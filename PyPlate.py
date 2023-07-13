@@ -1,5 +1,4 @@
 import re
-import copy
 from typing import Tuple, Dict
 
 
@@ -19,6 +18,7 @@ def convert_prefix(prefix):
             return 1e3
         case 'M':
             return 1e6
+
 
 def _split_value_unit(s: str):
     if not isinstance(s, str):
@@ -52,6 +52,7 @@ class Substance:
             return f"LIQUID ({self.name}: {self.mol_weight}, {self.density})"
         else:
             return f"ENZYME ({self.name})"
+
     @staticmethod
     def solid(name, mol_weight):
         substance = Substance(name, Substance.SOLID)
@@ -158,7 +159,8 @@ class Mixture:
                 adding = (substance, 0, 0, amount)
             if substance.id in new_mixture.contents:
                 old = new_mixture.contents[substance.id]
-                new_mixture.contents[substance.id] = (substance, old[1] + adding[1], old[2] + adding[2], old[3] + adding[3])
+                new_mixture.contents[substance.id] = \
+                    (substance, old[1] + adding[1], old[2] + adding[2], old[3] + adding[3])
             else:
                 new_mixture.contents[substance.id] = adding
         else:  # Mixture
@@ -172,7 +174,7 @@ class Mixture:
                 # if value > mixture.volume:
                 #     raise ValueError('Volume exceeds available amount')
                 # TODO: I'll use the volume of mixture merely for concentration purposes
-                ratio = 1000 * value / mixture.volume   # value is in L
+                ratio = 1000 * value / mixture.volume  # value is in L
                 new_mixture = Mixture(self)
                 for substance, mass, volume, au in mixture.contents.values():
                     old: Tuple[Substance, float, float, float] = self.contents.get(substance.id, (substance, 0, 0, 0))
@@ -182,7 +184,6 @@ class Mixture:
             else:
                 raise ValueError('You can only add a liquid Mixture to another Mixture')
         return new_mixture
-
 
     # def __iadd__(self, other):
     # def __setitem__(self, key, value):

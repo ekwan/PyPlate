@@ -1,4 +1,4 @@
-from PyPlate import Substance, Mixture
+from PyPlate import Substance
 import pytest
 
 EPSILON = 1e-6
@@ -100,6 +100,7 @@ def test_convert_to_unit_value_liquid_garbage():
     liquid = Substance.liquid('H2O', 18.0153, 1)
     with pytest.raises(ValueError):
         liquid.convert_to_unit_value('1 garbage')
+
 
 def test_convert_to_unit_value_enzyme():
     enzyme = Substance.enzyme('Lactase')

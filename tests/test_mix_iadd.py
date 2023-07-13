@@ -16,6 +16,7 @@ def test_mix_iadd_liquid():
     assert water.id in mix.contents
     assert mix.volume == 10
 
+
 def test_mix_iadd_liquid_and_solid():
     water = Substance.liquid('H2O', 18.0153, 1)
     salt = Substance.solid('NaCl', 58.4428)
