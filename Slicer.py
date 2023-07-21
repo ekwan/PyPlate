@@ -66,12 +66,18 @@ class Slicer:
             item: Slice(s) passed to __getitem__.
         """
 
+        if not isinstance(array_obj, np.ndarray):
+            raise TypeError("array must be a numpy.ndarray.")
         self.data = data
         self.array = array_obj
-        self.col_labels = col_labels
-        self.n_cols = len(col_labels)
+        if not isinstance(row_labels, list) or not all(isinstance(elem, str) for elem in row_labels):
+            raise TypeError("row_labels myst be a list of strings.")
+        if not isinstance(col_labels, list) or not all(isinstance(elem, str) for elem in col_labels):
+            raise TypeError("col_labels myst be a list of strings.")
         self.row_labels = row_labels
         self.n_rows = len(row_labels)
+        self.col_labels = col_labels
+        self.n_cols = len(col_labels)
         self.item = item
 
         if array_obj.shape != (self.n_rows, self.n_cols):
@@ -104,7 +110,7 @@ class Slicer:
         if isinstance(single, tuple) and len(single) == 2:
             return (self.resolve_labels(single[0], self.row_labels),
                     self.resolve_labels(single[1], self.col_labels))
-        raise ValueError("Invalid slice.")
+        raise TypeError("Invalid slice.")
 
     def parse_item(self, item: Slice) -> Union[int, Tuple[int, int]]:
         """
