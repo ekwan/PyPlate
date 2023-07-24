@@ -40,4 +40,3 @@ print(sodium_sulfate_halfM)
 # print(water_DI, sodium_sulfate_halfM)
 #
 #
-# plate = Generic96WellPlate('plate', max_volume_per_well=500)

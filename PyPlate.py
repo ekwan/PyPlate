@@ -2,7 +2,8 @@
 from __future__ import annotations
 import re
 import string
-from typing import Tuple, Dict, Union
+from typing import Tuple, Dict
+import numpy
 
 
 def convert_prefix(prefix):
@@ -129,13 +130,14 @@ class Substance:
 
 
 class Container:
-    def __init__(self, name):
+    def __init__(self, name, max_volume=float('inf')):
         self.name = name
         self.contents: Dict[Substance, float] = dict()
         self.volume = 0.0
+        self.max_volume = max_volume
 
     def copy(self):
-        new_container = Container(self.name)
+        new_container = Container(self.name, self.max_volume)
         new_container.contents = self.contents.copy()
         new_container.volume = self.volume
         return new_container
@@ -149,6 +151,8 @@ class Container:
         to.contents[frm] = to.contents.get(frm, 0) + volume_to_transfer
         if frm.type == Substance.LIQUID:
             to.volume += volume_to_transfer
+        if to.volume > to.max_volume:
+            raise ValueError("Exceeded maximum volume")
         return to
 
     def transfer_container(self, frm: Container, how_much: str):
@@ -164,6 +168,8 @@ class Container:
             to.contents[substance] = to.contents.get(substance, 0) + amount * ratio
             frm.contents[substance] -= amount * ratio
         to.volume += volume_to_transfer
+        if to.volume > to.max_volume:
+            raise ValueError("Exceeded maximum volume")
         frm.volume -= volume_to_transfer
         return frm, to
 
@@ -175,7 +181,8 @@ class Container:
         raise TypeError("Invalid source type.")
 
     def __repr__(self):
-        return f"Container ({self.name}) ({self.volume}) of ({self.contents})"
+        return f"Container ({self.name}) ({self.volume}" +\
+            f"{('/'+str(self.max_volume)) if self.max_volume != float('inf') else ''}) of ({self.contents})"
 
 
 class Plate:
@@ -258,6 +265,9 @@ class Plate:
             self.column_names = columns
         else:
             raise ValueError("columns must be int or list")
+
+        self.wells = numpy.array([[Container(f"well {col+1},{row+1}", max_volume=self.max_volume_per_well)
+                                   for col in range(self.n_columns)] for row in range(self.n_rows)])
 
 
 class Generic96WellPlate(Plate):
