@@ -3,32 +3,26 @@ from typing import Tuple, Dict
 
 
 def convert_prefix(prefix):
-    match prefix:
-        case 'µ':
-            return 1e-6
-        case 'm':
-            return 1e-3
-        case 'c':
-            return 1e-2
-        case 'd':
-            return 1e-1
-        case '':
-            return 1
-        case 'k':
-            return 1e3
-        case 'M':
-            return 1e6
+    prefixes = {'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
+    if prefix in prefixes:
+        return prefixes[prefix]
+    raise ValueError(f"Invalid prefix: {prefix}")
 
 
-def _split_value_unit(s: str):
+def extract_value_unit(s: str) -> Tuple[float, str]:
     if not isinstance(s, str):
         raise TypeError
     match = re.fullmatch(r"(\d+(?:\.\d+)?(?:e-?\d+)?)\s*([a-zA-Z]+)", s)
     if not match:
-        raise ValueError
+        raise ValueError("Invalid quantity.")
     value, unit = match.groups()
     value = float(value)
-    return value, unit
+    for base_unit in {'mol', 'g', 'L'}:
+        if unit.endswith(base_unit):
+            prefix = unit[:-len(base_unit)]
+            value = value * convert_prefix(prefix)
+            return value, base_unit
+    raise ValueError("Invalid unit.")
 
 
 class Substance:
