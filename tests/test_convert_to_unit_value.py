@@ -28,7 +28,6 @@ def test_convert_to_unit_value_solid_mol():
     assert moles == 1
 
 
-
 def test_convert_to_unit_value_solid_AU():
     solid = Substance.solid('NaCl', 58.4428)
     with pytest.raises(ValueError):
@@ -68,7 +67,6 @@ def test_convert_to_unit_value_liquid_mol():
     liquid = Substance.liquid('H2O', 18.0153, 1)
     volume = liquid.convert_to_unit_value('1 Mmol')
     assert abs(volume - 18.0153) < EPSILON
-
 
 
 def test_convert_to_unit_value_liquid_AU():

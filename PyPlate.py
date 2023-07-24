@@ -1,6 +1,7 @@
 # Allow typing reference while still building classes
 from __future__ import annotations
 import re
+import string
 from typing import Tuple, Dict
 
 
@@ -22,12 +23,23 @@ def extract_value_unit(s: str) -> Tuple[float, str]:
     value = float(value)
     if unit == 'AU':
         return value, unit
-    for base_unit in {'mol', 'g', 'L'}:
+    for base_unit in {'mol', 'g', 'L', 'M'}:
         if unit.endswith(base_unit):
             prefix = unit[:-len(base_unit)]
             value = value * convert_prefix(prefix)
             return value, base_unit
     raise ValueError("Invalid unit.")
+
+
+def is_integer(s):
+    """
+    Helper method to check if variable is integer.
+    """
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
 
 
 class Substance:
@@ -70,37 +82,43 @@ class Substance:
     def enzyme(name):
         return Substance(name, Substance.ENZYME)
 
-    def convert_to_unit_value(self, how_much: str):  # mol, mL or AU
+    def convert_to_unit_value(self, how_much: str, volume: float = 0.0):  # mol, mL or AU
         """
         Converts amount to standard units.
 
         :param how_much: Amount of substance to convert
+        :param volume: Volume of containing Mixture in mL
         :return: float
 
-                 +--------+--------+--------+--------+--------+
-                 |              Valid Input          | Output |
-                 |    g   |    L   |   mol  |    AU  |        |
-        +--------+--------+--------+--------+--------+--------+
-        |SOLID   |   Yes  |   No   |   Yes  |   No   |   mol  |
-        +--------+--------+--------+--------+--------+--------+
-        |LIQUID  |   Yes  |   Yes  |   Yes  |   No   |   mL   |
-        +--------+--------+--------+--------+--------+--------+
-        |ENZYME  |   No   |   No   |   No   |   Yes  |   AU   |
-        +--------+--------+--------+--------+--------+--------+
+                 +--------+--------+--------+--------+--------+--------+
+                 |              Valid Input                   | Output |
+                 |    g   |    L   |   mol  |    M   |    AU  |        |
+        +--------+--------+--------+--------+--------+--------+--------+
+        |SOLID   |   Yes  |   No   |   Yes  |   Yes  |   No   |   mol  |
+        +--------+--------+--------+--------+--------+--------+--------+
+        |LIQUID  |   Yes  |   Yes  |   Yes  |   No   |   No   |   mL   |
+        +--------+--------+--------+--------+--------+--------+--------+
+        |ENZYME  |   No   |   No   |   No   |   No   |   Yes  |   AU   |
+        +--------+--------+--------+--------+--------+--------+--------+
         """
 
         value, unit = extract_value_unit(how_much)
         if self.type == Substance.SOLID:  # Convert to moles
-            if unit == 'g':             # mass
+            if unit == 'g':  # mass
                 return value / self.mol_weight
-            elif unit == 'mol':         # moles
+            elif unit == 'mol':  # moles
                 return value
+            elif unit == 'M':   # molar
+                if volume <= 0.0:
+                    raise ValueError('Must have a liquid to add a molar concentration.')
+                # value = molar concentration in mol/L, volume = volume in mL
+                return value * volume / 1000
             raise ValueError("We only measure solids in grams and moles.")
         elif self.type == Substance.LIQUID:  # Convert to mL
-            if unit == 'g':         # mass
+            if unit == 'g':  # mass
                 return value / self.density
-            elif unit == 'L':       # volume
-                return value * 1000     # mL
+            elif unit == 'L':  # volume
+                return value * 1000  # mL
             elif unit == 'mol':  # moles
                 return (value / self.concentration) / 1000.0
             raise ValueError
@@ -123,14 +141,19 @@ class Container:
         return new_container
 
     def transfer_substance(self, frm: Substance, how_much: str):
-        how_much = frm.convert_to_unit_value(how_much)
+        if how_much.endswith('M') and frm.type != Substance.SOLID:
+            # TODO: molarity from liquids?
+            raise ValueError("Molarity solutions can only be made from solids.")
+        volume_to_transfer = frm.convert_to_unit_value(how_much, self.volume)
         to = self.copy()
-        to.contents[frm] = to.contents.get(frm, 0) + how_much
+        to.contents[frm] = to.contents.get(frm, 0) + volume_to_transfer
+        if frm.type == Substance.LIQUID:
+            to.volume += volume_to_transfer
         return to
 
     def transfer_container(self, frm: Container, how_much: str):
         volume_to_transfer, unit = extract_value_unit(how_much)
-        volume_to_transfer *= 1000.0        # convert to mL
+        volume_to_transfer *= 1000.0    # convert to mL
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
         if volume_to_transfer > frm.volume:
@@ -140,73 +163,110 @@ class Container:
         for substance, amount in frm.contents.items():
             to.contents[substance] = to.contents.get(substance, 0) + amount * ratio
             frm.contents[substance] -= amount * ratio
+        to.volume += volume_to_transfer
+        frm.volume -= volume_to_transfer
         return frm, to
 
+    def transfer(self, frm, how_much: str):
+        if isinstance(frm, Substance):
+            return self.transfer_substance(frm, how_much)
+        elif isinstance(frm, Container):
+            return self.transfer_container(frm, how_much)
+        raise TypeError("Invalid source type.")
 
-# class Mixture:
-#     next_id = 0
-#
-#     def __init__(self, other):
-#         if isinstance(other, Mixture):
-#             self.name = other.name
-#             self.contents = other.contents.copy()
-#             self.volume = other.volume
-#         else:
-#             self.name = other
-#             self.contents: Dict[int, Tuple[Substance, float, float, float]] = dict()
-#             self.volume = 0.0
-#         self.id = Substance.next_id
-#         Substance.next_id += 1
-#
-#     def __add__(self, other):
-#         assert isinstance(other, tuple) and len(other) == 2, \
-#             'You must specify a Substance or Mixture and an amount to add'
-#         other, raw_value = other
-#         assert isinstance(other, (Substance, Mixture)), 'You must specify a Substance or Mixture'
-#         assert isinstance(raw_value, str), 'You must specify an amount (i.e., "10 mL")'
-#         new_mixture = Mixture(self)
-#         if isinstance(other, Substance):
-#             substance: Substance = other
-#             adding: Tuple[Substance, float, float, float] = None
-#             amount = substance.convert_to_unit_value(raw_value, self.volume)
-#             if substance.type == Substance.LIQUID:
-#                 volume = amount  # in mL
-#                 moles = volume * substance.concentration / 1000.0
-#                 # mol, volume, AU
-#                 adding = (substance, moles, volume, 0)
-#                 new_mixture.volume += volume
-#             elif substance.type == Substance.SOLID:
-#                 adding = (substance, amount, 0, 0)
-#             elif substance.type == Substance.ENZYME:
-#                 adding = (substance, 0, 0, amount)
-#             if substance.id in new_mixture.contents:
-#                 old = new_mixture.contents[substance.id]
-#                 new_mixture.contents[substance.id] = \
-#                     (substance, old[1] + adding[1], old[2] + adding[2], old[3] + adding[3])
-#             else:
-#                 new_mixture.contents[substance.id] = adding
-#         else:  # Mixture
-#             value, unit = _split_value_unit(raw_value)
-#             mixture: Mixture = other
-#             if mixture.volume:
-#                 # OLD_TODO: ask Eugene about this.
-#                 if unit[-1] != 'L' or len(unit) > 2:
-#                     raise ValueError('You can only add liquid mixtures by volume to another mixture')
-#                 value = float(value) * convert_prefix(unit[:-1])
-#                 # if value > mixture.volume:
-#                 #     raise ValueError('Volume exceeds available amount')
-#                 # OLD_TODO: I'll use the volume of mixture merely for concentration purposes
-#                 ratio = 1000 * value / mixture.volume  # value is in L
-#                 new_mixture = Mixture(self)
-#                 for substance, mass, volume, au in mixture.contents.values():
-#                     old: Tuple[Substance, float, float, float] = self.contents.get(substance.id, (substance, 0, 0, 0))
-#                     new_mixture.contents[substance.id] = (substance, old[1] + mass * ratio,
-#                                                           old[2] + volume * ratio, old[3] + au * ratio)
-#                     new_mixture.volume += volume * ratio
-#             else:
-#                 raise ValueError('You can only add a liquid Mixture to another Mixture')
-#         return new_mixture
+    def __repr__(self):
+        return f"Container ({self.name}) ({self.volume}) of ({self.contents})"
 
-    # def __iadd__(self, other):
-    # def __setitem__(self, key, value):
-    #     assert key == self
+
+class Plate:
+    def __init__(self, name, make, rows, columns, max_volume_per_well):
+        """
+            Creates a generic plate.
+
+            Attributes:
+                name (str): name of plate
+                make (str): name of this kind of plate
+                rows (int or list): number of rows or list of names of rows
+                columns (int or list): number of columns or list of names of columns
+                max_volume_per_well (float): maximum volume of each well in uL
+        """
+
+        if not isinstance(name, str) or len(name) == 0:
+            raise ValueError("invalid plate name")
+        self.name = name
+
+        if not isinstance(make, str) or len(make) == 0:
+            raise ValueError("invalid plate make")
+        self.make = make
+
+        if isinstance(rows, int):
+            if rows < 1:
+                raise ValueError("illegal number of rows")
+            self.n_rows = rows
+            self.row_names = [f"{i+1}" for i in range(rows)]
+        elif isinstance(rows, list):
+            if len(rows) == 0:
+                raise ValueError("must have at least one row")
+            for row in rows:
+                if not isinstance(row, str):
+                    raise ValueError("row names must be strings")
+                if len(row.strip()) == 0:
+                    raise ValueError(
+                        "zero length strings are not allowed as column labels"
+                    )
+                if is_integer(row):
+                    raise ValueError(
+                        f"please don't confuse me with row names that are integers ({row})"
+                    )
+            if len(rows) != len(set(rows)):
+                raise ValueError("duplicate row names found")
+            self.n_rows = len(rows)
+            self.row_names = rows
+        else:
+            raise ValueError("rows must be int or list")
+
+        try:
+            max_volume_per_well = float(max_volume_per_well)
+            if max_volume_per_well <= 0:
+                raise ValueError("max volume per well must be greater than zero")
+            self.max_volume_per_well = max_volume_per_well / 1000   # store in mL
+        except (ValueError, OverflowError):
+            raise ValueError(f"invalid max volume per well {max_volume_per_well}")
+
+        if isinstance(columns, int):
+            if columns < 1:
+                raise ValueError("illegal number of columns")
+            self.n_columns = columns
+            self.column_names = [f"{i+1}" for i in range(columns)]
+        elif isinstance(columns, list):
+            if len(columns) == 0:
+                raise ValueError("must have at least one row")
+            for column in columns:
+                if not isinstance(column, str):
+                    raise ValueError("row names must be strings")
+                if len(column.strip()) == 0:
+                    raise ValueError(
+                        "zero length strings are not allowed as column labels"
+                    )
+                if is_integer(column):
+                    raise ValueError(
+                        f"please don't confuse me with column names that are integers({column})"
+                    )
+            if len(columns) != len(set(columns)):
+                raise ValueError("duplicate column names found")
+            self.n_columns = len(columns)
+            self.column_names = columns
+        else:
+            raise ValueError("columns must be int or list")
+
+
+class Generic96WellPlate(Plate):
+    """
+    Represents a 96 well plate.
+    """
+
+    def __init__(self, name, max_volume_per_well):
+        make = "generic 96 well plate"
+        rows = list(string.ascii_uppercase[:8])
+        columns = 12
+        super().__init__(name, make, rows, columns, max_volume_per_well)

@@ -54,6 +54,7 @@ def test_Slicer_row_labels():
     with pytest.raises(TypeError, match="row_labels"):
         Slicer(None, array, [1], None, None)
 
+
 def test_Slicer_col_labels():
     with pytest.raises(TypeError, match="row_labels") as e:
         Slicer(None, array, None, None, None)
