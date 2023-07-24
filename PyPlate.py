@@ -2,7 +2,7 @@
 from __future__ import annotations
 import re
 import string
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Union
 
 
 def convert_prefix(prefix):
@@ -270,3 +270,44 @@ class Generic96WellPlate(Plate):
         rows = list(string.ascii_uppercase[:8])
         columns = 12
         super().__init__(name, make, rows, columns, max_volume_per_well)
+
+
+class Recipe:
+    def __init__(self):
+        self.indexes = dict()
+        self.results = []
+        self.steps = []
+
+    def uses(self, *args):
+        for arg in args:
+            if arg not in self.indexes:
+                self.indexes[arg] = len(self.results)
+                self.results.append(arg)
+
+    def transfer(self, frm, to, how_much):
+        if not isinstance(to, Container):
+            raise ValueError("Invalid destination type.")
+        if not isinstance(frm, (Substance, Container)):
+            raise ValueError("Invalid source type.")
+        if frm not in self.indexes:
+            raise ValueError("Source not found in uses.")
+        if to not in self.indexes:
+            raise ValueError("Destination not found in uses.")
+        self.steps.append((frm, to, how_much))
+        return self
+
+    def build(self):
+        for frm, to, how_much in self.steps:
+            frm_index, to_index = self.indexes[frm], self.indexes[to]
+
+            # used items can change in a recipe
+            frm = self.results[frm_index]
+            to: Container = self.results[to_index]
+
+            if isinstance(frm, Substance):
+                to = to.transfer(frm, how_much)
+            elif isinstance(frm, Container):
+                frm, to = to.transfer(frm, how_much)
+            self.results[frm_index] = frm
+            self.results[to_index] = to
+        return self.results
