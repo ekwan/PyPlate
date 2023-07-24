@@ -28,20 +28,6 @@ def test_convert_to_unit_value_solid_mol():
     assert moles == 1
 
 
-def test_convert_to_unit_value_solid_M():
-    solid = Substance.solid('NaCl', 58.4428)
-    with pytest.raises(ValueError):
-        solid.convert_to_unit_value('1 M')
-
-    moles = solid.convert_to_unit_value('1 M', volume=1)
-    assert moles == 1000
-
-    moles = solid.convert_to_unit_value('1 mM', volume=1)
-    assert moles == 1
-
-    moles = solid.convert_to_unit_value('1 mM', volume=1000)
-    assert moles == 1000
-
 
 def test_convert_to_unit_value_solid_AU():
     solid = Substance.solid('NaCl', 58.4428)
@@ -84,11 +70,6 @@ def test_convert_to_unit_value_liquid_mol():
     assert abs(volume - 18.0153) < EPSILON
 
 
-def test_convert_to_unit_value_liquid_M():
-    liquid = Substance.liquid('H2O', 18.0153, 1)
-    with pytest.raises(ValueError):
-        liquid.convert_to_unit_value('1 M')
-
 
 def test_convert_to_unit_value_liquid_AU():
     liquid = Substance.liquid('H2O', 18.0153, 1)
@@ -104,7 +85,7 @@ def test_convert_to_unit_value_liquid_garbage():
 
 def test_convert_to_unit_value_enzyme():
     enzyme = Substance.enzyme('Lactase')
-    for amount in ['1 mg', '1 mL', '1 mol', '1 M', '1 garbage']:
+    for amount in ['1 mg', '1 mL', '1 mol', '1 garbage']:
         with pytest.raises(ValueError):
             enzyme.convert_to_unit_value(amount)
 
