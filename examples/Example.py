@@ -1,6 +1,6 @@
 from PyPlate import Substance, Container, Recipe, Generic96WellPlate
 
-water = Substance.liquid('H2O', 18.0153, 1)
+water = Substance.liquid('H2O', mol_weight=18.0153, density=1)
 salt = Substance.solid('NaCl', 58.4428)
 
 salt_water_halfM = Container('halfM salt water')
@@ -36,9 +36,9 @@ for recipe in [recipe, recipe2, recipe3, recipe4, recipe5]:
     print('=========')
 
 # salt_water_oneM.volume = 100
-import numpy
-print(numpy.vectorize(lambda elem: elem.container.contents)(plate.wells))
-recipe6 = Recipe().uses(salt, plate)
-result = recipe6.do_transfer(salt, plate[:3,:3], '1 g')
-result = recipe6.do_transfer(salt, plate[3:6, 3:6], '10 g')
-print(numpy.vectorize(lambda elem: elem.container.contents)(plate.wells))
+# import numpy
+# print(numpy.vectorize(lambda elem: elem.container.contents)(plate.wells))
+# recipe6 = Recipe().uses(salt, plate)
+# result = recipe6.do_transfer(salt, plate[:3, :3], '1 g')
+# result = recipe6.do_transfer(salt, plate[3:6, 3:6], '10 g')
+# print(numpy.vectorize(lambda elem: elem.container.contents)(plate.wells))

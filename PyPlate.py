@@ -9,7 +9,7 @@ from Slicer import Slicer
 
 
 def convert_prefix(prefix):
-    prefixes = {'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
+    prefixes = {'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
     if prefix in prefixes:
         return prefixes[prefix]
     raise ValueError(f"Invalid prefix: {prefix}")
@@ -99,7 +99,7 @@ class Substance:
         +--------+--------+--------+--------+--------+--------+--------+
         |SOLID   |   Yes  |   No   |   Yes  |   Yes  |   No   |   mol  |
         +--------+--------+--------+--------+--------+--------+--------+
-        |LIQUID  |   Yes  |   Yes  |   Yes  |   No   |   No   |   mL   |
+        |LIQUID  |   Yes  |   Yes  |   Yes  |   ??   |   No   |   mL   |
         +--------+--------+--------+--------+--------+--------+--------+
         |ENZYME  |   No   |   No   |   No   |   No   |   Yes  |   AU   |
         +--------+--------+--------+--------+--------+--------+--------+
@@ -111,7 +111,7 @@ class Substance:
                 return value / self.mol_weight
             elif unit == 'mol':  # moles
                 return value
-            elif unit == 'M':   # molar
+            elif unit == 'M':  # molar
                 if volume <= 0.0:
                     raise ValueError('Must have a liquid to add a molar concentration.')
                 # value = molar concentration in mol/L, volume = volume in mL
@@ -159,11 +159,11 @@ class Container:
 
     def transfer_container(self, frm: Container, how_much: str):
         volume_to_transfer, unit = extract_value_unit(how_much)
-        volume_to_transfer *= 1000.0    # convert to mL
+        volume_to_transfer *= 1000.0  # convert to mL
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
         if volume_to_transfer > frm.volume:
-            raise ValueError("Not enough mixture left in source container.")
+            raise ValueError("Not enough mixture left in source container." + f"{frm} ({how_much}) -> {self}")
         frm, to = frm.copy(), self.copy()
         ratio = volume_to_transfer / frm.volume
         for substance, amount in frm.contents.items():
@@ -183,8 +183,8 @@ class Container:
         raise TypeError("Invalid source type.")
 
     def __repr__(self):
-        return f"Container ({self.name}) ({self.volume}" +\
-            f"{('/'+str(self.max_volume)) if self.max_volume != float('inf') else ''}) of ({self.contents})"
+        return f"Container ({self.name}) ({self.volume}" + \
+            f"{('/' + str(self.max_volume)) if self.max_volume != float('inf') else ''}) of ({self.contents})"
 
 
 class Plate:
@@ -212,7 +212,7 @@ class Plate:
             if rows < 1:
                 raise ValueError("illegal number of rows")
             self.n_rows = rows
-            self.row_names = [f"{i+1}" for i in range(rows)]
+            self.row_names = [f"{i + 1}" for i in range(rows)]
         elif isinstance(rows, list):
             if len(rows) == 0:
                 raise ValueError("must have at least one row")
@@ -238,7 +238,7 @@ class Plate:
             max_volume_per_well = float(max_volume_per_well)
             if max_volume_per_well <= 0:
                 raise ValueError("max volume per well must be greater than zero")
-            self.max_volume_per_well = max_volume_per_well / 1000   # store in mL
+            self.max_volume_per_well = max_volume_per_well / 1000  # store in mL
         except (ValueError, OverflowError):
             raise ValueError(f"invalid max volume per well {max_volume_per_well}")
 
@@ -246,7 +246,7 @@ class Plate:
             if columns < 1:
                 raise ValueError("illegal number of columns")
             self.n_columns = columns
-            self.column_names = [f"{i+1}" for i in range(columns)]
+            self.column_names = [f"{i + 1}" for i in range(columns)]
         elif isinstance(columns, list):
             if len(columns) == 0:
                 raise ValueError("must have at least one row")
@@ -268,7 +268,7 @@ class Plate:
         else:
             raise ValueError("columns must be int or list")
 
-        self.wells = numpy.array([[Container(f"well {col+1},{row+1}", max_volume=self.max_volume_per_well)
+        self.wells = numpy.array([[Container(f"well {row + 1},{col + 1}", max_volume=self.max_volume_per_well)
                                    for col in range(self.n_columns)] for row in range(self.n_rows)])
 
     def __getitem__(self, item):
@@ -333,10 +333,30 @@ class Recipe:
         return self
 
     def build(self):
+        def helper_factory(frm_array, how_much):
+            def helper(elem):
+                frm_array[0], elem = elem.transfer(frm_array[0], how_much)
+                return elem
+
+            return helper
+
         for frm, to, how_much in self.steps:
             frm_index = self.indexes[frm] if not isinstance(frm, Slicer) else self.indexes[frm.data]
             to_index = self.indexes[to] if not isinstance(to, Slicer) else self.indexes[to.data]
-            frm, to = self.results[frm_index], self.results[to_index]
+
+            if isinstance(frm, Slicer):
+                new_frm = frm.copy()
+                new_frm.data = self.results[to_index]
+                frm = new_frm
+            else:
+                frm = self.results[frm_index]
+
+            if isinstance(to, Slicer):
+                new_to = to.copy()
+                new_to.data = self.results[to_index]
+                to = new_to
+            else:
+                to = self.results[to_index]
 
             # # used items can change in a recipe
             # frm = self.results[frm_index]
@@ -346,13 +366,56 @@ class Recipe:
                 frm = frm[:]
             if isinstance(to, Plate):
                 to = to[:]
+
             # frm is a Substance, Container, or Slicer
             # to is a Container or Slicer
             # Six combinations
-            # if isinstance(frm, Substance):
-            #     to = to.transfer(frm, how_much)
-            # elif isinstance(frm, Container):
-            #     frm, to = to.transfer(frm, how_much)
-            self.results[frm_index] = frm
-            self.results[to_index] = to
+
+            if isinstance(to, Container):
+                if isinstance(frm, Substance):
+                    to = to.transfer(frm, how_much)
+                elif isinstance(frm, Container):
+                    frm, to = to.transfer(frm, how_much)
+                else:  # frm == Slicer
+                    # TODO: Is this something we want to work?
+                    pass
+            elif isinstance(to, Slicer):
+                if isinstance(frm, Substance):
+                    to.set(numpy.vectorize(lambda elem: elem.transfer(frm, how_much), cache=True)(to.get()))
+                elif isinstance(frm, Container):
+                    frm_array = [frm]
+                    helper_function = helper_factory(frm_array, how_much)
+                    to.set(numpy.vectorize(helper_function, cache=True)(to.get()))
+                    frm = frm_array[0]
+                elif isinstance(frm, Slicer):
+                    if frm.size == 1:
+                        # Source from the single element in frm
+                        if frm.shape != (1,):
+                            raise RuntimeError("Shape of source should have been (1,)")
+
+                        frm_array = [frm.get()[0]]
+                        helper_function = helper_factory(frm_array, how_much)
+                        to.set(numpy.vectorize(helper_function, cache=True)(to.get()))
+                        frm.get()[0] = frm_array[0]
+                    elif to.size == 1:
+                        #  Replace the single element in to
+                        if to.shape != (1,):
+                            raise RuntimeError("Shape of source should have been (1,)")
+                        to_array = [to.get()[0]]
+
+                        def to_helper(elem):
+                            elem, to_array[0] = to_array[0].transfer(elem, how_much)
+
+                        frm.set(numpy.vectorize(to_helper, cache=True)(frm.get()))
+                        to.get()[0] = to_array[0]
+                    elif frm.size == to.size and frm.shape == to.shape:
+                        func = numpy.frompyfunc(lambda elem1, elem2: elem2.transfer(elem1, how_much), 2, 2)
+                        frm_result, to_result = func(frm.get(), to.get())
+                        frm.set(frm_result)
+                        to.set(frm_result)
+                    else:
+                        raise ValueError("Source and destination slices must be the same size and shape.")
+            self.results[frm_index] = frm.data if isinstance(frm, Slicer) else frm
+            self.results[to_index] = to.data if isinstance(to, Slicer) else to
+
         return [result for result in self.results if not isinstance(result, Substance)]

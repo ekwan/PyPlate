@@ -2,7 +2,6 @@ from functools import cached_property
 from typing import Union, Tuple, List
 import numpy as np
 
-
 # Valid slices:
 #
 # Label = Union(str, int)
@@ -93,6 +92,9 @@ class Slicer:
             self.slices = item - 1
         else:
             self.slices = self.parse_item(item)
+
+    def copy(self):
+        return Slicer(self.data, self.array, self.row_labels, self.col_labels, self.item)
 
     def parse_single(self, single: Single) -> Tuple[int, int]:
         """
