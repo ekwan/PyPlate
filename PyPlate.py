@@ -7,6 +7,8 @@ import numpy
 
 from Slicer import Slicer
 
+# TODO: fix rounding globally
+
 
 def convert_prefix(prefix):
     prefixes = {'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
@@ -148,18 +150,20 @@ class Container:
         if how_much.endswith('M') and frm.type != Substance.SOLID:
             # TODO: molarity from liquids?
             raise ValueError("Molarity solutions can only be made from solids.")
-        volume_to_transfer = frm.convert_to_unit_value(how_much, self.volume)
+        volume_to_transfer = round(frm.convert_to_unit_value(how_much, self.volume), 10)
         to = self.copy()
-        to.contents[frm] = to.contents.get(frm, 0) + volume_to_transfer
+        to.contents[frm] = round(to.contents.get(frm, 0) + volume_to_transfer, 10)
         if frm.type == Substance.LIQUID:
-            to.volume += volume_to_transfer
+            to.volume = round(to.volume + volume_to_transfer, 10)
+            # to.volume += volume_to_transfer
         if to.volume > to.max_volume:
             raise ValueError("Exceeded maximum volume")
         return to
 
     def transfer_container(self, frm: Container, how_much: str):
         volume_to_transfer, unit = extract_value_unit(how_much)
-        volume_to_transfer *= 1000.0  # convert to mL
+        volume_to_transfer *= 1000.0  # convert L to mL
+        volume_to_transfer = round(volume_to_transfer, 10)
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
         if volume_to_transfer > frm.volume:
@@ -167,12 +171,13 @@ class Container:
         frm, to = frm.copy(), self.copy()
         ratio = volume_to_transfer / frm.volume
         for substance, amount in frm.contents.items():
-            to.contents[substance] = to.contents.get(substance, 0) + amount * ratio
-            frm.contents[substance] -= amount * ratio
-        to.volume += volume_to_transfer
+            to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio, 10)
+            frm.contents[substance] = round(frm.contents[substance] - amount * ratio, 10)
+        to.volume = round(to.volume + volume_to_transfer, 10)
         if to.volume > to.max_volume:
             raise ValueError("Exceeded maximum volume")
-        frm.volume -= volume_to_transfer
+        # frm.volume -= volume_to_transfer
+        frm.volume = round(frm.volume - volume_to_transfer, 10)
         return frm, to
 
     def transfer(self, frm, how_much: str):
