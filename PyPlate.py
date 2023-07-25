@@ -390,7 +390,10 @@ class Recipe:
                 elif isinstance(frm, Container):
                     frm_array = [frm]
                     helper_function = helper_factory(frm_array, how_much)
-                    to.set(numpy.vectorize(helper_function, cache=True)(to.get()))
+                    result = numpy.vectorize(helper_function, cache=True)(to.get())
+                    to.set(result)
+                    # TODO: investigate why this is necessary.
+                    to.data.wells = to.array
                     frm = frm_array[0]
                 elif isinstance(frm, Slicer):
                     if frm.size == 1:
@@ -401,6 +404,7 @@ class Recipe:
                         frm_array = [frm.get()[0]]
                         helper_function = helper_factory(frm_array, how_much)
                         to.set(numpy.vectorize(helper_function, cache=True)(to.get()))
+                        to.data.wells = to.array
                         frm.get()[0] = frm_array[0]
                     elif to.size == 1:
                         #  Replace the single element in to
@@ -412,12 +416,15 @@ class Recipe:
                             elem, to_array[0] = to_array[0].transfer(elem, how_much)
 
                         frm.set(numpy.vectorize(to_helper, cache=True)(frm.get()))
+                        to.data.wells = to.array
                         to.get()[0] = to_array[0]
                     elif frm.size == to.size and frm.shape == to.shape:
                         func = numpy.frompyfunc(lambda elem1, elem2: elem2.transfer(elem1, how_much), 2, 2)
                         frm_result, to_result = func(frm.get(), to.get())
                         frm.set(frm_result)
+                        frm.data.wells = frm.array
                         to.set(frm_result)
+                        to.data.wells = to.array
                     else:
                         raise ValueError("Source and destination slices must be the same size and shape.")
             self.results[frm_index] = frm.data if isinstance(frm, Slicer) else frm
