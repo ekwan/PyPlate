@@ -5,6 +5,8 @@ import string
 from typing import Tuple, Dict
 import numpy
 
+from Slicer import Slicer
+
 
 def convert_prefix(prefix):
     prefixes = {'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
@@ -269,6 +271,26 @@ class Plate:
         self.wells = numpy.array([[Container(f"well {col+1},{row+1}", max_volume=self.max_volume_per_well)
                                    for col in range(self.n_columns)] for row in range(self.n_rows)])
 
+    def __getitem__(self, item):
+        return Slicer(self, self.wells, self.row_names, self.column_names, item)
+
+    def __repr__(self):
+        return f"Plate: {self.name}"
+
+    def volumes(self, arr=None):
+        if arr is None:
+            arr = self.wells
+        if isinstance(arr, Slicer):
+            arr = arr.get()
+        return numpy.vectorize(lambda x: x.volume)(arr)
+
+    def copy(self):
+        new_plate = Plate(self.name, self.make, 1, 1, self.max_volume_per_well)
+        new_plate.n_rows, new_plate.n_columns = self.n_rows, self.n_columns
+        new_plate.row_names, new_plate.column_names = self.row_names, self.column_names
+        new_plate.wells = self.wells.copy()
+        return new_plate
+
 
 class Generic96WellPlate(Plate):
     """
@@ -292,32 +314,45 @@ class Recipe:
         for arg in args:
             if arg not in self.indexes:
                 self.indexes[arg] = len(self.results)
-                self.results.append(arg)
+                if isinstance(arg, Substance):
+                    self.results.append(arg)
+                else:
+                    self.results.append(arg.copy())
+        return self
 
     def transfer(self, frm, to, how_much):
-        if not isinstance(to, Container):
+        if not isinstance(to, (Container, Plate, Slicer)):
             raise ValueError("Invalid destination type.")
         if not isinstance(frm, (Substance, Container)):
             raise ValueError("Invalid source type.")
-        if frm not in self.indexes:
-            raise ValueError("Source not found in uses.")
-        if to not in self.indexes:
-            raise ValueError("Destination not found in uses.")
+        if (frm.data if isinstance(frm, Slicer) else frm) not in self.indexes:
+            raise ValueError("Source not found in declared uses.")
+        if (to.data if isinstance(to, Slicer) else to) not in self.indexes:
+            raise ValueError("Destination not found in declared uses.")
         self.steps.append((frm, to, how_much))
         return self
 
     def build(self):
         for frm, to, how_much in self.steps:
-            frm_index, to_index = self.indexes[frm], self.indexes[to]
+            frm_index = self.indexes[frm] if not isinstance(frm, Slicer) else self.indexes[frm.data]
+            to_index = self.indexes[to] if not isinstance(to, Slicer) else self.indexes[to.data]
+            frm, to = self.results[frm_index], self.results[to_index]
 
-            # used items can change in a recipe
-            frm = self.results[frm_index]
-            to: Container = self.results[to_index]
+            # # used items can change in a recipe
+            # frm = self.results[frm_index]
+            # to: Container = self.results[to_index]
 
-            if isinstance(frm, Substance):
-                to = to.transfer(frm, how_much)
-            elif isinstance(frm, Container):
-                frm, to = to.transfer(frm, how_much)
+            if isinstance(frm, Plate):
+                frm = frm[:]
+            if isinstance(to, Plate):
+                to = to[:]
+            # frm is a Substance, Container, or Slicer
+            # to is a Container or Slicer
+            # Six combinations
+            # if isinstance(frm, Substance):
+            #     to = to.transfer(frm, how_much)
+            # elif isinstance(frm, Container):
+            #     frm, to = to.transfer(frm, how_much)
             self.results[frm_index] = frm
             self.results[to_index] = to
-        return self.results
+        return [result for result in self.results if not isinstance(result, Substance)]

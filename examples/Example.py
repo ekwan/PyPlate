@@ -1,42 +1,44 @@
-from PyPlate import Substance, Container, Generic96WellPlate, Recipe
+from PyPlate import Substance, Container, Recipe, Generic96WellPlate
 
-sodium_sulfate = Substance.solid("sodium sulfate", mol_weight=142.04)
-triethylamine = Substance.liquid("triethylamine", mol_weight=101.19, density=0.726)
-dmso = Substance.liquid("DMSO", mol_weight=78.13, density=1.1004)
-water = Substance.liquid("H2O", mol_weight=18.0153, density=1)
-dmso_stock = Container("DMSO")
-water_DI = Container("DI water")
-water_tap = Container("tap water")
-sodium_sulfate_halfM = Container("Sodium sulfate 0.5M")
+water = Substance.liquid('H2O', 18.0153, 1)
+salt = Substance.solid('NaCl', 58.4428)
 
-recipe = Recipe()
-recipe.uses(water, water_DI, water_tap, sodium_sulfate, sodium_sulfate_halfM)
-recipe.transfer(water, water_DI, '10 mL').transfer(water, water_tap, '20 mL')
-recipe.transfer(water_DI, sodium_sulfate_halfM, '8 mL').transfer(sodium_sulfate, sodium_sulfate_halfM, '5 mmol')
-water, water_DI, water_tap, sodium_sulfate, sodium_sulfate_halfM = recipe.build()
-print(water_DI)
-print(water_tap)
-print(sodium_sulfate_halfM)
-# print(recipe.results)
-# print(recipe.steps)
-# print(recipe.build())
-# water_DI = Container("DI water").transfer(water, '10 mL')
-# water_tap = Container("tap water").transfer(water, '20 mL')
-#
-# dmso_stock = Container("DMSO").transfer(dmso, '15 mL')
-# print(water_DI)
-# print(water_tap)
-# print(dmso_stock)
-#
-#
-# water_DI, sodium_sulfate_halfM = Container("Sodium sulfate 0.5M").transfer(water_DI, '10 mL')
-# sodium_sulfate_halfM = sodium_sulfate_halfM.transfer(sodium_sulfate, '0.5 M')
-# print(water_DI, sodium_sulfate_halfM)
-# print()
-#
-# water_DI = Container("DI water").transfer(water, '10 mL')
-# water_DI, sodium_sulfate_halfM = Container("Sodium sulfate 0.5M").transfer(water_DI, '10 mL')
-# sodium_sulfate_halfM = sodium_sulfate_halfM.transfer(sodium_sulfate, '5 mmol')
-# print(water_DI, sodium_sulfate_halfM)
-#
-#
+salt_water_halfM = Container('halfM salt water')
+recipe = Recipe().uses(water, salt, salt_water_halfM)
+recipe.transfer(water, salt_water_halfM, '100 mL')
+recipe.transfer(salt, salt_water_halfM, '50 mol')
+salt_water_halfM, = recipe.build()
+
+salt_water_oneM = Container('oneM salt water')
+recipe2 = Recipe().uses(water, salt, salt_water_oneM)
+recipe2.transfer(water, salt_water_oneM, '100 mL')
+recipe2.transfer(salt, salt_water_oneM, '50 mol')
+salt_water_oneM, = recipe2.build()
+
+recipe3 = Recipe().uses(salt_water_halfM, salt_water_oneM)
+recipe3.transfer(salt_water_halfM, salt_water_oneM, '5 mL')
+salt_water_halfM, salt_water_oneM = recipe3.build()
+
+plate = Generic96WellPlate('plate', 500.0)
+recipe4 = Recipe().uses(plate, salt_water_oneM, salt_water_halfM)
+recipe4.transfer(salt_water_oneM, plate[:4], '1 mL')
+recipe4.transfer(salt_water_halfM, plate, '1 mL')
+plate, salt_water_oneM, salt_water_halfM = recipe4.build()
+
+recipe5 = Recipe().uses(plate, salt_water_oneM)
+for sub_plate, volume in {plate[1, 1]: 1.0, plate['A', 2]: 2.0, plate[1, 3]: 3.0,
+                          plate[3, 3]: 7.0, plate['D', 3]: 10.0, plate[5, '3']: 9.0}.items():
+    recipe5.transfer(salt_water_oneM, sub_plate, f"{volume} mL")
+plate, salt_water_oneM = recipe5.build()
+
+for recipe in [recipe, recipe2, recipe3, recipe4, recipe5]:
+    print(recipe)
+    print('=========')
+
+# salt_water_oneM.volume = 100
+import numpy
+print(numpy.vectorize(lambda elem: elem.container.contents)(plate.wells))
+recipe6 = Recipe().uses(salt, plate)
+result = recipe6.do_transfer(salt, plate[:3,:3], '1 g')
+result = recipe6.do_transfer(salt, plate[3:6, 3:6], '10 g')
+print(numpy.vectorize(lambda elem: elem.container.contents)(plate.wells))
