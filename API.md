@@ -1,11 +1,9 @@
+## PyPlate
 
 All classes except for Recipe are immutable. All work is done on copies of the original instances.
 
 - Amounts can be volume ('10 mL'), mass ('10 g'), or enzyme activity units ('10 AU')
 
-Recipe - a set of instructions for transforming containers/plates
-
-## Functions
 ### Substance
 An abstract chemical (without quantity, but having a molecular weight, name, and optional structure)
 - solid(name, mol_weight) -> Substance
@@ -46,6 +44,7 @@ A spatially ordered collection of containers (e.g., a 96 well plate)
   - Clones current Plate
 
 ### Recipe
+A set of instructions for transforming containers/plates
 
 - uses(*args)
   - `args` is an iterable of objects intended to be used in the recipe
@@ -59,3 +58,13 @@ A spatially ordered collection of containers (e.g., a 96 well plate)
   - performs steps described using above functions, returning all new Containers and Plates in the order they were defined in `used()`
 
 
+## Helper class
+### Slicer
+- get()
+  - Returns a numpy array of selected elements
+- set(values)
+  - Replaces elements
+- shape
+  - Shape of elements
+- size
+  - Number of elements
