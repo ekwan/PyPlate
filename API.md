@@ -1,8 +1,8 @@
 ## PyPlate
 
-All classes except for Recipe are immutable. All work is done on copies of the original instances.
+All classes except for Recipe cannot me modified. All work is done on copies of the original instances.
 
-- Amounts can be volume ('10 mL'), mass ('10 g'), or enzyme activity units ('10 AU')
+- Amounts can be volume ('10 mL'), mass ('10 g'), moles ('1 mol'), or enzyme activity units ('10 AU')
 
 ### Substance
 An abstract chemical (without quantity, but having a molecular weight, name, and optional structure)
@@ -12,8 +12,7 @@ An abstract chemical (without quantity, but having a molecular weight, name, and
   - Creates a new liquid
 - enzyme(name) -> Substance
   - Creates a new enzyme
-- copy()
-  - Clones current `Substance`
+
 
 ### Container
 An unordered collection of (substance, quantity) pairs, with a maximum capacity (i.e., a container of substances)
@@ -54,6 +53,7 @@ A set of instructions for transforming containers/plates
   - Adds a step that transfers an amount of a substance from `frm` to `to`
 - create_container(name, max_volume, initial_contents)
   - Adds a step that creates a container as above and adds it to the used list.
+  - Returns new container so that it can be used later in the same recipe.
 - build()
   - performs steps described using above functions, returning all new Containers and Plates in the order they were defined in `used()`
 
