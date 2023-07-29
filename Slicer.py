@@ -1,6 +1,8 @@
-from functools import cached_property
+from functools import cached_property, cache
 from typing import Union, Tuple, List
 import numpy as np
+
+__docformat__ = "google"
 
 # Valid slices:
 #
@@ -29,36 +31,29 @@ import numpy as np
 
 
 Label = Union[str, int]
+"""@private"""
 Single = Union[Label, Tuple[Label, Label]]
+"""@private"""
 Singles = Union[List[Single], Single]
+"""@private"""
 Slice = Union[Singles, slice, Tuple[slice, Label], Tuple[Label, slice], Tuple[slice, slice]]
+"""@private"""
 
 
 class Slicer:
     """
     Helper class to provide slicing for composed numpy ndarrays.
 
+    Extend the class to make it useful for a particular application
+
+    All integer indexes are one-based. i.e. array[1,1] is the upper left element.
     Does not currently support negative indexing.
     """
 
-    # @staticmethod
-    # def _is_label(item):
-    #     return isinstance(item, int) or isinstance(item, str)
-    #
-    # @classmethod
-    # def _is_single(cls, item):
-    #     return isinstance(item, str) or \
-    #         (isinstance(item, tuple) and len(item) == 2 and all(map(cls._is_label, item)))
-    #
-    # @classmethod
-    # def _is_singles(cls, item):
-    #     return cls._is_single(item) or (isinstance(item, list) and all(map(cls._is_single, item)))
-
-    def __init__(self, data, array_obj: np.ndarray, row_labels, col_labels, item: Slice):
+    def __init__(self, array_obj: np.ndarray, row_labels, col_labels, item):
         """
 
-        Args:
-            data: Data stored only for the class users' convenience.
+        Args:\
             array_obj (numpy.ndarry): Array to slice.
             row_labels (list): Row labels.
             col_labels (list): Column labels.
@@ -67,7 +62,6 @@ class Slicer:
 
         if not isinstance(array_obj, np.ndarray):
             raise TypeError("array must be a numpy.ndarray.")
-        self.data = data
         self.array = array_obj
         if not isinstance(row_labels, list) or not all(isinstance(elem, str) for elem in row_labels):
             raise TypeError("row_labels myst be a list of strings.")
@@ -91,20 +85,17 @@ class Slicer:
                 raise ValueError("Row index out of range.")
             self.slices = item - 1
         else:
-            self.slices = self.parse_item(item)
+            self.slices = self.parse_tuple(item)
 
     def copy(self):
-        return Slicer(self.data, self.array, self.row_labels, self.col_labels, self.item)
+        return Slicer(self.array, self.row_labels, self.col_labels, self.item)
 
-    def parse_single(self, single: Single) -> Tuple[int, int]:
+    def parse_single(self, single) -> Tuple[int, int]:
         """
         Convert a single index to a tuple of integers.
 
         Args:
             single: Index to parse, i.e. 'A:1' or ('A','1') or (1, 1).
-
-        Returns:
-            Result.
 
         """
         if isinstance(single, str) and ':' in single:
@@ -114,15 +105,15 @@ class Slicer:
                     self.resolve_labels(single[1], self.col_labels))
         raise TypeError("Invalid slice.")
 
-    def parse_item(self, item: Slice) -> Union[int, Tuple[int, int]]:
+    def parse_tuple(self, item):
         """
         Handle cases where item is a tuple.
 
         Args:
-            item: Slice(s) passed to __getitem__.
+            item: Tuples from slice(s) passed to __getitem__.
 
         Returns:
-            Resolved slice(s).
+            Resolved tuples(s).
 
         """
         if isinstance(item, tuple) and len(item) == 1:
@@ -136,7 +127,7 @@ class Slicer:
             return self.resolve_labels(item, self.row_labels)
 
     @staticmethod
-    def resolve_labels(item: Slice, labels: List[str]) -> Union[int, slice]:
+    def resolve_labels(item, labels: List[str]) -> Union[int, slice]:
         """
         Convert argument passed into __getitem__ to only contain integer indices.
 
@@ -228,4 +219,4 @@ class Slicer:
         return np.size(self.get())
 
     def __repr__(self):
-        return f"Slice: {self.data}[{self.slices}]"
+        return f"Slice: [{self.slices}]"
