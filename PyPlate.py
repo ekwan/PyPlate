@@ -24,7 +24,7 @@ class PlateSlicer(Slicer):
         return PlateSlicer(self.plate, self.item)
 
     def add(self, frm, how_much):
-        self.set(numpy.vectorize(lambda elem: elem.transfer(frm, how_much), cache=True)(self.get()))
+        self.set(numpy.vectorize(lambda elem: elem.add(frm, how_much), cache=True)(self.get()))
         return self.plate
 
     def transfer(self, frm, how_much):
@@ -244,14 +244,14 @@ class Container:
     def _self_add(self, frm: Substance, how_much: str):
         # Only to be used in constructor and immediately after copy
         if not isinstance(frm, Substance):
-            return TypeError("Invalid source type.")
+            raise TypeError("Invalid source type.")
         if how_much.endswith('M') and frm.type != Substance.SOLID:
             # TODO: molarity from liquids?
             raise ValueError("Molarity solutions can only be made from solids.")
-        volume_to_transfer = round(frm.convert_to_unit_value(how_much, self.volume), 10)
-        self.contents[frm] = round(self.contents.get(frm, 0) + volume_to_transfer, 10)
+        amount_to_transfer = round(frm.convert_to_unit_value(how_much, self.volume), 10)
+        self.contents[frm] = round(self.contents.get(frm, 0) + amount_to_transfer, 10)
         if frm.type == Substance.LIQUID:
-            self.volume = round(self.volume + volume_to_transfer, 10)
+            self.volume = round(self.volume + amount_to_transfer, 10)
             # to.volume += volume_to_transfer
         if self.volume > self.max_volume:
             raise ValueError("Exceeded maximum volume")
@@ -263,7 +263,7 @@ class Container:
 
     def transfer(self, frm: Container, how_much: str):
         if not isinstance(frm, Container):
-            return TypeError("Invalid source type.")
+            raise TypeError("Invalid source type.")
         volume_to_transfer, unit = extract_value_unit(how_much)
         volume_to_transfer *= 1000.0  # convert L to mL
         volume_to_transfer = round(volume_to_transfer, 10)
@@ -410,6 +410,9 @@ class Plate:
 
         return numpy.vectorize(helper, cache=True)(arr)
 
+    def volume(self, arr=None):
+        return numpy.sum(self.volumes(arr))
+
     def copy(self):
         new_plate = Plate(self.name, self.make, 1, 1, self.max_volume_per_well)
         new_plate.n_rows, new_plate.n_columns = self.n_rows, self.n_columns
@@ -448,9 +451,9 @@ class Recipe:
 
     def transfer(self, frm, to, how_much):
         if not isinstance(to, (Container, Plate, PlateSlicer)):
-            raise ValueError("Invalid destination type.")
+            raise TypeError("Invalid destination type.")
         if not isinstance(frm, (Substance, Container, PlateSlicer)):
-            raise ValueError("Invalid source type.")
+            raise TypeError("Invalid source type.")
         if (frm.plate if isinstance(frm, PlateSlicer) else frm) not in self.indexes:
             raise ValueError("Source not found in declared uses.")
         if (to.plate if isinstance(to, PlateSlicer) else to) not in self.indexes:
