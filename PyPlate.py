@@ -235,7 +235,8 @@ class Container:
     def __eq__(self, other):
         if not isinstance(other, Container):
             return False
-        return self.name == other.name and self.contents == other.contents and self.volume == other.volume and self.max_volume == other.max_volume
+        return self.name == other.name and self.contents == other.contents and\
+            self.volume == other.volume and self.max_volume == other.max_volume
 
     def __hash__(self):
         return hash((self.name, self.volume, self.max_volume, *tuple(map(tuple, self.contents.items()))))

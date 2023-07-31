@@ -1,6 +1,6 @@
 ## PyPlate
 
-All classes except for Recipe cannot me modified. All work is done on copies of the original instances.
+All classes except for Recipe cannot be modified. All work is done on copies of the original instances.
 
 - Amounts can be volume ('10 mL'), mass ('10 g'), moles ('1 mol'), or enzyme activity units ('10 AU')
 
