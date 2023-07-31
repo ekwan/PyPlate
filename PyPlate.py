@@ -20,9 +20,8 @@ class PlateSlicer(Slicer):
     def array(self, array):
         self.plate.wells = array
 
-    # def set(self, values):
-    #     super().set(values)
-    #     pl
+    def copy(self):
+        return PlateSlicer(self.plate, self.item)
 
     def add(self, frm, how_much):
         self.set(numpy.vectorize(lambda elem: elem.transfer(frm, how_much), cache=True)(self.get()))
@@ -38,12 +37,14 @@ class PlateSlicer(Slicer):
         if isinstance(self.get(), Container):  # A zero-dim array was returned.
             result = result.item()
         self.set(result)
-        # TODO: investigate why this is necessary.
         return frm_array[0], self.plate
 
     def transfer_slice(self, frm, how_much):
-        self.plate = self.plate.copy()
-        frm.plate = frm.plate.copy()
+        if self.plate != frm.plate:
+            self.plate = self.plate.copy()
+            frm.plate = frm.plate.copy()
+        else:
+            self.plate = frm.plate = self.plate.copy()
         if frm.size == 1:
             # Source from the single element in frm
             if frm.shape != ():
@@ -54,12 +55,9 @@ class PlateSlicer(Slicer):
                 return elem
 
             frm_array = [frm.get()]
-            # self.set(numpy.vectorize(helper_func, cache=True)(self.get()))
             result = numpy.vectorize(helper_func, cache=True)(self.get())
             self.set(result)
-            # self.data.wells = self.array
             frm.set(frm_array[0])
-            # frm.data.wells = frm.array
 
         elif self.size == 1:
             #  Replace the single element in self
@@ -72,9 +70,7 @@ class PlateSlicer(Slicer):
 
             to_array = [self.get()]
             frm.set(numpy.vectorize(helper_func, cache=True)(frm.get()))
-            # frm.data.wells = frm.array
             self.set(to_array[0])
-            # to.data.wells = to.array
 
         elif frm.size == self.size and frm.shape == self.shape:
             def helper(elem1, elem2):
@@ -84,89 +80,11 @@ class PlateSlicer(Slicer):
             func = numpy.frompyfunc(helper, 2, 2)
             frm_result, to_result = func(frm.get(), self.get())
             frm.set(frm_result)
-            # frm.data.wells = frm.array
             self.set(to_result)
-            # to.data.wells = to.array
         else:
             raise ValueError("Source and destination slices must be the same size and shape.")
 
         return frm.plate, self.plate
-
-
-# def _slicer_add(frm, to, how_much):
-#     to.set(numpy.vectorize(lambda elem: elem.transfer(frm, how_much), cache=True)(to.get()))
-#     return to
-#
-#
-# Slicer.add = lambda self, frm, how_much: _slicer_add(frm, self, how_much)
-#
-#
-# def _slicer_transfer(frm, to, how_much):
-#     def helper_func(elem):
-#         frm_array[0], elem = elem.transfer(frm_array[0], how_much)
-#         return elem
-#
-#     frm_array = [frm]
-#     result = numpy.vectorize(helper_func, cache=True)(to.get())
-#     if isinstance(to.get(), Container):  # A zero-dim array was returned.
-#         result = result.item()
-#     to.set(result)
-#     # TODO: investigate why this is necessary.
-#     to.data.wells = to.array
-#     return frm_array[0], to.data
-#
-#
-# Slicer.transfer = lambda self, frm, how_much: _slicer_transfer(frm, self, how_much)
-#
-#
-# def _slicer_transfer_slices(frm, to, how_much):
-#     if frm.size == 1:
-#         # Source from the single element in frm
-#         if frm.shape != ():
-#             raise RuntimeError("Shape of source should have been ()")
-#
-#         def helper_func(elem):
-#             frm_array[0], elem = elem.transfer(frm_array[0], how_much)
-#             return elem
-#
-#         frm_array = [frm.get()]
-#         to.set(numpy.vectorize(helper_func, cache=True)(to.get()))
-#         to.data.wells = to.array
-#         frm.set(frm_array[0])
-#         frm.data.wells = frm.array
-#
-#     elif to.size == 1:
-#         #  Replace the single element in to
-#         if to.shape != ():
-#             raise RuntimeError("Shape of source should have been ()")
-#
-#         def helper_func(elem):
-#             elem, to_array[0] = to_array[0].transfer(elem, how_much)
-#             return elem
-#
-#         to_array = [to.get()]
-#         frm.set(numpy.vectorize(helper_func, cache=True)(frm.get()))
-#         frm.data.wells = frm.array
-#         to.set(to_array[0])
-#         to.data.wells = to.array
-#
-#     elif frm.size == to.size and frm.shape == to.shape:
-#         def helper(elem1, elem2):
-#             elem1, elem2 = elem2.transfer(elem1, how_much)
-#             return elem1, elem2
-#
-#         func = numpy.frompyfunc(helper, 2, 2)
-#         frm_result, to_result = func(frm.get(), to.get())
-#         frm.set(frm_result)
-#         frm.data.wells = frm.array
-#         to.set(to_result)
-#         to.data.wells = to.array
-#     else:
-#         raise ValueError("Source and destination slices must be the same size and shape.")
-#     return frm.data, to.data
-#
-#
-# Slicer.transfer_slice = lambda self, frm, how_much: _slicer_transfer_slices(frm, self, how_much)
 
 
 def convert_prefix(prefix):
@@ -223,6 +141,15 @@ class Substance:
             return f"LIQUID ({self.name}: {self.mol_weight}, {self.density})"
         else:
             return f"ENZYME ({self.name})"
+
+    def __eq__(self, other):
+        if not isinstance(other, Substance):
+            return False
+        return self.name == other.name and self.type == other.type and self.mol_weight == other.mol_weight\
+            and self.density == other.density and self.concentration == other.concentration
+
+    def __hash__(self):
+        return hash((self.name, self.type, self.mol_weight, self.density, self.concentration))
 
     @staticmethod
     def solid(name, mol_weight):
@@ -304,6 +231,14 @@ class Container:
         new_container.contents = self.contents.copy()
         new_container.volume = self.volume
         return new_container
+
+    def __eq__(self, other):
+        if not isinstance(other, Container):
+            return False
+        return self.name == other.name and self.contents == other.contents and self.volume == other.volume and self.max_volume == other.max_volume
+
+    def __hash__(self):
+        return hash((self.name, self.volume, self.max_volume, *tuple(map(tuple, self.contents.items()))))
 
     def _self_add(self, frm: Substance, how_much: str):
         # Only to be used in constructor and immediately after copy
@@ -436,11 +371,8 @@ class Plate:
         self.wells = numpy.array([[Container(f"well {row + 1},{col + 1}", max_volume=self.max_volume_per_well)
                                    for col in range(self.n_columns)] for row in range(self.n_rows)])
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> PlateSlicer:
         return PlateSlicer(self, item)
-        # slicer = Slicer(self, self.wells, self.row_names, self.column_names, item)
-        # slicer.transfer_slice = lambda frm, how_much: _slicer_transfer_slices(frm, slicer, how_much)
-        # return slicer
 
     def __repr__(self):
         return f"Plate: {self.name}"
@@ -448,14 +380,14 @@ class Plate:
     def volumes(self, arr=None):
         if arr is None:
             arr = self.wells
-        elif isinstance(arr, Slicer):
+        elif isinstance(arr, PlateSlicer):
             arr = arr.get()
         return numpy.vectorize(lambda x: x.volume)(arr)
 
     def substances(self, arr=None):
         if arr is None:
             arr = self.wells
-        elif isinstance(arr, Slicer):
+        elif isinstance(arr, PlateSlicer):
             arr = arr.get()
         substances_arr = numpy.vectorize(lambda elem: elem.contents.keys())(arr)
         return set.union(*map(set, substances_arr.flatten()))
@@ -464,7 +396,7 @@ class Plate:
         PRECISION = 6
         if arr is None:
             arr = self.wells
-        elif isinstance(arr, Slicer):
+        elif isinstance(arr, PlateSlicer):
             arr = arr.get()
 
         def helper(elem):
@@ -514,14 +446,18 @@ class Recipe:
         return self
 
     def transfer(self, frm, to, how_much):
-        if not isinstance(to, (Container, Plate, Slicer)):
+        if not isinstance(to, (Container, Plate, PlateSlicer)):
             raise ValueError("Invalid destination type.")
-        if not isinstance(frm, (Substance, Container, Slicer)):
+        if not isinstance(frm, (Substance, Container, PlateSlicer)):
             raise ValueError("Invalid source type.")
-        if (frm.data if isinstance(frm, Slicer) else frm) not in self.indexes:
+        if (frm.plate if isinstance(frm, PlateSlicer) else frm) not in self.indexes:
             raise ValueError("Source not found in declared uses.")
-        if (to.data if isinstance(to, Slicer) else to) not in self.indexes:
+        if (to.plate if isinstance(to, PlateSlicer) else to) not in self.indexes:
             raise ValueError("Destination not found in declared uses.")
+        if isinstance(frm, Plate):
+            frm = frm[:]
+        if isinstance(to, Plate):
+            to = to[:]
         self.steps.append((frm, to, how_much))
         return self
 
@@ -538,95 +474,31 @@ class Recipe:
     def build(self):
 
         for frm, to, how_much in self.steps:
-            frm_index = self.indexes[frm] if not isinstance(frm, Slicer) else self.indexes[frm.data]
-            to_index = self.indexes[to] if not isinstance(to, Slicer) else self.indexes[to.data]
+            # used items can change in a recipe
+            frm_index = self.indexes[frm] if not isinstance(frm, PlateSlicer) else self.indexes[frm.plate]
+            to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
 
             # containers and such can change while building the recipe
 
-            if isinstance(frm, Slicer):
+            if isinstance(frm, PlateSlicer):
                 new_frm = frm.copy()
-                new_frm.transfer_slice = frm.transfer_slice
-                new_frm.data = self.results[frm_index]
+                new_frm.plate = self.results[frm_index]
                 frm = new_frm
             else:
                 frm = self.results[frm_index]
 
-            if isinstance(to, Slicer):
+            if isinstance(to, PlateSlicer):
                 new_to = to.copy()
-                new_to.data = self.results[to_index]
+                new_to.plate = self.results[to_index]
                 to = new_to
             else:
                 to = self.results[to_index]
 
-            # # # used items can change in a recipe
-            #
-            # if isinstance(frm, Plate):
-            #     frm = frm[:]
-            # if isinstance(to, Plate):
-            #     to = to[:]
-            #
-            # # frm is a Substance, Container, or Slicer
-            # # to is a Container or Slicer
-            # # Six combinations
-            #
-            # if isinstance(to, Container):
-            #     if isinstance(frm, Substance):
-            #         to = to.add(frm, how_much)
-            #     elif isinstance(frm, Container):
-            #         frm, to = to.transfer(frm, how_much)
-            #     else:  # frm == Slicer
-            #         # TODO: Is this something we want to work?
-            #         pass
-            # elif isinstance(to, Slicer):
-            #     if isinstance(frm, Substance):
-            #         ds
-            #     elif isinstance(frm, Container):
-            #         frm_array = [frm]
-            #         helper_function = helper_factory(frm_array, how_much)
-            #         result = numpy.vectorize(helper_function, cache=True)(to.get())
-            #         if isinstance(to.get(), Container):  # A zero-dim array was returned.
-            #             result = result.item()
-            #         to.set(result)
-            #         # TODO: investigate why this is necessary.
-            #         to.data.wells = to.array
-            #         frm = frm_array[0]
-            #     elif isinstance(frm, Slicer):
-            #         if frm.size == 1:
-            #             # Source from the single element in frm
-            #             if frm.shape != (1,):
-            #                 raise RuntimeError("Shape of source should have been (1,)")
-            #
-            #             frm_array = [frm.get()[0]]
-            #             helper_function = helper_factory(frm_array, how_much)
-            #             to.set(numpy.vectorize(helper_function, cache=True)(to.get()))
-            #             to.data.wells = to.array
-            #             frm.get()[0] = frm_array[0]
-            #         elif to.size == 1:
-            #             #  Replace the single element in to
-            #             if to.shape != (1,):
-            #                 raise RuntimeError("Shape of source should have been (1,)")
-            #             to_array = [to.get()[0]]
-            #
-            #             def to_helper(elem):
-            #                 elem, to_array[0] = to_array[0].transfer(elem, how_much)
-            #
-            #             frm.set(numpy.vectorize(to_helper, cache=True)(frm.get()))
-            #             to.data.wells = to.array
-            #             to.get()[0] = to_array[0]
-            #         elif frm.size == to.size and frm.shape == to.shape:
-            #             func = numpy.frompyfunc(lambda elem1, elem2: elem2.transfer(elem1, how_much), 2, 2)
-            #             frm_result, to_result = func(frm.get(), to.get())
-            #             frm.set(frm_result)
-            #             frm.data.wells = frm.array
-            #             to.set(frm_result)
-            #             to.data.wells = to.array
-            #         else:
-            #             raise ValueError("Source and destination slices must be the same size and shape.")
             if isinstance(frm, Substance):
                 to = to.add(frm, how_much)
             elif isinstance(frm, Container):
                 frm, to = to.transfer(frm, how_much)
-            elif isinstance(frm, Slicer):
+            elif isinstance(frm, PlateSlicer):
                 frm, to = to.transfer_slice(frm, how_much)
 
             self.results[frm_index] = frm
