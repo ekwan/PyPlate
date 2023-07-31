@@ -24,27 +24,38 @@ class PlateSlicer(Slicer):
         return PlateSlicer(self.plate, self.item)
 
     def add(self, frm, how_much):
-        self.set(numpy.vectorize(lambda elem: elem.add(frm, how_much), cache=True)(self.get()))
-        return self.plate
+        to = self.copy()
+        to.plate = to.plate.copy()
+        result = numpy.vectorize(lambda elem: elem.add(frm, how_much), cache=True)(to.get())
+        to.set(result)
+        return to.plate
 
     def transfer(self, frm, how_much):
+        to = self.copy()
+        to.plate = self.plate.copy()
+
         def helper_func(elem):
             frm_array[0], elem = elem.transfer(frm_array[0], how_much)
             return elem
 
         frm_array = [frm]
-        result = numpy.vectorize(helper_func, cache=True)(self.get())
-        if isinstance(self.get(), Container):  # A zero-dim array was returned.
+        result = numpy.vectorize(helper_func, cache=True)(to.get())
+        if isinstance(to.get(), Container):  # A zero-dim array was returned.
             result = result.item()
-        self.set(result)
-        return frm_array[0], self.plate
+        to.set(result)
+        return frm_array[0], to.plate
 
     def transfer_slice(self, frm, how_much):
+
+        to = self.copy()
+        frm = frm.copy()
+
         if self.plate != frm.plate:
-            self.plate = self.plate.copy()
+            to.plate = to.plate.copy()
             frm.plate = frm.plate.copy()
         else:
-            self.plate = frm.plate = self.plate.copy()
+            to.plate = frm.plate = to.plate.copy()
+
         if frm.size == 1:
             # Source from the single element in frm
             if frm.shape != ():
@@ -55,8 +66,8 @@ class PlateSlicer(Slicer):
                 return elem
 
             frm_array = [frm.get()]
-            result = numpy.vectorize(helper_func, cache=True)(self.get())
-            self.set(result)
+            result = numpy.vectorize(helper_func, cache=True)(to.get())
+            to.set(result)
             frm.set(frm_array[0])
 
         elif self.size == 1:
@@ -68,9 +79,9 @@ class PlateSlicer(Slicer):
                 elem, to_array[0] = to_array[0].transfer(elem, how_much)
                 return elem
 
-            to_array = [self.get()]
+            to_array = [to.get()]
             frm.set(numpy.vectorize(helper_func, cache=True)(frm.get()))
-            self.set(to_array[0])
+            to.set(to_array[0])
 
         elif frm.size == self.size and frm.shape == self.shape:
             def helper(elem1, elem2):
@@ -78,13 +89,13 @@ class PlateSlicer(Slicer):
                 return elem1, elem2
 
             func = numpy.frompyfunc(helper, 2, 2)
-            frm_result, to_result = func(frm.get(), self.get())
+            frm_result, to_result = func(frm.get(), to.get())
             frm.set(frm_result)
-            self.set(to_result)
+            to.set(to_result)
         else:
             raise ValueError("Source and destination slices must be the same size and shape.")
 
-        return frm.plate, self.plate
+        return frm.plate, to.plate
 
 
 def convert_prefix(prefix):

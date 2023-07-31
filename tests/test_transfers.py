@@ -78,7 +78,9 @@ def test_transfer_between_containers(solution1, solution2, water, salt):
 
 def test_add_to_slice(plate1, salt):
     plate3 = plate1[:].add(salt, '10 mol')
+    # 10 moles of salt should be in each well
     assert numpy.array_equal(plate3.moles(salt), numpy.full(plate3.wells.shape, 10))
+    # Original plate should be unchanged
     assert numpy.array_equal(plate1.moles(salt), numpy.zeros(plate1.wells.shape))
 
 
@@ -90,3 +92,34 @@ def test_transfer_to_slice(plate1, solution1):
     # Original solution and plate should be unchanged
     assert solution1.volume == 100
     assert plate1.volume() == 0
+
+
+def test_transfer_between_slices(plate1, plate2, solution1, solution2):
+    left_over_solution, plate3 = plate1[1, 1].transfer(solution1, '10 mL')
+    initial_volumes = plate3.volumes().copy()
+    # 10 mL of solution should in the first well
+    assert initial_volumes[0, 0] == 10
+    plate4, _ = plate3[8:].transfer_slice(plate3[1, 1], '0.1 mL')
+    volumes = plate4.volumes()
+    intended_result_volumes = numpy.zeros(volumes.shape)
+    # Solution should have been transferred between
+    #   the first well and the last row
+    intended_result_volumes[0, 0] = 10 - 0.1 * 12
+    intended_result_volumes[7:] = 0.1
+    assert numpy.array_equal(volumes, intended_result_volumes)
+    # Plate3 should not have been modified
+    assert numpy.array_equal(initial_volumes, plate3.volumes())
+
+    # Plate with first row containing 1mL of solution1
+    left_over_solution1, plate5 = plate1[:1].transfer(solution1, '1 mL')
+    # Plate with last row containing 2mL of solution2
+    left_over_solution2, plate6 = plate2[8:].transfer(solution2, '2 mL')
+    # Expected starting volumes
+    assert plate5.volume() == 12 and plate6.volume() == 24
+    plate7, plate8 = plate6[8:].transfer_slice(plate5[:1], '1 mL')
+    # From plate should be empty
+    assert plate7.volume() == 0
+    intended_result_volumes = numpy.zeros(plate8[:].shape)
+    intended_result_volumes[7:] = 3
+    # Last row should have 3 mL in each well
+    assert numpy.array_equal(intended_result_volumes, plate8.volumes())
