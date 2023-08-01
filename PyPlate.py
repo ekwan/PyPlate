@@ -290,12 +290,36 @@ class Container:
         to.volume = round(to.volume + volume_to_transfer, 10)
         if to.volume > to.max_volume:
             raise ValueError("Exceeded maximum volume")
-        # frm.volume -= volume_to_transfer
         frm.volume = round(frm.volume - volume_to_transfer, 10)
         return frm, to
 
+    def transfer_slice(self, frm, how_much):
+        def helper_func(elem):
+            elem, to_array[0] = to_array[0].transfer(elem, how_much)
+            return elem
+
+        if isinstance(frm, Plate):
+            frm = frm[:]
+        if not isinstance(frm, PlateSlicer):
+            raise TypeError("Invalid source type.")
+        to = self.copy()
+        frm = frm.copy()
+        frm.plate = frm.plate.copy()
+        volume_to_transfer, unit = extract_value_unit(how_much)
+        volume_to_transfer *= 1000.0  # convert L to mL
+        volume_to_transfer = round(volume_to_transfer, 10)
+        if unit != 'L':
+            raise ValueError("We can only transfer liquid from other containers.")
+        if frm.get().size * volume_to_transfer > (to.max_volume - to.volume):
+            raise ValueError("Not enough room left in destination container.")
+
+        to_array = [to]
+        result = numpy.vectorize(helper_func, cache=True)(frm.get())
+        frm.set(result)
+        return frm.plate, to_array[0]
+
     def __repr__(self):
-        return f"Container ({self.name}) ({self.volume}" + \
+        return f"Container ({self.name}) ({self.volume}" +\
             f"{('/' + str(self.max_volume)) if self.max_volume != float('inf') else ''}) of ({self.contents})"
 
 

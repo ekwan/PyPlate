@@ -1,6 +1,5 @@
 from PyPlate import Plate, Substance, Container, Generic96WellPlate
 import pytest
-from copy import deepcopy
 import numpy
 
 
@@ -45,6 +44,9 @@ def solution2(dmso, sodium_sulfate) -> Container:
 
 
 def test_add_to_container(salt, water):
+    """
+    Tests adding a substance to a container.
+    """
     container = Container('container', max_volume=10_000).add(frm=salt, how_much='10 mol')
     # container should contain 10 moles of salt
     assert salt in container.contents and container.contents[salt] == 10
@@ -67,6 +69,9 @@ def test_add_to_container(salt, water):
 
 
 def test_transfer_between_containers(solution1, solution2, water, salt):
+    """
+    Tests transferring from one container to another.
+    """
     solution3, solution4 = solution2.transfer(solution1, '10 mL')
     # original solutions should be unchanged
     assert solution2.volume == 100 and solution1.volume == 100
@@ -77,6 +82,9 @@ def test_transfer_between_containers(solution1, solution2, water, salt):
 
 
 def test_add_to_slice(plate1, salt):
+    """
+    Tests adding a substance to each well in a slice.
+    """
     plate3 = plate1[:].add(salt, '10 mol')
     # 10 moles of salt should be in each well
     assert numpy.array_equal(plate3.moles(salt), numpy.full(plate3.wells.shape, 10))
@@ -85,6 +93,9 @@ def test_add_to_slice(plate1, salt):
 
 
 def test_transfer_to_slice(plate1, solution1):
+    """
+    Tests transferring from a container to each well in a slice.
+    """
     solution3, plate3 = plate1[:].transfer(solution1, '1 mL')
     # 1 mL should have been transferred to each well in the plate
     assert plate3.volume() == plate3[:].size
@@ -95,6 +106,9 @@ def test_transfer_to_slice(plate1, solution1):
 
 
 def test_transfer_between_slices(plate1, plate2, solution1, solution2):
+    """
+    Tests transfer from the wells in one slice to the wells in another.
+    """
     left_over_solution, plate3 = plate1[1, 1].transfer(solution1, '10 mL')
     initial_volumes = plate3.volumes().copy()
     # 10 mL of solution should in the first well
@@ -123,3 +137,18 @@ def test_transfer_between_slices(plate1, plate2, solution1, solution2):
     intended_result_volumes[7:] = 3
     # Last row should have 3 mL in each well
     assert numpy.array_equal(intended_result_volumes, plate8.volumes())
+
+
+def test_transfer_from_slice(plate1, solution1):
+    """
+    Tests transferring from each well in a slice to a container.
+    """
+    solution3, plate3 = plate1[:].transfer(solution1, '1 mL')
+    destination_solution = Container('destination', 100)
+    plate4, destination_solution = destination_solution.transfer_slice(plate3, '0.5 mL')
+    # Original plate should have 1 mL in each well
+    assert numpy.array_equal(plate3.volumes(), numpy.ones(plate3[:].shape))
+    # Destination container should have 0.5 mL for each well
+    assert destination_solution.volume == 0.5 * plate3[:].size
+    # Source wells should all have 0.5 mL
+    assert numpy.array_equal(plate4.volumes(), numpy.ones(plate4[:].shape) * 0.5)
