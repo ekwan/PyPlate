@@ -23,19 +23,20 @@ class PlateSlicer(Slicer):
     def copy(self):
         return PlateSlicer(self.plate, self.item)
 
-    def add(self, frm, how_much):
+    def _add(self, frm, how_much):
         to = self.copy()
         to.plate = to.plate.copy()
-        result = numpy.vectorize(lambda elem: elem.add(frm, how_much), cache=True)(to.get())
+        result = numpy.vectorize(lambda elem: Container.add(frm, elem, how_much), cache=True)(to.get())
         to.set(result)
         return to.plate
 
-    def transfer(self, frm, how_much):
+    def _transfer(self, frm, how_much):
         to = self.copy()
         to.plate = self.plate.copy()
 
         def helper_func(elem):
-            frm_array[0], elem = elem.transfer(frm_array[0], how_much)
+            # frm_array[0], elem = elem._transfer(frm_array[0], how_much)
+            frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
             return elem
 
         frm_array = [frm]
@@ -45,7 +46,7 @@ class PlateSlicer(Slicer):
         to.set(result)
         return frm_array[0], to.plate
 
-    def transfer_slice(self, frm, how_much):
+    def _transfer_slice(self, frm, how_much):
 
         to = self.copy()
         frm = frm.copy()
@@ -62,7 +63,7 @@ class PlateSlicer(Slicer):
                 raise RuntimeError("Shape of source should have been ()")
 
             def helper_func(elem):
-                frm_array[0], elem = elem.transfer(frm_array[0], how_much)
+                frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
                 return elem
 
             frm_array = [frm.get()]
@@ -85,8 +86,7 @@ class PlateSlicer(Slicer):
 
         elif frm.size == self.size and frm.shape == self.shape:
             def helper(elem1, elem2):
-                elem1, elem2 = elem2.transfer(elem1, how_much)
-                return elem1, elem2
+                return Container.transfer(elem1, elem2, how_much)
 
             func = numpy.frompyfunc(helper, 2, 2)
             frm_result, to_result = func(frm.get(), to.get())
@@ -252,75 +252,95 @@ class Container:
     def __hash__(self):
         return hash((self.name, self.volume, self.max_volume, *tuple(map(tuple, self.contents.items()))))
 
-    def _self_add(self, frm: Substance, how_much: str):
+    def _self_add(self, source: Substance, how_much: str):
         # Only to be used in constructor and immediately after copy
-        if not isinstance(frm, Substance):
+        if not isinstance(source, Substance):
             raise TypeError("Invalid source type.")
-        if how_much.endswith('M') and frm.type != Substance.SOLID:
+        if how_much.endswith('M') and source.type != Substance.SOLID:
             # TODO: molarity from liquids?
             raise ValueError("Molarity solutions can only be made from solids.")
-        amount_to_transfer = round(frm.convert_to_unit_value(how_much, self.volume), 10)
-        self.contents[frm] = round(self.contents.get(frm, 0) + amount_to_transfer, 10)
-        if frm.type == Substance.LIQUID:
+        amount_to_transfer = round(source.convert_to_unit_value(how_much, self.volume), 10)
+        self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, 10)
+        if source.type == Substance.LIQUID:
             self.volume = round(self.volume + amount_to_transfer, 10)
-            # to.volume += volume_to_transfer
         if self.volume > self.max_volume:
             raise ValueError("Exceeded maximum volume")
 
-    def add(self, frm: Substance, how_much: str):
+    def _add(self, source: Substance, how_much: str):
+        """ add substance to self """
         to = self.copy()
-        to._self_add(frm, how_much)
+        to._self_add(source, how_much)
         return to
 
-    def transfer(self, frm: Container, how_much: str):
-        if not isinstance(frm, Container):
+    def _transfer(self, source_container: Container, volume: str):
+        """ transfer from container to self """
+        if not isinstance(source_container, Container):
             raise TypeError("Invalid source type.")
-        volume_to_transfer, unit = extract_value_unit(how_much)
+        volume_to_transfer, unit = extract_value_unit(volume)
         volume_to_transfer *= 1000.0  # convert L to mL
         volume_to_transfer = round(volume_to_transfer, 10)
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
-        if volume_to_transfer > frm.volume:
-            raise ValueError("Not enough mixture left in source container." + f"{frm} ({how_much}) -> {self}")
-        frm, to = frm.copy(), self.copy()
-        ratio = volume_to_transfer / frm.volume
-        for substance, amount in frm.contents.items():
+        if volume_to_transfer > source_container.volume:
+            raise ValueError("Not enough mixture left in source container." +
+                             f"{source_container} ({volume}) -> {self}")
+        source_container, to = source_container.copy(), self.copy()
+        ratio = volume_to_transfer / source_container.volume
+        for substance, amount in source_container.contents.items():
             to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio, 10)
-            frm.contents[substance] = round(frm.contents[substance] - amount * ratio, 10)
+            source_container.contents[substance] = round(source_container.contents[substance] - amount * ratio, 10)
         to.volume = round(to.volume + volume_to_transfer, 10)
         if to.volume > to.max_volume:
             raise ValueError("Exceeded maximum volume")
-        frm.volume = round(frm.volume - volume_to_transfer, 10)
-        return frm, to
+        source_container.volume = round(source_container.volume - volume_to_transfer, 10)
+        return source_container, to
 
-    def transfer_slice(self, frm, how_much):
+    def _transfer_slice(self, source_slice, volume):
+        """ transfer from slice to self """
         def helper_func(elem):
-            elem, to_array[0] = to_array[0].transfer(elem, how_much)
+            elem, to_array[0] = Container.transfer(elem, to_array[0], volume)
             return elem
 
-        if isinstance(frm, Plate):
-            frm = frm[:]
-        if not isinstance(frm, PlateSlicer):
+        if isinstance(source_slice, Plate):
+            source_slice = source_slice[:]
+        if not isinstance(source_slice, PlateSlicer):
             raise TypeError("Invalid source type.")
         to = self.copy()
-        frm = frm.copy()
-        frm.plate = frm.plate.copy()
-        volume_to_transfer, unit = extract_value_unit(how_much)
+        source_slice = source_slice.copy()
+        source_slice.plate = source_slice.plate.copy()
+        volume_to_transfer, unit = extract_value_unit(volume)
         volume_to_transfer *= 1000.0  # convert L to mL
         volume_to_transfer = round(volume_to_transfer, 10)
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
-        if frm.get().size * volume_to_transfer > (to.max_volume - to.volume):
+        if source_slice.get().size * volume_to_transfer > (to.max_volume - to.volume):
             raise ValueError("Not enough room left in destination container.")
 
         to_array = [to]
-        result = numpy.vectorize(helper_func, cache=True)(frm.get())
-        frm.set(result)
-        return frm.plate, to_array[0]
+        result = numpy.vectorize(helper_func, cache=True)(source_slice.get())
+        source_slice.set(result)
+        return source_slice.plate, to_array[0]
 
     def __repr__(self):
         return f"Container ({self.name}) ({self.volume}" +\
             f"{('/' + str(self.max_volume)) if self.max_volume != float('inf') else ''}) of ({self.contents})"
+
+    @staticmethod
+    def add(source: Substance, destination: Container, how_much):
+        if not isinstance(destination, Container):
+            raise TypeError("You can only use Container.add to add to a Container")
+        return destination._add(source, how_much)
+
+    @staticmethod
+    def transfer(source, destination: Container, volume):
+        if not isinstance(destination, Container):
+            raise TypeError("You can only use Container.transfer into a Container")
+        if isinstance(source, Container):
+            return destination._transfer(source, volume)
+        elif isinstance(source, (Plate, PlateSlicer)):
+            return destination._transfer_slice(source, volume)
+        else:
+            raise TypeError("Invalid source type.")
 
 
 class Plate:
@@ -455,6 +475,32 @@ class Plate:
         new_plate.wells = self.wells.copy()
         return new_plate
 
+    def _add(self, source: Substance, how_much):
+        return self[:]._add(source, how_much)
+
+    def _transfer(self, source_container: Container, volume):
+        return self[:]._transfer(source_container, volume)
+
+    def _transfer_slice(self, source_slice, volume):
+        return self[:]._transfer_slice(source_slice, volume)
+
+    @staticmethod
+    def add(source: Substance, destination: Plate | PlateSlicer, how_much):
+        if not isinstance(destination, (Plate, PlateSlicer)):
+            raise TypeError("You can only use Plate.add to add to a Plate")
+        return destination._add(source, how_much)
+
+    @staticmethod
+    def transfer(source, destination: Plate | PlateSlicer, volume):
+        if not isinstance(destination, (Plate, PlateSlicer)):
+            raise TypeError("You can only use Plate.transfer into a Plate")
+        if isinstance(source, Container):
+            return destination._transfer(source, volume)
+        elif isinstance(source, (Plate, PlateSlicer)):
+            return destination._transfer_slice(source, volume)
+        else:
+            raise TypeError("Invalid source type.")
+
 
 class Generic96WellPlate(Plate):
     """
@@ -497,7 +543,7 @@ class Recipe:
             frm = frm[:]
         if isinstance(to, Plate):
             to = to[:]
-        self.steps.append((frm, to, how_much))
+        self.steps.append(('transfer', frm, to, how_much))
         return self
 
     def create_container(self, name, max_volume, initial_contents=None):
@@ -507,42 +553,63 @@ class Recipe:
             for substance, how_much in initial_contents:
                 if not isinstance(substance, Substance):
                     raise ValueError("Containers can only be created from substances.")
-                self.steps.append((substance, new_container, how_much))
+                self.steps.append(('add', substance, new_container, how_much))
         return new_container
 
     def build(self):
 
-        for frm, to, how_much in self.steps:
-            # used items can change in a recipe
-            frm_index = self.indexes[frm] if not isinstance(frm, PlateSlicer) else self.indexes[frm.plate]
-            to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
+        for operation, frm, to, how_much in self.steps:
+            if operation == 'add':
+                to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
 
-            # containers and such can change while building the recipe
+                # containers and such can change while building the recipe
+                if isinstance(to, PlateSlicer):
+                    new_to = to.copy()
+                    new_to.plate = self.results[to_index]
+                    to = new_to
+                else:
+                    to = self.results[to_index]
 
-            if isinstance(frm, PlateSlicer):
-                new_frm = frm.copy()
-                new_frm.plate = self.results[frm_index]
-                frm = new_frm
-            else:
-                frm = self.results[frm_index]
+                if isinstance(to, Container):
+                    to = Container.add(frm, to, how_much)
+                elif isinstance(to, PlateSlicer):
+                    to = Plate.add(frm, to, how_much)
 
-            if isinstance(to, PlateSlicer):
-                new_to = to.copy()
-                new_to.plate = self.results[to_index]
-                to = new_to
-            else:
-                to = self.results[to_index]
+                self.results[to_index] = to
 
-            if isinstance(frm, Substance):
-                to = to.add(frm, how_much)
-            elif isinstance(frm, Container):
-                frm, to = to.transfer(frm, how_much)
-            elif isinstance(frm, PlateSlicer):
-                frm, to = to.transfer_slice(frm, how_much)
+            elif operation == 'transfer':
+                # used items can change in a recipe
+                frm_index = self.indexes[frm] if not isinstance(frm, PlateSlicer) else self.indexes[frm.plate]
+                to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
 
-            self.results[frm_index] = frm
-            self.results[to_index] = to
-            # self.results[frm_index] = frm.data if isinstance(frm, Slicer) else frm
-            # self.results[to_index] = to.data if isinstance(to, Slicer) else to
+                # containers and such can change while building the recipe
+
+                if isinstance(frm, PlateSlicer):
+                    new_frm = frm.copy()
+                    new_frm.plate = self.results[frm_index]
+                    frm = new_frm
+                else:
+                    frm = self.results[frm_index]
+
+                if isinstance(to, PlateSlicer):
+                    new_to = to.copy()
+                    new_to.plate = self.results[to_index]
+                    to = new_to
+                else:
+                    to = self.results[to_index]
+
+                if isinstance(frm, Substance): # Adding a substance is handled differently
+                    if isinstance(to, Container):
+                        to = Container.add(frm, to, how_much)
+                    elif isinstance(to, PlateSlicer):
+                        to = Plate.add(frm, to, how_much)
+                    # to = to.add(frm, how_much)
+                elif isinstance(to, Container):
+                    frm, to = Container.transfer(frm, to, how_much)
+                elif isinstance(to, PlateSlicer):
+                    frm, to = Plate.transfer(frm, to, how_much)
+
+                self.results[frm_index] = frm
+                self.results[to_index] = to
 
         return [result for result in self.results if not isinstance(result, Substance)]

@@ -3,19 +3,12 @@ from PyPlate import Substance, Container, Recipe, Generic96WellPlate
 water = Substance.liquid('H2O', mol_weight=18.0153, density=1)
 salt = Substance.solid('NaCl', 58.4428)
 
-salt_water_halfM = Container('halfM salt water')
-recipe = Recipe().uses(water, salt, salt_water_halfM)
-recipe.transfer(water, salt_water_halfM, '100 mL')
-recipe.transfer(salt, salt_water_halfM, '50 mmol')
+recipe = Recipe()
+recipe.create_container('halfM salt water', 1000, ((water, '100 mL'), (salt, '50 mmol')))
 salt_water_halfM, = recipe.build()
 
-# recipe = Recipe()
-# recipe.create_container('halfM salt water', ((water, '100 mL'), (salt, '50 mmol')))
-# # recipe.transfer('halfM salt water', plate[:2], '1 uL')
-# salt_water_halfM = recipe.build()
 
-
-salt_water_oneM = Container('oneM salt water')
+salt_water_oneM = Container('oneM salt water', 1000)
 recipe2 = Recipe().uses(water, salt, salt_water_oneM)
 recipe2.transfer(water, salt_water_oneM, '100 mL')
 recipe2.transfer(salt, salt_water_oneM, '100 mmol')

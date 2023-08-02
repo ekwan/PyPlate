@@ -1,4 +1,4 @@
-from functools import cached_property, cache
+from functools import cached_property
 from typing import Union, Tuple, List
 import numpy as np
 
