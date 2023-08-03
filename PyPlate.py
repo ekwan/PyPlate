@@ -23,35 +23,37 @@ class PlateSlicer(Slicer):
     def copy(self):
         return PlateSlicer(self.plate, self.item)
 
-    def _add(self, frm, how_much):
-        to = self.copy()
+    @staticmethod
+    def _add(frm, to, how_much):
+        to = to.copy()
         to.plate = to.plate.copy()
         result = numpy.vectorize(lambda elem: Container.add(frm, elem, how_much), cache=True)(to.get())
         to.set(result)
         return to.plate
 
-    def _transfer(self, frm, how_much):
-        to = self.copy()
-        to.plate = self.plate.copy()
+    @staticmethod
+    def _transfer(frm, to, how_much):
+        if isinstance(frm, Container):
+            to = to.copy()
+            to.plate = to.plate.copy()
 
-        def helper_func(elem):
-            # frm_array[0], elem = elem._transfer(frm_array[0], how_much)
-            frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
-            return elem
+            def helper_func(elem):
+                frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
+                return elem
 
-        frm_array = [frm]
-        result = numpy.vectorize(helper_func, cache=True)(to.get())
-        if isinstance(to.get(), Container):  # A zero-dim array was returned.
-            result = result.item()
-        to.set(result)
-        return frm_array[0], to.plate
+            frm_array = [frm]
+            result = numpy.vectorize(helper_func, cache=True)(to.get())
+            if isinstance(to.get(), Container):  # A zero-dim array was returned.
+                result = result.item()
+            to.set(result)
+            return frm_array[0], to.plate
+        elif not isinstance(frm, (Plate, PlateSlicer)):
+            raise TypeError("Invalid source type.")
 
-    def _transfer_slice(self, frm, how_much):
-
-        to = self.copy()
+        to = to.copy()
         frm = frm.copy()
 
-        if self.plate != frm.plate:
+        if to.plate != frm.plate:
             to.plate = to.plate.copy()
             frm.plate = frm.plate.copy()
         else:
@@ -71,9 +73,9 @@ class PlateSlicer(Slicer):
             to.set(result)
             frm.set(frm_array[0])
 
-        elif self.size == 1:
+        elif to.size == 1:
             #  Replace the single element in self
-            if self.shape != ():
+            if to.shape != ():
                 raise RuntimeError("Shape of source should have been ()")
 
             def helper_func(elem):
@@ -84,7 +86,7 @@ class PlateSlicer(Slicer):
             frm.set(numpy.vectorize(helper_func, cache=True)(frm.get()))
             to.set(to_array[0])
 
-        elif frm.size == self.size and frm.shape == self.shape:
+        elif frm.size == to.size and frm.shape == to.shape:
             def helper(elem1, elem2):
                 return Container.transfer(elem1, elem2, how_much)
 
@@ -140,10 +142,11 @@ class Substance:
     LIQUID = 2
     ENZYME = 3
 
-    def __init__(self, name, mol_type):
+    def __init__(self, name, mol_type, molecule=None):
         self.name = name
         self.type = mol_type
         self.mol_weight = self.density = self.concentration = None
+        self.molecule = molecule
 
     def __repr__(self):
         if self.type == Substance.SOLID:
@@ -163,22 +166,22 @@ class Substance:
         return hash((self.name, self.type, self.mol_weight, self.density, self.concentration))
 
     @staticmethod
-    def solid(name, mol_weight):
-        substance = Substance(name, Substance.SOLID)
+    def solid(name, mol_weight, molecule=None):
+        substance = Substance(name, Substance.SOLID, molecule)
         substance.mol_weight = mol_weight
         return substance
 
     @staticmethod
-    def liquid(name, mol_weight, density):
-        substance = Substance(name, Substance.LIQUID)
+    def liquid(name, mol_weight, density, molecule=None):
+        substance = Substance(name, Substance.LIQUID, molecule)
         substance.mol_weight = mol_weight  # g / mol
         substance.density = density  # g / mL
         substance.concentration = 1000.0 * density / mol_weight  # mol / L
         return substance
 
     @staticmethod
-    def enzyme(name):
-        return Substance(name, Substance.ENZYME)
+    def enzyme(name, molecule=None):
+        return Substance(name, Substance.ENZYME, molecule)
 
     def convert_to_unit_value(self, how_much: str, volume: float = 0.0):  # mol, mL or AU
         """
@@ -266,12 +269,6 @@ class Container:
         if self.volume > self.max_volume:
             raise ValueError("Exceeded maximum volume")
 
-    def _add(self, source: Substance, how_much: str):
-        """ add substance to self """
-        to = self.copy()
-        to._self_add(source, how_much)
-        return to
-
     def _transfer(self, source_container: Container, volume: str):
         """ transfer from container to self """
         if not isinstance(source_container, Container):
@@ -329,7 +326,9 @@ class Container:
     def add(source: Substance, destination: Container, how_much):
         if not isinstance(destination, Container):
             raise TypeError("You can only use Container.add to add to a Container")
-        return destination._add(source, how_much)
+        destination = destination.copy()
+        destination._self_add(source, how_much)
+        return destination
 
     @staticmethod
     def transfer(source, destination: Container, volume):
@@ -475,31 +474,19 @@ class Plate:
         new_plate.wells = self.wells.copy()
         return new_plate
 
-    def _add(self, source: Substance, how_much):
-        return self[:]._add(source, how_much)
-
-    def _transfer(self, source_container: Container, volume):
-        return self[:]._transfer(source_container, volume)
-
-    def _transfer_slice(self, source_slice, volume):
-        return self[:]._transfer_slice(source_slice, volume)
-
     @staticmethod
     def add(source: Substance, destination: Plate | PlateSlicer, how_much):
         if not isinstance(destination, (Plate, PlateSlicer)):
             raise TypeError("You can only use Plate.add to add to a Plate")
-        return destination._add(source, how_much)
+        if isinstance(destination, Plate):
+            destination = destination[:]
+        return PlateSlicer._add(source, destination, how_much)
 
     @staticmethod
     def transfer(source, destination: Plate | PlateSlicer, volume):
         if not isinstance(destination, (Plate, PlateSlicer)):
             raise TypeError("You can only use Plate.transfer into a Plate")
-        if isinstance(source, Container):
-            return destination._transfer(source, volume)
-        elif isinstance(source, (Plate, PlateSlicer)):
-            return destination._transfer_slice(source, volume)
-        else:
-            raise TypeError("Invalid source type.")
+        return PlateSlicer._transfer(source, destination, volume)
 
 
 class Generic96WellPlate(Plate):
