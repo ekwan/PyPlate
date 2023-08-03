@@ -20,53 +20,50 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 
 ### Substance
 
-**Definition:** an abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  Immutable.  Solids and enzymes are assumed to require zero volume.
+#### Definition: an abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  Immutable.  Solids and enzymes are assumed to require zero volume.
 
-**Constructors/Factory Methods:**
+#### Constructors/Factory Methods:
 
-- Substance.solid(name, molecular_weight)
-- Substance.liquid(name, molecular_weight, density)
-- Substance.enzyme(name)
+- Substance.solid(name, molecular_weight, molecule)
+- Substance.liquid(name, molecular_weight, density, molecule)
+- Substance.enzyme(name, molecule)
 
-**Attributes:**
+#### Attributes
 
-*we should support an optional `molecule` field of type `cctk.Molecule` and be able to infer the molecular weight from that*
+- name (str): name of the `Substance`
+- type (int): normal solid (1), liquid (2), enzyme solid (3)
+- molecular_weight (float, optional): in g/mol
+- density (float, optional): in g/mL
+- molecule (cctk.Molecule, optional): the 3D structure
 
-*name (str):* name of the `Substance`
-*type (int):* normal solid (1), liquid (2), enzyme solid (3)
-*molecular_weight (float, optional):* in g/mol
-*density (float, optional):* in g/mL
-*molecule (cctk.Molecule, optional)*: the 3D structure
-
-**Methods:**
-
-*please fill in*
-
----
 
 ### Container
 
-**Definition:** Stores specified quantities of `Substances` in a vessel with a given maximum volume.  Immutable.
+#### Definition: Stores specified quantities of `Substances` in a vessel with a given maximum volume.  Immutable.
 
-**Constructors/Factory Methods:**
+#### Constructors/Factory Methods:
 
-Container(name, max_volume, initial_contents) where initial_contents is an iterable of tuples of the form (substance,amount), with types `Substance` and `str`, respectively.
+- Container(name, max_volume, initial_contents) where initial_contents is an iterable of tuples of the form (substance,amount), with types `Substance` and `str`, respectively.
 
-**Attributes:**
+#### Attributes:
 
-name (str): name of this Container
-contents (dict): map from `Substances` to amounts (str?).
-max_volume (float): in microlitres.
+- name (str): name of this Container
+- contents (dict): map from `Substances` to amounts. Amounts are stored as mL for liquids, moles for solids, and U for enzymes
+- max_volume (float): in microlitres.
 
-**Methods:**
 
-- **copy():** Clones current `Container`
-- **add(what, how_much):** Create a new `Container` with the additional `Substance`.  If `what` is already present, amounts should stack.  *Should we allow dictionaries here to add multiple substances?*
-- **add_from(source_container, volume):** Move `volume` from `source_container` to here, decreasing the amount in `source_container` and increasing the amount in this object.  Note that all `Substances` should be transferred in proportion to their volumetric ratios (as pipettes are not Substance-selective!).  As `Containers` are immutable, this function returns `new_source_container` and `new_destination_container`. 
+#### Static Methods:
 
-**Stacking:** What happens when we try to stack Substances with `add` or `add_from`?  My suggestion is that if they are in the same units, then stacking is allowed.  If they are in different units, then density/molecular_weight conversions must be possible.  Otherwise, throw an exception.
+- add(source, destination, volume): Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* wille be returned.
+- transfer(source, destination, how_much): Move *volume* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
+  - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
+  - *source* can be a container, a plate, or a slice of a plate.
 
-*Should there be a convenience method for performing a dilution?*
+[//]: # (- transfer&#40;source_container, volume&#41;:** Move `volume` from `source_container` to here, decreasing the amount in `source_container` and increasing the amount in this object.  Note that all `Substances` should be transferred in proportion to their volumetric ratios &#40;as pipettes are not Substance-selective!&#41;.  As `Containers` are immutable, this function returns `new_source_container` and `new_destination_container`. )
+
+[//]: # (**Stacking:** What happens when we try to stack Substances with `add` or `add_from`?  My suggestion is that if they are in the same units, then stacking is allowed.  If they are in different units, then density/molecular_weight conversions must be possible.  Otherwise, throw an exception.)
+
+[//]: # (*Should there be a convenience method for performing a dilution?*)
 
 ---
 
@@ -74,71 +71,100 @@ max_volume (float): in microlitres.
 
 **Definition:** A spatially ordered collection of `Containers`, like a 96 well plate.  The spatial arrangement must be rectangular.  Immutable.
 
-**Constructors/Factory Methods:**
+#### Constructors/Factory Methods:
 
-Plate(name, contents, n\_rows, n\_columns, row\_labels, column\_labels, max\_capacities)
+- Plate(name, max_capacities, n_rows, n_columns, row_labels, column_labels)
 
-**Attributes:**
+#### Attributes:
 
-name (str): name of this Container
-contents (dict): map from `Substances` to amounts (str?).
-n_rows (int): how many rows there are (default, 8)
-n_cols (int): how many columns there are (default, 12)
-row_labels (list of str): by default, A, B, C, ..., AA, AB, ...
-column_labels (list of str): by default, "1", "2", ...
-max_capacities (float): assumed to be the same volume for all wells, in uL
+[//]: # (contents &#40;dict&#41;: numpy.array of Containers.)
 
-**Methods:**
+- name (str): name of this Container
+- max_capacities (float): assumed to be the same volume for all wells, in uL
+- n_rows (int): how many rows there are (default, 8)
+- n_cols (int): how many columns there are (default, 12)
+- row_labels (list of str): by default, A, B, C, ..., AA, AB, ...
+- column_labels (list of str): by default, "1", "2", ...
+
+
+#### Methods:
 
 - Plate[slice]
-  - Returns a helper class (`PlateSlicer`) to help perform actions on slices *Shouldn't this return an iterable of `Containers`?  Or, are you saying that if we add something to the slice, the plate slicer will help return a new Plate with the updated Containers?*
-- volumes(arr = None)
-  - arr defaults to all the wells in the plate
-    - Can be a numpy array or a `PlateSlicer` instance
+  - Returns a slice of the plate.
+
+[//]: # (    - Returns a helper class &#40;`PlateSlicer`&#41; to help perform actions on slices *Shouldn't this return an iterable of `Containers`?  Or, are you saying that if we add something to the slice, the plate slicer will help return a new Plate with the updated Containers?*)
+
+- volumes()
   - Returns a numpy array of used volumes
-- substances(arr = None)
-  - arr defaults to all the wells in the plate
+- substances()
   - Returns a set of all substances used
-- moles(substance, arr = None)
-  - arr defaults to all the wells in the plate
+- moles(substance)
   - Returns a numpy array of moles of given substance
-- copy()
-  - Clones current `Plate`
-  - *Is this a deep clone of all the Containers as well? I assume we don't need to clone all the Substances too?  Is cloning necessary with immutable objects?*
+- concentrations(substance)
 
-*Need to add concentrations method.*
+##### Volumes, substances, moles, concentration can all be called on a slice of the plate
 
-**Stacking:**
+[//]: # (- copy&#40;&#41;)
 
-We should provide methods for adding entire plates to other plates.  Should that be provided here or in Recipe?
+[//]: # (  - Clones current `Plate`)
+
+[//]: # (We are going to keep copy&#40;&#41; "private")
+[//]: # (  - *Is this a deep clone of all the Containers as well? I assume we don't need to clone all the Substances too?  Is cloning necessary with immutable objects?*)
+
+
+- add(source, destination, volume): Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* wille be returned.
+- transfer(source, destination, how_much): Move *volume* from *source* to *destination* plate or slice, returning copies of the objects with amounts adjusted accordingly.
+  - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
+  - *source* can be a container, a plate, or a slice of a plate.
+
+[//]: # (**Stacking:**)
+
+[//]: # ()
+[//]: # (We should provide methods for adding entire plates to other plates.  Should that be provided here or in Recipe?)
+
+[//]: # (Adding entire plates to another plate is currently allowed.. plate1, plate2 = Plate.transfer&#40;plate1, plate2, '1 mL'&#41;)
 
 ### Recipe
 
-**Definition:** A list of instructions for transforming one set of containers into another.  The intended workflow is to declare the source containers, enumerate the desired transformations, and call recipe.bake().  This method will ensure that all solid and liquid handling instructions are valid.  If they are indeed valid, then the updated containers will be generated.  Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
+#### Definition: A list of instructions for transforming one set of containers into another.  The intended workflow is to declare the source containers, enumerate the desired transformations, and call recipe.bake().  This method will ensure that all solid and liquid handling instructions are valid.  If they are indeed valid, then the updated containers will be generated.  Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
 
-**Constructors/Factory Methods:**
+#### Constructors/Factory Methods:
 
 Recipe(name, uses): creates a blank Recipe with the specified source `Containers`.
 
-**Attributes:**
+#### Attributes:
 
 name (str): a short description
 uses (list): a list of *Containers* that will be used in this `Recipe`.  An exception will be thrown if an attempt is made to use an undeclared Container.  A warning will be given if a declared Container is not used at "baking time."
 
-**Methods:**
+#### Methods:
 
-- **uses(*containers)**
-  - declare `*containers` (iterable of `Containers`) as 
-- **transfer(source_containers, destination_containers, amount)**
-  - transfer `amount` (specified in volume units) from each `source_container` to each `destination_container`
-  - the shape of `source_containers` and `destination_containers` must be compatible (*please list the cases: one to one, many to one, one to many, and many to many*)
-- ~~create\_container(name, max\_volume, initial\_contents)~~
-  - **Why did we think we needed this method again?**
-  - Adds a step that creates a container as above and adds it to the used list.
-  - Returns new container so that it can be used later in the same recipe.
-- **bake()**
+- uses(*containers)
+  - declare `*containers` (iterable of `Containers`) as being used in the recipe.
+- add(source, destination, volume): Adds a step to the recipe which will move the given quantity of the *source* substance to the *destination*.
+- transfer(source, destination, how_much): Adds a step to the recipe which will move *volume* from *source* to *destination*.
+  - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
+- bake()
   - Checks the validity of each step and ensures all Containers are used.
   - Returns all new Containers and Plates in the order they were defined in `uses()`.
+  - Locks recipe from future changes
+
+[//]: # (- transfer&#40;source_containers, destination_containers, amount&#41;)
+
+[//]: # (  - transfer `amount` &#40;specified in volume units&#41; from each `source_container` to each `destination_container`)
+
+[//]: # (  - the shape of `source_containers` and `destination_containers` must be compatible &#40;*please list the cases: one to one, many to one, one to many, and many to many*&#41;)
+
+[//]: # (- ~~create\_container&#40;name, max\_volume, initial\_contents&#41;~~)
+
+[//]: # (  - Keep track of steps to create container in recipe )
+
+[//]: # (  - **Why did we think we needed this method again?**)
+
+[//]: # (  - Adds a step that creates a container as above and adds it to the used list.)
+
+[//]: # (  - Returns new container so that it can be used later in the same recipe.)
+
 
 *Need to add some visualization and instruction printing methods.
 
@@ -151,6 +177,7 @@ These classes will not be exposed to the user.
 
 *Please explain the concept here.  Please also update the below to match the style and detail of the above.*
 
+- get/set public???
 - get()
   - Returns a numpy array of selected elements
 - set(values)
@@ -193,12 +220,12 @@ Inspired by `numpy` and `pandas`, wells (`Containers`) in plates can be addresse
 
 Here are some examples for a standard 96 well plate, with rows A-H and columns 1-12:
 
-- well B3: `plate["B3"]`, `plate[2,3]`, `plate["B",3]`,  `plate[2,"3"]`, `plate["B","3"]`
+- well B3: `plate["B,3"]`, `plate[2,3]`, `plate["B",3]`,  `plate[2,"3"]`, `plate["B","3"]`
 - selecting row C: `plate["C",:]`, `plate[3,:]`
 - selecting column 5: `plate[:,5]`
-- rectangular selections with ranges: `plate["B":"C",3:5]`, `plate["B3":"C5"]` (*there doesn't seem to be a logical way to use numeric indices with the second form?*)
+- rectangular selections with ranges: `plate["B":"C",3:5]`, `plate["B,3":"C,5"]` (*there doesn't seem to be a logical way to use numeric indices with the second form?*)
 - strides: plate["A",::2] would select A1, A3, A5, A7, A9, and A11.
-- custom selections with lists: plate[["A1","B5","A3"]]
+- custom selections with lists: plate[["A,1","B,5","A,3"]]
 
 ## Example Workflow
 
