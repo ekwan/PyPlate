@@ -14,15 +14,14 @@ The *PyPlate* Python API defines a set of objects and operations for implementin
 
 Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `Plate`, and `Recipe`.  *All classes are immutable.*  (An immutable object is one whose fields cannot be changed once it has been constructed.)
 
-*Once recipe.bake() has been called, it should be immutable.*
-
 ---
 
 ### Substance
 
-#### Definition: an abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  Immutable.  Solids and enzymes are assumed to require zero volume.
+#### Definition: 
+- An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  Immutable.  Solids and enzymes are assumed to require zero volume.
 
-#### Constructors/Factory Methods:
+#### Constructors/Factory Methods
 
 - Substance.solid(name, molecular_weight, molecule)
 - Substance.liquid(name, molecular_weight, density, molecule)
@@ -31,15 +30,21 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 #### Attributes
 
 - name (str): name of the `Substance`
-- type (int): normal solid (1), liquid (2), enzyme solid (3)
 - molecular_weight (float, optional): in g/mol
 - density (float, optional): in g/mL
 - molecule (cctk.Molecule, optional): the 3D structure
 
+#### Methods
+- is_liquid(): Return True if the `Substance` is a liquid.
+- is_solid(): Return True if the `Substance` is a solid.
+- is_enzyme(): Return True if the `Substance` is an enzyme.
+---
 
 ### Container
 
-#### Definition: Stores specified quantities of `Substances` in a vessel with a given maximum volume.  Immutable.
+#### Definition:
+
+- Stores specified quantities of `Substances` in a vessel with a given maximum volume.  Immutable.
 
 #### Constructors/Factory Methods:
 
@@ -54,14 +59,17 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 
 #### Static Methods:
 
-- add(source, destination, volume): Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* wille be returned.
-- transfer(source, destination, how_much): Move *volume* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
+- add(source, destination, volume):
+  - Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* will be returned.
+- transfer(source, destination, how_much):
+  - Move *volume* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
   - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
   - *source* can be a container, a plate, or a slice of a plate.
+- create_stock_solution(what, concentration, solvent, volume)
+  - Create a new container with the desired volume and containing the desired concentration of `what`.
+  - If `what` is a liquid, volumes will be calculated appropriately.
 
 [//]: # (- transfer&#40;source_container, volume&#41;:** Move `volume` from `source_container` to here, decreasing the amount in `source_container` and increasing the amount in this object.  Note that all `Substances` should be transferred in proportion to their volumetric ratios &#40;as pipettes are not Substance-selective!&#41;.  As `Containers` are immutable, this function returns `new_source_container` and `new_destination_container`. )
-
-[//]: # (**Stacking:** What happens when we try to stack Substances with `add` or `add_from`?  My suggestion is that if they are in the same units, then stacking is allowed.  If they are in different units, then density/molecular_weight conversions must be possible.  Otherwise, throw an exception.)
 
 [//]: # (*Should there be a convenience method for performing a dilution?*)
 
@@ -69,7 +77,9 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 
 ### Plate
 
-**Definition:** A spatially ordered collection of `Containers`, like a 96 well plate.  The spatial arrangement must be rectangular.  Immutable.
+#### Definition:
+
+- A spatially ordered collection of `Containers`, like a 96 well plate.  The spatial arrangement must be rectangular.  Immutable.
 
 #### Constructors/Factory Methods:
 
@@ -95,14 +105,15 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 [//]: # (    - Returns a helper class &#40;`PlateSlicer`&#41; to help perform actions on slices *Shouldn't this return an iterable of `Containers`?  Or, are you saying that if we add something to the slice, the plate slicer will help return a new Plate with the updated Containers?*)
 
 - volumes()
-  - Returns a numpy array of used volumes
+  - Returns a `numpy` array of used volumes
 - substances()
   - Returns a set of all substances used
 - moles(substance)
-  - Returns a numpy array of moles of given substance
+  - Returns a `numpy` array of moles of given substance
 - concentrations(substance)
 
-##### Volumes, substances, moles, concentration can all be called on a slice of the plate
+  
+** Volumes, substances, moles, and concentrations can all be called on a slice of the plate
 
 [//]: # (- copy&#40;&#41;)
 
@@ -111,8 +122,9 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 [//]: # (We are going to keep copy&#40;&#41; "private")
 [//]: # (  - *Is this a deep clone of all the Containers as well? I assume we don't need to clone all the Substances too?  Is cloning necessary with immutable objects?*)
 
+#### Static Methods:
 
-- add(source, destination, volume): Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* wille be returned.
+- add(source, destination, volume): Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* will be returned.
 - transfer(source, destination, how_much): Move *volume* from *source* to *destination* plate or slice, returning copies of the objects with amounts adjusted accordingly.
   - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
   - *source* can be a container, a plate, or a slice of a plate.
@@ -124,9 +136,12 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 
 [//]: # (Adding entire plates to another plate is currently allowed.. plate1, plate2 = Plate.transfer&#40;plate1, plate2, '1 mL'&#41;)
 
+---
+
 ### Recipe
 
-#### Definition: A list of instructions for transforming one set of containers into another.  The intended workflow is to declare the source containers, enumerate the desired transformations, and call recipe.bake().  This method will ensure that all solid and liquid handling instructions are valid.  If they are indeed valid, then the updated containers will be generated.  Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
+#### Definition:
+- A list of instructions for transforming one set of containers into another.  The intended workflow is to declare the source containers, enumerate the desired transformations, and call recipe.bake().  This method will ensure that all solid and liquid handling instructions are valid.  If they are indeed valid, then the updated containers will be generated.  Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
 
 #### Constructors/Factory Methods:
 
@@ -141,9 +156,14 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.  An exce
 
 - uses(*containers)
   - declare `*containers` (iterable of `Containers`) as being used in the recipe.
-- add(source, destination, volume): Adds a step to the recipe which will move the given quantity of the *source* substance to the *destination*.
-- transfer(source, destination, how_much): Adds a step to the recipe which will move *volume* from *source* to *destination*.
+- add(source, destination, volume):
+  - Adds a step to the recipe which will move the given quantity of the *source* substance to the *destination*.
+- transfer(source, destination, how_much):
+  - Adds a step to the recipe which will move *volume* from *source* to *destination*.
   - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
+- create_stock_solution(what, concentration, solvent, volume)
+  - Adds a step to the recipe with will create a new container with the desired volume and containing the desired concentration of `what`.
+  - If `what` is a liquid, volumes will be calculated appropriately.
 - bake()
   - Checks the validity of each step and ensures all Containers are used.
   - Returns all new Containers and Plates in the order they were defined in `uses()`.
@@ -168,6 +188,7 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.  An exce
 
 *Need to add some visualization and instruction printing methods.
 
+---
 
 ## Internal Classes
 
@@ -179,7 +200,7 @@ These classes will not be exposed to the user.
 
 - get/set public???
 - get()
-  - Returns a numpy array of selected elements
+  - Returns a `numpy` array of selected elements
 - set(values)
   - Replaces elements
 - add(frm, how_much):
@@ -197,6 +218,8 @@ These classes will not be exposed to the user.
   - Shape of elements
 - size
   - Number of elements
+
+---
 
 ## Supported Units
 

@@ -101,7 +101,7 @@ class PlateSlicer(Slicer):
 
 
 def convert_prefix(prefix):
-    prefixes = {'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
+    prefixes = {'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
     if prefix in prefixes:
         return prefixes[prefix]
     raise ValueError(f"Invalid prefix: {prefix}")
@@ -144,14 +144,14 @@ class Substance:
 
     def __init__(self, name, mol_type, molecule=None):
         self.name = name
-        self.type = mol_type
+        self._type = mol_type
         self.mol_weight = self.density = self.concentration = None
         self.molecule = molecule
 
     def __repr__(self):
-        if self.type == Substance.SOLID:
+        if self.is_solid():
             return f"SOLID ({self.name}: {self.mol_weight})"
-        if self.type == Substance.LIQUID:
+        if self.is_liquid():
             return f"LIQUID ({self.name}: {self.mol_weight}, {self.density})"
         else:
             return f"ENZYME ({self.name})"
@@ -159,11 +159,11 @@ class Substance:
     def __eq__(self, other):
         if not isinstance(other, Substance):
             return False
-        return self.name == other.name and self.type == other.type and self.mol_weight == other.mol_weight\
+        return self.name == other.name and self._type == other._type and self.mol_weight == other.mol_weight\
             and self.density == other.density and self.concentration == other.concentration
 
     def __hash__(self):
-        return hash((self.name, self.type, self.mol_weight, self.density, self.concentration))
+        return hash((self.name, self._type, self.mol_weight, self.density, self.concentration))
 
     @staticmethod
     def solid(name, mol_weight, molecule=None):
@@ -182,6 +182,15 @@ class Substance:
     @staticmethod
     def enzyme(name, molecule=None):
         return Substance(name, Substance.ENZYME, molecule)
+
+    def is_solid(self):
+        return self._type == Substance.SOLID
+
+    def is_liquid(self):
+        return self._type == Substance.LIQUID
+
+    def is_enzyme(self):
+        return self._type == Substance.ENZYME
 
     def convert_to_unit_value(self, how_much: str, volume: float = 0.0):  # mol, mL or AU
         """
@@ -205,7 +214,7 @@ class Substance:
         """
 
         value, unit = extract_value_unit(how_much)
-        if self.type == Substance.SOLID:  # Convert to moles
+        if self.is_solid():  # Convert to moles
             if unit == 'g':  # mass
                 return value / self.mol_weight
             elif unit == 'mol':  # moles
@@ -216,7 +225,7 @@ class Substance:
                 # value = molar concentration in mol/L, volume = volume in mL
                 return value * volume / 1000
             raise ValueError("We only measure solids in grams and moles.")
-        elif self.type == Substance.LIQUID:  # Convert to mL
+        elif self.is_liquid():  # Convert to mL
             if unit == 'g':  # mass
                 return value / self.density
             elif unit == 'L':  # volume
@@ -224,7 +233,7 @@ class Substance:
             elif unit == 'mol':  # moles
                 return (value / self.concentration) / 1000.0
             raise ValueError
-        elif self.type == Substance.ENZYME:
+        elif self.is_enzyme():
             if unit == 'AU':
                 return value
             raise ValueError
@@ -259,12 +268,12 @@ class Container:
         # Only to be used in constructor and immediately after copy
         if not isinstance(source, Substance):
             raise TypeError("Invalid source type.")
-        if how_much.endswith('M') and source.type != Substance.SOLID:
+        if how_much.endswith('M') and not source.is_solid():
             # TODO: molarity from liquids?
             raise ValueError("Molarity solutions can only be made from solids.")
         amount_to_transfer = round(source.convert_to_unit_value(how_much, self.volume), 10)
         self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, 10)
-        if source.type == Substance.LIQUID:
+        if source.is_liquid():
             self.volume = round(self.volume + amount_to_transfer, 10)
         if self.volume > self.max_volume:
             raise ValueError("Exceeded maximum volume")
@@ -340,6 +349,33 @@ class Container:
             return destination._transfer_slice(source, volume)
         else:
             raise TypeError("Invalid source type.")
+
+    @staticmethod
+    def create_stock_solution(what: Substance, concentration: float, solvent: Substance, volume: float):
+        """
+        Create a stock solution.
+
+        Args:
+            what: What to dilute.
+            concentration: Desired concentration in mol/L
+            solvent: What to dilute with.
+            volume: Desired total volume in mL.
+
+        Returns:
+            New container with desired solution.
+        """
+        container = Container(f"{what.name} {concentration:.2}M", max_volume=volume)
+        moles_to_add = volume * concentration
+        if what.is_enzyme():
+            raise TypeError("You can't add enzymes by molarity.")
+        elif what.is_solid():
+            container = container.add(solvent, container, f"{volume} mL")
+            container = container.add(what, container, f"{round(moles_to_add, 10)} mol")
+        else:   # Liquid
+            volume_to_add = round(moles_to_add * what.mol_weight / (what.density * 1000), 3)
+            container = container.add(solvent, container, f"{volume - volume_to_add} mL")
+            container = container.add(what, container, f"{volume_to_add} mL")
+        return container
 
 
 class Plate:
@@ -457,9 +493,9 @@ class Plate:
         def helper(elem):
             if substance not in elem.contents:
                 return 0
-            if substance.type == Substance.LIQUID:
+            if substance.is_liquid():
                 return round(elem.contents[substance] * substance.density / substance.mol_weight, PRECISION)
-            elif substance.type == Substance.SOLID:
+            elif substance.is_solid():
                 return round(elem.contents[substance], PRECISION)
 
         return numpy.vectorize(helper, cache=True)(arr)
@@ -506,8 +542,11 @@ class Recipe:
         self.indexes = dict()
         self.results = []
         self.steps = []
+        self.locked = False
 
     def uses(self, *args):
+        if self.locked:
+            raise RuntimeError("This recipe is locked.")
         for arg in args:
             if arg not in self.indexes:
                 self.indexes[arg] = len(self.results)
@@ -518,6 +557,8 @@ class Recipe:
         return self
 
     def transfer(self, frm, to, how_much):
+        if self.locked:
+            raise RuntimeError("This recipe is locked.")
         if not isinstance(to, (Container, Plate, PlateSlicer)):
             raise TypeError("Invalid destination type.")
         if not isinstance(frm, (Substance, Container, PlateSlicer)):
@@ -534,6 +575,8 @@ class Recipe:
         return self
 
     def create_container(self, name, max_volume, initial_contents=None):
+        if self.locked:
+            raise RuntimeError("This recipe is locked.")
         new_container = Container(name, max_volume)
         self.uses(new_container)
         if initial_contents:
@@ -543,10 +586,18 @@ class Recipe:
                 self.steps.append(('add', substance, new_container, how_much))
         return new_container
 
-    def build(self):
+    def create_stock_solution(self, what: Substance, concentration: float, solvent: Substance, volume: float):
+        if self.locked:
+            raise RuntimeError("This recipe is locked.")
+        new_container = Container("{what.name} {concentration:.2}M", max_volume=volume)
+        self.uses(new_container)
+        self.steps.append(('stock', new_container, what, concentration, solvent, volume))
+        return new_container
 
-        for operation, frm, to, how_much in self.steps:
+    def bake(self):
+        for operation, *rest in self.steps:
             if operation == 'add':
+                frm, to, how_much = rest
                 to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
 
                 # containers and such can change while building the recipe
@@ -565,6 +616,7 @@ class Recipe:
                 self.results[to_index] = to
 
             elif operation == 'transfer':
+                frm, to, how_much = rest
                 # used items can change in a recipe
                 frm_index = self.indexes[frm] if not isinstance(frm, PlateSlicer) else self.indexes[frm.plate]
                 to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
@@ -598,5 +650,10 @@ class Recipe:
 
                 self.results[frm_index] = frm
                 self.results[to_index] = to
+            elif operation == 'stock':
+                to, what, concentration, solvent, volume = rest
+                to_index = self.indexes[to]
+                self.results[to_index] = Container.create_stock_solution(what, concentration, solvent, volume)
 
+        self.locked = True
         return [result for result in self.results if not isinstance(result, Substance)]
