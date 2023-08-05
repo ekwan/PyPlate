@@ -1,10 +1,12 @@
 # Allow typing reference while still building classes
 from __future__ import annotations
 import re
-import string
 from typing import Tuple, Dict
 import numpy
 from Slicer import Slicer
+
+EXTERNAL_PRECISION = 3
+INTERNAL_PRECISION = 10
 
 
 class PlateSlicer(Slicer):
@@ -111,7 +113,7 @@ def extract_value_unit(s: str) -> Tuple[float, str]:
     if not isinstance(s, str):
         raise TypeError
     # (floating point number in 1.0e1 format) possibly some white space (alpha string)
-    match = re.fullmatch(r"(\d+(?:\.\d+)?(?:e-?\d+)?)\s*([a-zA-Z]+)", s)
+    match = re.fullmatch(r"([_\d]+(?:\.\d+)?(?:e-?\d+)?)\s*([a-zA-Z]+)", s)
     if not match:
         raise ValueError("Invalid quantity.")
     value, unit = match.groups()
@@ -159,7 +161,7 @@ class Substance:
     def __eq__(self, other):
         if not isinstance(other, Substance):
             return False
-        return self.name == other.name and self._type == other._type and self.mol_weight == other.mol_weight\
+        return self.name == other.name and self._type == other._type and self.mol_weight == other.mol_weight \
             and self.density == other.density and self.concentration == other.concentration
 
     def __hash__(self):
@@ -258,7 +260,7 @@ class Container:
     def __eq__(self, other):
         if not isinstance(other, Container):
             return False
-        return self.name == other.name and self.contents == other.contents and\
+        return self.name == other.name and self.contents == other.contents and \
             self.volume == other.volume and self.max_volume == other.max_volume
 
     def __hash__(self):
@@ -271,10 +273,10 @@ class Container:
         if how_much.endswith('M') and not source.is_solid():
             # TODO: molarity from liquids?
             raise ValueError("Molarity solutions can only be made from solids.")
-        amount_to_transfer = round(source.convert_to_unit_value(how_much, self.volume), 10)
-        self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, 10)
+        amount_to_transfer = round(source.convert_to_unit_value(how_much, self.volume), INTERNAL_PRECISION)
+        self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, INTERNAL_PRECISION)
         if source.is_liquid():
-            self.volume = round(self.volume + amount_to_transfer, 10)
+            self.volume = round(self.volume + amount_to_transfer, INTERNAL_PRECISION)
         if self.volume > self.max_volume:
             raise ValueError("Exceeded maximum volume")
 
@@ -284,25 +286,28 @@ class Container:
             raise TypeError("Invalid source type.")
         volume_to_transfer, unit = extract_value_unit(volume)
         volume_to_transfer *= 1000.0  # convert L to mL
-        volume_to_transfer = round(volume_to_transfer, 10)
+        volume_to_transfer = round(volume_to_transfer, INTERNAL_PRECISION)
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
         if volume_to_transfer > source_container.volume:
             raise ValueError("Not enough mixture left in source container." +
-                             f"{source_container} ({volume}) -> {self}")
+                             f" {volume_to_transfer} mL  needed of {source_container.name}" +
+                             f" out of {source_container.volume} mL.")
         source_container, to = source_container.copy(), self.copy()
         ratio = volume_to_transfer / source_container.volume
         for substance, amount in source_container.contents.items():
-            to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio, 10)
-            source_container.contents[substance] = round(source_container.contents[substance] - amount * ratio, 10)
-        to.volume = round(to.volume + volume_to_transfer, 10)
+            to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio, INTERNAL_PRECISION)
+            source_container.contents[substance] = round(source_container.contents[substance] - amount * ratio,
+                                                         INTERNAL_PRECISION)
+        to.volume = round(to.volume + volume_to_transfer, INTERNAL_PRECISION)
         if to.volume > to.max_volume:
             raise ValueError("Exceeded maximum volume")
-        source_container.volume = round(source_container.volume - volume_to_transfer, 10)
+        source_container.volume = round(source_container.volume - volume_to_transfer, INTERNAL_PRECISION)
         return source_container, to
 
     def _transfer_slice(self, source_slice, volume):
         """ transfer from slice to self """
+
         def helper_func(elem):
             elem, to_array[0] = Container.transfer(elem, to_array[0], volume)
             return elem
@@ -316,7 +321,7 @@ class Container:
         source_slice.plate = source_slice.plate.copy()
         volume_to_transfer, unit = extract_value_unit(volume)
         volume_to_transfer *= 1000.0  # convert L to mL
-        volume_to_transfer = round(volume_to_transfer, 10)
+        volume_to_transfer = round(volume_to_transfer, INTERNAL_PRECISION)
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
         if source_slice.get().size * volume_to_transfer > (to.max_volume - to.volume):
@@ -328,7 +333,7 @@ class Container:
         return source_slice.plate, to_array[0]
 
     def __repr__(self):
-        return f"Container ({self.name}) ({self.volume}" +\
+        return f"Container ({self.name}) ({self.volume}" + \
             f"{('/' + str(self.max_volume)) if self.max_volume != float('inf') else ''}) of ({self.contents})"
 
     @staticmethod
@@ -370,25 +375,25 @@ class Container:
             raise TypeError("You can't add enzymes by molarity.")
         elif what.is_solid():
             container = container.add(solvent, container, f"{volume} mL")
-            container = container.add(what, container, f"{round(moles_to_add, 10)} mol")
-        else:   # Liquid
-            volume_to_add = round(moles_to_add * what.mol_weight / (what.density * 1000), 3)
+            container = container.add(what, container, f"{round(moles_to_add, INTERNAL_PRECISION)} mol")
+        else:  # Liquid
+            volume_to_add = round(moles_to_add * what.mol_weight / (what.density * 1000), EXTERNAL_PRECISION)
             container = container.add(solvent, container, f"{volume - volume_to_add} mL")
             container = container.add(what, container, f"{volume_to_add} mL")
         return container
 
 
 class Plate:
-    def __init__(self, name, make, rows, columns, max_volume_per_well):
+    def __init__(self, name, max_volume_per_well, make="generic", rows=8, columns=12):
         """
             Creates a generic plate.
 
             Attributes:
                 name (str): name of plate
+                max_volume_per_well (float): maximum volume of each well in uL
                 make (str): name of this kind of plate
                 rows (int or list): number of rows or list of names of rows
                 columns (int or list): number of columns or list of names of columns
-                max_volume_per_well (float): maximum volume of each well in uL
         """
 
         if not isinstance(name, str) or len(name) == 0:
@@ -403,7 +408,15 @@ class Plate:
             if rows < 1:
                 raise ValueError("illegal number of rows")
             self.n_rows = rows
-            self.row_names = [f"{i + 1}" for i in range(rows)]
+            self.row_names = []
+            for n in range(1, rows + 1):
+                result = []
+                while n > 0:
+                    n -= 1
+                    result.append(chr(ord('A') + n % 26))
+                    n //= 26
+                self.row_names.append(''.join(reversed(result)))
+            # self.row_names = [f"{i + 1}" for i in range(rows)]
         elif isinstance(rows, list):
             if len(rows) == 0:
                 raise ValueError("must have at least one row")
@@ -468,43 +481,37 @@ class Plate:
     def __repr__(self):
         return f"Plate: {self.name}"
 
-    def volumes(self, arr=None):
-        if arr is None:
-            arr = self.wells
-        elif isinstance(arr, PlateSlicer):
-            arr = arr.get()
-        return numpy.vectorize(lambda x: x.volume)(arr)
+    def volumes(self, substance=None):
+        if substance is None:
+            return numpy.vectorize(lambda x: x.volume)(self.wells)
+        else:
+            def helper(elem):
+                if substance.is_liquid() and substance in elem.contents:
+                    return round(elem.contents[substance], EXTERNAL_PRECISION)
+                else:
+                    return 0
+            return numpy.vectorize(helper)(self.wells)
 
-    def substances(self, arr=None):
-        if arr is None:
-            arr = self.wells
-        elif isinstance(arr, PlateSlicer):
-            arr = arr.get()
-        substances_arr = numpy.vectorize(lambda elem: elem.contents.keys())(arr)
+    def substances(self):
+        substances_arr = numpy.vectorize(lambda elem: elem.contents.keys())(self.wells)
         return set.union(*map(set, substances_arr.flatten()))
 
-    def moles(self, substance, arr=None):
-        PRECISION = 6
-        if arr is None:
-            arr = self.wells
-        elif isinstance(arr, PlateSlicer):
-            arr = arr.get()
-
+    def moles(self, substance):
         def helper(elem):
             if substance not in elem.contents:
                 return 0
             if substance.is_liquid():
-                return round(elem.contents[substance] * substance.density / substance.mol_weight, PRECISION)
+                return round(elem.contents[substance] * substance.density / substance.mol_weight, EXTERNAL_PRECISION)
             elif substance.is_solid():
-                return round(elem.contents[substance], PRECISION)
+                return round(elem.contents[substance], EXTERNAL_PRECISION)
 
-        return numpy.vectorize(helper, cache=True)(arr)
+        return numpy.vectorize(helper, cache=True)(self.wells)
 
-    def volume(self, arr=None):
-        return numpy.sum(self.volumes(arr))
+    def volume(self):
+        return self.volumes().sum()
 
     def copy(self):
-        new_plate = Plate(self.name, self.make, 1, 1, self.max_volume_per_well)
+        new_plate = Plate(self.name, self.max_volume_per_well, self.make, 1, 1)
         new_plate.n_rows, new_plate.n_columns = self.n_rows, self.n_columns
         new_plate.row_names, new_plate.column_names = self.row_names, self.column_names
         new_plate.wells = self.wells.copy()
@@ -523,18 +530,6 @@ class Plate:
         if not isinstance(destination, (Plate, PlateSlicer)):
             raise TypeError("You can only use Plate.transfer into a Plate")
         return PlateSlicer._transfer(source, destination, volume)
-
-
-class Generic96WellPlate(Plate):
-    """
-    Represents a 96 well plate.
-    """
-
-    def __init__(self, name, max_volume_per_well):
-        make = "generic 96 well plate"
-        rows = list(string.ascii_uppercase[:8])
-        columns = 12
-        super().__init__(name, make, rows, columns, max_volume_per_well)
 
 
 class Recipe:
@@ -556,22 +551,36 @@ class Recipe:
                     self.results.append(arg.copy())
         return self
 
-    def transfer(self, frm, to, how_much):
+    def add(self, source, destination, how_much):
         if self.locked:
             raise RuntimeError("This recipe is locked.")
-        if not isinstance(to, (Container, Plate, PlateSlicer)):
-            raise TypeError("Invalid destination type.")
-        if not isinstance(frm, (Substance, Container, PlateSlicer)):
+        if not isinstance(source, Substance):
             raise TypeError("Invalid source type.")
-        if (frm.plate if isinstance(frm, PlateSlicer) else frm) not in self.indexes:
-            raise ValueError("Source not found in declared uses.")
-        if (to.plate if isinstance(to, PlateSlicer) else to) not in self.indexes:
+        if not isinstance(destination, (Container, Plate, PlateSlicer)):
+            raise TypeError("Invalid destination type.")
+        if (destination.plate if isinstance(destination, PlateSlicer) else destination) not in self.indexes:
             raise ValueError("Destination not found in declared uses.")
-        if isinstance(frm, Plate):
-            frm = frm[:]
-        if isinstance(to, Plate):
-            to = to[:]
-        self.steps.append(('transfer', frm, to, how_much))
+        if isinstance(destination, Plate):
+            destination = destination[:]
+        self.steps.append(('add', source, destination, how_much))
+        return self
+
+    def transfer(self, source, destination, how_much):
+        if self.locked:
+            raise RuntimeError("This recipe is locked.")
+        if not isinstance(destination, (Container, Plate, PlateSlicer)):
+            raise TypeError("Invalid destination type.")
+        if not isinstance(source, (Substance, Container, PlateSlicer)):
+            raise TypeError("Invalid source type.")
+        if (source.plate if isinstance(source, PlateSlicer) else source) not in self.indexes:
+            raise ValueError("Source not found in declared uses.")
+        if (destination.plate if isinstance(destination, PlateSlicer) else destination) not in self.indexes:
+            raise ValueError("Destination not found in declared uses.")
+        if isinstance(source, Plate):
+            source = source[:]
+        if isinstance(destination, Plate):
+            destination = destination[:]
+        self.steps.append(('transfer', source, destination, how_much))
         return self
 
     def create_container(self, name, max_volume, initial_contents=None):
@@ -637,7 +646,7 @@ class Recipe:
                 else:
                     to = self.results[to_index]
 
-                if isinstance(frm, Substance): # Adding a substance is handled differently
+                if isinstance(frm, Substance):  # Adding a substance is handled differently
                     if isinstance(to, Container):
                         to = Container.add(frm, to, how_much)
                     elif isinstance(to, PlateSlicer):
