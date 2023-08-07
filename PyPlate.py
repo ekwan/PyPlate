@@ -7,8 +7,6 @@ from Slicer import Slicer
 
 EXTERNAL_PRECISION = 3
 INTERNAL_PRECISION = 10
-# VOLUME_STORAGE = 1e-3   # mL
-# MOLES_STORAGE = 1e-3    # mmol
 VOLUME_STORAGE = 1e-6  # uL
 MOLES_STORAGE = 1e-6  # umol
 
@@ -41,7 +39,7 @@ class Unit:
         raise ValueError("Invalid unit.")
 
     @staticmethod
-    def convert_to_unit_value(substance, how_much: str, volume: float = 0.0):  # mol, mL or AU
+    def convert_to_unit_value(substance, how_much: str, volume: float = 0.0):
         """
         @private
         Converts amount to standard units.
@@ -66,29 +64,53 @@ class Unit:
         value, unit = Unit.extract_value_unit(how_much)
         if substance.is_solid():  # Convert to moles
             if unit == 'g':  # mass
-                return value / substance.mol_weight
+                result = value / substance.mol_weight
             elif unit == 'mol':  # moles
-                return value
+                result = value
             elif unit == 'M':  # molar
                 if volume <= 0.0:
                     raise ValueError('Must have a liquid to add a molar concentration.')
                 # value = molar concentration in mol/L, volume = volume in mL
-                return value * volume / 1000
-            raise ValueError("We only measure solids in grams and moles.")
-        elif substance.is_liquid():  # Convert to VOLUME_STORAGE L
+                result = value * volume / 1000
+            else:
+                raise ValueError("We only measure solids in grams and moles.")
+            return Unit.convert_to_storage(result, 'mol')
+        elif substance.is_liquid():
             if unit == 'g':  # mass
-                # g -> mL -> L -> VOLUME_STORAGE
-                return value / substance.density
+                # g -> mL
+                result = value / substance.density
             elif unit == 'L':  # volume
-                return value * 1000
+                result = value * 1000
             elif unit == 'mol':  # moles
-                # mol -> mL -> L -> VOLUME_STORAGE
-                return value / substance.concentration / 1000
-            raise ValueError
+                # mol -> mL
+                result = value / substance.concentration
+            else:
+                raise ValueError
+            return Unit.convert_to_storage(result, 'mL')
         elif substance.is_enzyme():
             if unit == 'U':
                 return value
             raise ValueError
+
+    @staticmethod
+    def convert_to_storage(value, unit):
+        if unit[-1] == 'L':
+            prefix_value = Unit.convert_prefix(unit[:-1])
+            result = value * prefix_value / VOLUME_STORAGE
+        else:   # moles
+            prefix_value = Unit.convert_prefix(unit[:-3])
+            result = value * prefix_value / MOLES_STORAGE
+        return round(result, INTERNAL_PRECISION)
+
+    @staticmethod
+    def convert_from_storage(value, unit):
+        if unit[-1] == 'L':
+            prefix_value = Unit.convert_prefix(unit[:-1])
+            result = value * VOLUME_STORAGE / prefix_value
+        else:   # moles
+            prefix_value = Unit.convert_prefix(unit[:-3])
+            result = value * MOLES_STORAGE / prefix_value
+        return round(result, INTERNAL_PRECISION)
 
 
 def is_integer(s):
@@ -160,10 +182,18 @@ class Substance:
 
 class Container:
     def __init__(self, name, max_volume=float('inf'), initial_contents=None):
+        """
+        Create a Container.
+
+        Args:
+            name: Name of container
+            max_volume: maximum volume that can be stored in the container in mL
+            initial_contents: optional iterable of tuples of the form (Substance, quantity)
+        """
         self.name = name
         self.contents: Dict[Substance, float] = dict()
         self.volume = 0.0
-        self.max_volume = max_volume
+        self.max_volume = Unit.convert_to_storage(max_volume, 'mL')
         if initial_contents:
             for substance, how_much in initial_contents:
                 self._self_add(substance, how_much)
@@ -172,6 +202,7 @@ class Container:
         new_container = Container(self.name, self.max_volume)
         new_container.contents = self.contents.copy()
         new_container.volume = self.volume
+        new_container.max_volume = self.max_volume  # Don't readjust this value
         return new_container
 
     def __eq__(self, other):
@@ -190,7 +221,8 @@ class Container:
         if how_much.endswith('M') and not source.is_solid():
             # TODO: molarity from liquids?
             raise ValueError("Molarity solutions can only be made from solids.")
-        amount_to_transfer = round(Unit.convert_to_unit_value(source, how_much, self.volume), INTERNAL_PRECISION)
+        volume = Unit.convert_from_storage(self.volume, 'mL')
+        amount_to_transfer = round(Unit.convert_to_unit_value(source, how_much, volume), INTERNAL_PRECISION)
         self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, INTERNAL_PRECISION)
         if source.is_liquid():
             self.volume = round(self.volume + amount_to_transfer, INTERNAL_PRECISION)
@@ -202,14 +234,15 @@ class Container:
         if not isinstance(source_container, Container):
             raise TypeError("Invalid source type.")
         volume_to_transfer, unit = Unit.extract_value_unit(volume)
-        volume_to_transfer *= 1000.0  # convert L to mL
+        volume_to_transfer = Unit.convert_to_storage(volume_to_transfer, 'L')
         volume_to_transfer = round(volume_to_transfer, INTERNAL_PRECISION)
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
         if volume_to_transfer > source_container.volume:
             raise ValueError("Not enough mixture left in source container." +
-                             f" {volume_to_transfer} mL  needed of {source_container.name}" +
-                             f" out of {source_container.volume} mL.")
+                             f" {Unit.convert_from_storage(volume_to_transfer, 'mL')} mL "
+                             f" needed of {source_container.name}" +
+                             f" out of {Unit.convert_from_storage(source_container.volume, 'mL')} mL.")
         source_container, to = source_container.copy(), self.copy()
         ratio = volume_to_transfer / source_container.volume
         for substance, amount in source_container.contents.items():
@@ -218,7 +251,7 @@ class Container:
                                                          INTERNAL_PRECISION)
         to.volume = round(to.volume + volume_to_transfer, INTERNAL_PRECISION)
         if to.volume > to.max_volume:
-            raise ValueError("Exceeded maximum volume")
+            raise ValueError(f"Exceeded maximum volume in {to.name}.")
         source_container.volume = round(source_container.volume - volume_to_transfer, INTERNAL_PRECISION)
         return source_container, to
 
@@ -236,8 +269,9 @@ class Container:
         to = self.copy()
         source_slice = source_slice.copy()
         source_slice.plate = source_slice.plate.copy()
-        volume_to_transfer, unit = extract_value_unit(volume)
-        volume_to_transfer *= 1000.0  # convert L to mL
+        volume_to_transfer, unit = Unit.extract_value_unit(volume)
+        volume_to_transfer = Unit.convert_to_storage(volume_to_transfer, 'L')
+        # volume_to_transfer *= 1000.0  # convert L to mL
         volume_to_transfer = round(volume_to_transfer, INTERNAL_PRECISION)
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
@@ -250,8 +284,10 @@ class Container:
         return source_slice.plate, to_array[0]
 
     def __repr__(self):
-        return f"Container ({self.name}) ({self.volume}" + \
-            f"{('/' + str(self.max_volume)) if self.max_volume != float('inf') else ''}) of ({self.contents})"
+        max_volume = ('/' + str(Unit.convert_from_storage(self.max_volume, 'mL')))\
+            if self.max_volume != float('inf') else ''
+        return f"Container ({self.name}) ({Unit.convert_from_storage(self.volume, 'mL')}" +\
+            f"{max_volume} of ({self.contents})"
 
     @staticmethod
     def add(source: Substance, destination: Container, how_much):
@@ -359,7 +395,7 @@ class Plate:
             max_volume_per_well = float(max_volume_per_well)
             if max_volume_per_well <= 0:
                 raise ValueError("max volume per well must be greater than zero")
-            self.max_volume_per_well = max_volume_per_well / 1000  # store in mL
+            self.max_volume_per_well = Unit.convert_to_storage(max_volume_per_well, 'uL')
         except (ValueError, OverflowError):
             raise ValueError(f"invalid max volume per well {max_volume_per_well}")
 
@@ -389,7 +425,8 @@ class Plate:
         else:
             raise ValueError("columns must be int or list")
 
-        self.wells = numpy.array([[Container(f"well {row + 1},{col + 1}", max_volume=self.max_volume_per_well)
+        self.wells = numpy.array([[Container(f"well {row + 1},{col + 1}",
+                                             max_volume=Unit.convert_from_storage(self.max_volume_per_well, 'mL'))
                                    for col in range(self.n_columns)] for row in range(self.n_rows)])
 
     def __getitem__(self, item) -> PlateSlicer:
@@ -399,12 +436,21 @@ class Plate:
         return f"Plate: {self.name}"
 
     def volumes(self, substance=None):
+        """
+
+        Args:
+            substance: (optional) Substance to display volumes of.
+
+        Returns:
+            numpy.ndarray of volumes for each well in uL
+
+        """
         if substance is None:
-            return numpy.vectorize(lambda x: x.volume)(self.wells)
+            return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, 'uL'))(self.wells)
         else:
             def helper(elem):
                 if substance.is_liquid() and substance in elem.contents:
-                    return round(elem.contents[substance], EXTERNAL_PRECISION)
+                    return round(Unit.convert_from_storage(elem.contents[substance], 'uL'), EXTERNAL_PRECISION)
                 else:
                     return 0
 
@@ -415,23 +461,30 @@ class Plate:
         return set.union(*map(set, substances_arr.flatten()))
 
     def moles(self, substance):
+        """
+        Returns: moles of substance in each well.
+        """
         def helper(elem):
             if substance not in elem.contents:
                 return 0
             if substance.is_liquid():
-                return round(elem.contents[substance] * substance.density / substance.mol_weight, EXTERNAL_PRECISION)
+                return round(Unit.convert_from_storage(elem.contents[substance], 'mL') * substance.density /
+                             substance.mol_weight, EXTERNAL_PRECISION)
             elif substance.is_solid():
-                return round(elem.contents[substance], EXTERNAL_PRECISION)
-
+                return round(Unit.convert_from_storage(elem.contents[substance], 'mol'), EXTERNAL_PRECISION)
         return numpy.vectorize(helper, cache=True)(self.wells)
 
     def volume(self):
+        """
+        Returns: total volume stored in plate in uL.
+        """
         return self.volumes().sum()
 
     def copy(self):
         new_plate = Plate(self.name, self.max_volume_per_well, self.make, 1, 1)
         new_plate.n_rows, new_plate.n_columns = self.n_rows, self.n_columns
         new_plate.row_names, new_plate.column_names = self.row_names, self.column_names
+        new_plate.max_volume_per_well = self.max_volume_per_well    # Don't readjust this value
         new_plate.wells = self.wells.copy()
         return new_plate
 
@@ -514,6 +567,20 @@ class Recipe:
         return new_container
 
     def create_stock_solution(self, what: Substance, concentration: float, solvent: Substance, volume: float):
+        """
+
+        Adds a step to the recipe which creates a stock solution.
+
+        Args:
+            what: What to dilute.
+            concentration: Desired concentration in mol/L
+            solvent: What to dilute with.
+            volume: Desired total volume in mL.
+
+        Returns:
+            A new Container which will contain the solution, so that it may be used in later recipe steps.
+
+        """
         if self.locked:
             raise RuntimeError("This recipe is locked.")
         new_container = Container("{what.name} {concentration:.2}M", max_volume=volume)
