@@ -1,4 +1,4 @@
-from PyPlate import Plate, Substance, Container, Generic96WellPlate
+from PyPlate import Plate, Substance, Container
 import pytest
 import numpy
 
@@ -25,12 +25,12 @@ def sodium_sulfate() -> Substance:
 
 @pytest.fixture
 def plate1() -> Plate:
-    return Generic96WellPlate('plate1', 50_000)
+    return Plate('plate1', 50_000)
 
 
 @pytest.fixture
 def plate2() -> Plate:
-    return Generic96WellPlate('plate2', 50_000)
+    return Plate('plate2', 50_000)
 
 
 @pytest.fixture

@@ -236,7 +236,7 @@ class Container:
         to = self.copy()
         source_slice = source_slice.copy()
         source_slice.plate = source_slice.plate.copy()
-        volume_to_transfer, unit = extract_value_unit(volume)
+        volume_to_transfer, unit = Unit.extract_value_unit(volume)
         volume_to_transfer *= 1000.0  # convert L to mL
         volume_to_transfer = round(volume_to_transfer, INTERNAL_PRECISION)
         if unit != 'L':
