@@ -7,125 +7,88 @@ from Slicer import Slicer
 
 EXTERNAL_PRECISION = 3
 INTERNAL_PRECISION = 10
+# VOLUME_STORAGE = 1e-3   # mL
+# MOLES_STORAGE = 1e-3    # mmol
+VOLUME_STORAGE = 1e-6  # uL
+MOLES_STORAGE = 1e-6  # umol
 
 
-class PlateSlicer(Slicer):
-    def __init__(self, plate, item):
-        self.plate = plate
-        super().__init__(plate.wells, plate.row_names, plate.column_names, item)
-
-    @property
-    def array(self):
-        return self.plate.wells
-
-    @array.setter
-    def array(self, array):
-        self.plate.wells = array
-
-    def copy(self):
-        return PlateSlicer(self.plate, self.item)
+class Unit:
+    @staticmethod
+    def convert_prefix(prefix):
+        prefixes = {'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
+        if prefix in prefixes:
+            return prefixes[prefix]
+        raise ValueError(f"Invalid prefix: {prefix}")
 
     @staticmethod
-    def _add(frm, to, how_much):
-        to = to.copy()
-        to.plate = to.plate.copy()
-        result = numpy.vectorize(lambda elem: Container.add(frm, elem, how_much), cache=True)(to.get())
-        to.set(result)
-        return to.plate
+    def extract_value_unit(s: str) -> Tuple[float, str]:
+        if not isinstance(s, str):
+            raise TypeError
+        # (floating point number in 1.0e1 format) possibly some white space (alpha string)
+        match = re.fullmatch(r"([_\d]+(?:\.\d+)?(?:e-?\d+)?)\s*([a-zA-Z]+)", s)
+        if not match:
+            raise ValueError("Invalid quantity.")
+        value, unit = match.groups()
+        value = float(value)
+        if unit == 'AU':
+            return value, unit
+        for base_unit in {'mol', 'g', 'L', 'M'}:
+            if unit.endswith(base_unit):
+                prefix = unit[:-len(base_unit)]
+                value = value * Unit.convert_prefix(prefix)
+                return value, base_unit
+        raise ValueError("Invalid unit.")
 
     @staticmethod
-    def _transfer(frm, to, how_much):
-        if isinstance(frm, Container):
-            to = to.copy()
-            to.plate = to.plate.copy()
+    def convert_to_unit_value(substance, how_much: str, volume: float = 0.0):  # mol, mL or AU
+        """
+        @private
+        Converts amount to standard units.
 
-            def helper_func(elem):
-                frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
-                return elem
+        :param substance: Substance in question
+        :param how_much: Amount of substance to convert
+        :param volume: Volume of containing Mixture in mL
+        :return: float
 
-            frm_array = [frm]
-            result = numpy.vectorize(helper_func, cache=True)(to.get())
-            if isinstance(to.get(), Container):  # A zero-dim array was returned.
-                result = result.item()
-            to.set(result)
-            return frm_array[0], to.plate
-        elif not isinstance(frm, (Plate, PlateSlicer)):
-            raise TypeError("Invalid source type.")
+                 +--------+--------+--------+--------+--------+--------+
+                 |              Valid Input                   | Output |
+                 |    g   |    L   |   mol  |    M   |    U   |        |
+        +--------+--------+--------+--------+--------+--------+--------+
+        |SOLID   |   Yes  |   No   |   Yes  |   Yes  |   No   |   mol  |
+        +--------+--------+--------+--------+--------+--------+--------+
+        |LIQUID  |   Yes  |   Yes  |   Yes  |   ??   |   No   |   mL   |
+        +--------+--------+--------+--------+--------+--------+--------+
+        |ENZYME  |   No   |   No   |   No   |   No   |   Yes  |   U    |
+        +--------+--------+--------+--------+--------+--------+--------+
+        """
 
-        to = to.copy()
-        frm = frm.copy()
-
-        if to.plate != frm.plate:
-            to.plate = to.plate.copy()
-            frm.plate = frm.plate.copy()
-        else:
-            to.plate = frm.plate = to.plate.copy()
-
-        if frm.size == 1:
-            # Source from the single element in frm
-            if frm.shape != ():
-                raise RuntimeError("Shape of source should have been ()")
-
-            def helper_func(elem):
-                frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
-                return elem
-
-            frm_array = [frm.get()]
-            result = numpy.vectorize(helper_func, cache=True)(to.get())
-            to.set(result)
-            frm.set(frm_array[0])
-
-        elif to.size == 1:
-            #  Replace the single element in self
-            if to.shape != ():
-                raise RuntimeError("Shape of source should have been ()")
-
-            def helper_func(elem):
-                elem, to_array[0] = to_array[0].transfer(elem, how_much)
-                return elem
-
-            to_array = [to.get()]
-            frm.set(numpy.vectorize(helper_func, cache=True)(frm.get()))
-            to.set(to_array[0])
-
-        elif frm.size == to.size and frm.shape == to.shape:
-            def helper(elem1, elem2):
-                return Container.transfer(elem1, elem2, how_much)
-
-            func = numpy.frompyfunc(helper, 2, 2)
-            frm_result, to_result = func(frm.get(), to.get())
-            frm.set(frm_result)
-            to.set(to_result)
-        else:
-            raise ValueError("Source and destination slices must be the same size and shape.")
-
-        return frm.plate, to.plate
-
-
-def convert_prefix(prefix):
-    prefixes = {'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
-    if prefix in prefixes:
-        return prefixes[prefix]
-    raise ValueError(f"Invalid prefix: {prefix}")
-
-
-def extract_value_unit(s: str) -> Tuple[float, str]:
-    if not isinstance(s, str):
-        raise TypeError
-    # (floating point number in 1.0e1 format) possibly some white space (alpha string)
-    match = re.fullmatch(r"([_\d]+(?:\.\d+)?(?:e-?\d+)?)\s*([a-zA-Z]+)", s)
-    if not match:
-        raise ValueError("Invalid quantity.")
-    value, unit = match.groups()
-    value = float(value)
-    if unit == 'AU':
-        return value, unit
-    for base_unit in {'mol', 'g', 'L', 'M'}:
-        if unit.endswith(base_unit):
-            prefix = unit[:-len(base_unit)]
-            value = value * convert_prefix(prefix)
-            return value, base_unit
-    raise ValueError("Invalid unit.")
+        value, unit = Unit.extract_value_unit(how_much)
+        if substance.is_solid():  # Convert to moles
+            if unit == 'g':  # mass
+                return value / substance.mol_weight
+            elif unit == 'mol':  # moles
+                return value
+            elif unit == 'M':  # molar
+                if volume <= 0.0:
+                    raise ValueError('Must have a liquid to add a molar concentration.')
+                # value = molar concentration in mol/L, volume = volume in mL
+                return value * volume / 1000
+            raise ValueError("We only measure solids in grams and moles.")
+        elif substance.is_liquid():  # Convert to VOLUME_STORAGE L
+            if unit == 'g':  # mass
+                # g -> mL -> L -> VOLUME_STORAGE
+                return value / substance.density
+            elif unit == 'L':  # volume
+                return value * 1000
+            elif unit == 'mol':  # moles
+                # mol -> mL -> L -> VOLUME_STORAGE
+                return value / substance.concentration / 1000
+            raise ValueError
+        elif substance.is_enzyme():
+            if unit == 'U':
+                return value
+            raise ValueError
 
 
 def is_integer(s):
@@ -194,52 +157,6 @@ class Substance:
     def is_enzyme(self):
         return self._type == Substance.ENZYME
 
-    def convert_to_unit_value(self, how_much: str, volume: float = 0.0):  # mol, mL or AU
-        """
-        @private
-        Converts amount to standard units.
-
-        :param how_much: Amount of substance to convert
-        :param volume: Volume of containing Mixture in mL
-        :return: float
-
-                 +--------+--------+--------+--------+--------+--------+
-                 |              Valid Input                   | Output |
-                 |    g   |    L   |   mol  |    M   |    AU  |        |
-        +--------+--------+--------+--------+--------+--------+--------+
-        |SOLID   |   Yes  |   No   |   Yes  |   Yes  |   No   |   mol  |
-        +--------+--------+--------+--------+--------+--------+--------+
-        |LIQUID  |   Yes  |   Yes  |   Yes  |   ??   |   No   |   mL   |
-        +--------+--------+--------+--------+--------+--------+--------+
-        |ENZYME  |   No   |   No   |   No   |   No   |   Yes  |   AU   |
-        +--------+--------+--------+--------+--------+--------+--------+
-        """
-
-        value, unit = extract_value_unit(how_much)
-        if self.is_solid():  # Convert to moles
-            if unit == 'g':  # mass
-                return value / self.mol_weight
-            elif unit == 'mol':  # moles
-                return value
-            elif unit == 'M':  # molar
-                if volume <= 0.0:
-                    raise ValueError('Must have a liquid to add a molar concentration.')
-                # value = molar concentration in mol/L, volume = volume in mL
-                return value * volume / 1000
-            raise ValueError("We only measure solids in grams and moles.")
-        elif self.is_liquid():  # Convert to mL
-            if unit == 'g':  # mass
-                return value / self.density
-            elif unit == 'L':  # volume
-                return value * 1000  # mL
-            elif unit == 'mol':  # moles
-                return (value / self.concentration) / 1000.0
-            raise ValueError
-        elif self.is_enzyme():
-            if unit == 'AU':
-                return value
-            raise ValueError
-
 
 class Container:
     def __init__(self, name, max_volume=float('inf'), initial_contents=None):
@@ -273,7 +190,7 @@ class Container:
         if how_much.endswith('M') and not source.is_solid():
             # TODO: molarity from liquids?
             raise ValueError("Molarity solutions can only be made from solids.")
-        amount_to_transfer = round(source.convert_to_unit_value(how_much, self.volume), INTERNAL_PRECISION)
+        amount_to_transfer = round(Unit.convert_to_unit_value(source, how_much, self.volume), INTERNAL_PRECISION)
         self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, INTERNAL_PRECISION)
         if source.is_liquid():
             self.volume = round(self.volume + amount_to_transfer, INTERNAL_PRECISION)
@@ -284,7 +201,7 @@ class Container:
         """ transfer from container to self """
         if not isinstance(source_container, Container):
             raise TypeError("Invalid source type.")
-        volume_to_transfer, unit = extract_value_unit(volume)
+        volume_to_transfer, unit = Unit.extract_value_unit(volume)
         volume_to_transfer *= 1000.0  # convert L to mL
         volume_to_transfer = round(volume_to_transfer, INTERNAL_PRECISION)
         if unit != 'L':
@@ -490,6 +407,7 @@ class Plate:
                     return round(elem.contents[substance], EXTERNAL_PRECISION)
                 else:
                     return 0
+
             return numpy.vectorize(helper)(self.wells)
 
     def substances(self):
@@ -646,6 +564,7 @@ class Recipe:
                 else:
                     to = self.results[to_index]
 
+                # TODO: ?
                 if isinstance(frm, Substance):  # Adding a substance is handled differently
                     if isinstance(to, Container):
                         to = Container.add(frm, to, how_much)
@@ -666,3 +585,96 @@ class Recipe:
 
         self.locked = True
         return [result for result in self.results if not isinstance(result, Substance)]
+
+
+class PlateSlicer(Slicer):
+    def __init__(self, plate, item):
+        self.plate = plate
+        super().__init__(plate.wells, plate.row_names, plate.column_names, item)
+
+    @property
+    def array(self):
+        return self.plate.wells
+
+    @array.setter
+    def array(self, array):
+        self.plate.wells = array
+
+    def copy(self):
+        return PlateSlicer(self.plate, self.item)
+
+    @staticmethod
+    def _add(frm, to, how_much):
+        to = to.copy()
+        to.plate = to.plate.copy()
+        result = numpy.vectorize(lambda elem: Container.add(frm, elem, how_much), cache=True)(to.get())
+        to.set(result)
+        return to.plate
+
+    @staticmethod
+    def _transfer(frm, to, how_much):
+        if isinstance(frm, Container):
+            to = to.copy()
+            to.plate = to.plate.copy()
+
+            def helper_func(elem):
+                frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
+                return elem
+
+            frm_array = [frm]
+            result = numpy.vectorize(helper_func, cache=True)(to.get())
+            if isinstance(to.get(), Container):  # A zero-dim array was returned.
+                result = result.item()
+            to.set(result)
+            return frm_array[0], to.plate
+        elif not isinstance(frm, (Plate, PlateSlicer)):
+            raise TypeError("Invalid source type.")
+
+        to = to.copy()
+        frm = frm.copy()
+
+        if to.plate != frm.plate:
+            to.plate = to.plate.copy()
+            frm.plate = frm.plate.copy()
+        else:
+            to.plate = frm.plate = to.plate.copy()
+
+        if frm.size == 1:
+            # Source from the single element in frm
+            if frm.shape != ():
+                raise RuntimeError("Shape of source should have been ()")
+
+            def helper_func(elem):
+                frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
+                return elem
+
+            frm_array = [frm.get()]
+            result = numpy.vectorize(helper_func, cache=True)(to.get())
+            to.set(result)
+            frm.set(frm_array[0])
+
+        elif to.size == 1:
+            #  Replace the single element in self
+            if to.shape != ():
+                raise RuntimeError("Shape of source should have been ()")
+
+            def helper_func(elem):
+                elem, to_array[0] = to_array[0].transfer(elem, how_much)
+                return elem
+
+            to_array = [to.get()]
+            frm.set(numpy.vectorize(helper_func, cache=True)(frm.get()))
+            to.set(to_array[0])
+
+        elif frm.size == to.size and frm.shape == to.shape:
+            def helper(elem1, elem2):
+                return Container.transfer(elem1, elem2, how_much)
+
+            func = numpy.frompyfunc(helper, 2, 2)
+            frm_result, to_result = func(frm.get(), to.get())
+            frm.set(frm_result)
+            to.set(to_result)
+        else:
+            raise ValueError("Source and destination slices must be the same size and shape.")
+
+        return frm.plate, to.plate
