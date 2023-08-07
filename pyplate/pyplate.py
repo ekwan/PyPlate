@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Tuple, Dict
 import numpy
-from Slicer import Slicer
+from pyplate.slicer import Slicer
 
 EXTERNAL_PRECISION = 3
 INTERNAL_PRECISION = 10

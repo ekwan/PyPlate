@@ -1,4 +1,4 @@
-from PyPlate import Substance, Container, Recipe, Plate
+from pyplate.pyplate import Substance, Container, Recipe, Plate
 
 water = Substance.liquid('H2O', mol_weight=18.0153, density=1)
 salt = Substance.solid('NaCl', 58.4428)

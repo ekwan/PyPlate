@@ -1,5 +1,5 @@
 # from PyPlate import Reagent, StockSolution, Solvent, Generic96WellPlate
-from PyPlate import Substance, Container, Plate, Recipe
+from pyplate.pyplate import Substance, Container, Plate, Recipe
 
 # testing #
 

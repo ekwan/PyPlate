@@ -1,4 +1,4 @@
-from PyPlate import Plate, Substance, Container, Unit
+from pyplate.pyplate import Plate, Substance, Container, Unit
 import pytest
 import numpy
 
