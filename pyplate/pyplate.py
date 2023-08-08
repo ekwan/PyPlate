@@ -174,7 +174,7 @@ class Substance:
 
         Args:
             name: Name of substance.
-            mol_type: Substance.LIQUID, Substance.SOLID, or Substance.Enzyme.
+            mol_type: Substance.LIQUID, Substance.SOLID, or Substance.ENZYME.
             molecule: (optional) A cctk molecule.
         """
         self.name = name
