@@ -29,7 +29,7 @@ class Unit:
             raise ValueError("Invalid quantity.")
         value, unit = match.groups()
         value = float(value)
-        if unit == 'AU':
+        if unit == 'U':
             return value, unit
         for base_unit in {'mol', 'g', 'L', 'M'}:
             if unit.endswith(base_unit):
@@ -163,7 +163,7 @@ class Substance:
         substance = Substance(name, Substance.LIQUID, molecule)
         substance.mol_weight = mol_weight  # g / mol
         substance.density = density  # g / mL
-        substance.concentration = 1000.0 * density / mol_weight  # mol / L
+        substance.concentration = density / mol_weight  # mol / mL
         return substance
 
     @staticmethod

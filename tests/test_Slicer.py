@@ -1,8 +1,11 @@
 import pytest
-from Slicer import Slicer
+from pyplate.slicer import Slicer
 import numpy as np
 
-array = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+
+@pytest.fixture
+def array():
+    return np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
 
 
 def test_resolve_labels_zero():
@@ -43,22 +46,22 @@ def test_resolve_labels_typerror():
 
 def test_Slicer_arraytype():
     with pytest.raises(TypeError, match="must be a numpy.ndarray"):
-        Slicer(None, None, None, None, None)
+        Slicer(None, None, None, None)
 
 
-def test_Slicer_row_labels():
+def test_Slicer_row_labels(array):
     with pytest.raises(TypeError, match="row_labels") as e:
-        Slicer(None, array, None, None, None)
+        Slicer(array, None, None, None)
     with pytest.raises(TypeError, match="row_labels"):
-        Slicer(None, array, (), None, None)
+        Slicer(array, (), None, None)
     with pytest.raises(TypeError, match="row_labels"):
-        Slicer(None, array, [1], None, None)
+        Slicer(array, [1], None, None)
 
 
-def test_Slicer_col_labels():
+def test_Slicer_col_labels(array):
     with pytest.raises(TypeError, match="row_labels") as e:
-        Slicer(None, array, None, None, None)
+        Slicer(array, None, None, None)
     with pytest.raises(TypeError, match="row_labels"):
-        Slicer(None, array, (), None, None)
+        Slicer(array, (), None, None)
     with pytest.raises(TypeError, match="row_labels"):
-        Slicer(None, array, [1], None, None)
+        Slicer(array, [1], None, None)
