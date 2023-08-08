@@ -50,7 +50,7 @@ def test_Slicer_arraytype():
 
 
 def test_Slicer_row_labels(array):
-    with pytest.raises(TypeError, match="row_labels") as e:
+    with pytest.raises(TypeError, match="row_labels"):
         Slicer(array, None, None, None)
     with pytest.raises(TypeError, match="row_labels"):
         Slicer(array, (), None, None)
@@ -59,7 +59,7 @@ def test_Slicer_row_labels(array):
 
 
 def test_Slicer_col_labels(array):
-    with pytest.raises(TypeError, match="row_labels") as e:
+    with pytest.raises(TypeError, match="row_labels"):
         Slicer(array, None, None, None)
     with pytest.raises(TypeError, match="row_labels"):
         Slicer(array, (), None, None)

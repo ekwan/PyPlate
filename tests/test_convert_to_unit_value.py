@@ -3,6 +3,7 @@ import pytest
 
 EPSILON = 1e-6
 
+
 @pytest.fixture
 def water() -> Substance:
     return Substance.liquid('H2O', mol_weight=18.0153, density=1)
