@@ -79,7 +79,7 @@ print()
 print("used volumes:")
 for substance in plate.substances():
     if substance.is_liquid():
-        print(f"{substance.name} : {plate.volumes(substance).sum() * 1000.0:.1f} uL")
+        print(f"{substance.name} : {plate.volumes(substance).sum():.1f} uL")
 print()
 
 exit()
