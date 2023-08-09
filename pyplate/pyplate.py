@@ -2,6 +2,16 @@
 
 pyplate: a tool for designing chemistry experiments in plate format
 
+Substance: An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).
+           Immutable. Solids and enzymes are assumed to require zero volume.
+
+Container: Stores specified quantities of Substances in a vessel with a given maximum volume. Immutable.
+
+Plate: A spatially ordered collection of Containers, like a 96 well plate.
+       The spatial arrangement must be rectangular. Immutable.
+
+Recipe: A list of instructions for transforming one set of containers into another.
+
 All classes in this package are friends and use private methods of other classes freely.
 
 """
@@ -17,8 +27,8 @@ from pyplate.slicer import Slicer
 try:
     with open('../pyplate.yaml', 'r') as config_file:
         config = yaml.safe_load(config_file)
-except (OSError, yaml.YAMLError):
-    raise RuntimeError("Config file could not be read")
+except (FileNotFoundError, yaml.YAMLError) as exc:
+    raise RuntimeError("Config file could not be read") from exc
 
 
 class Unit:
@@ -32,6 +42,12 @@ class Unit:
 
         Converts an SI prefix into a multiplier.
         Example: "m" -> 1e-3, "u" -> 1e-6
+
+        Arguments:
+            prefix:
+
+        Returns:
+             Multiplier (float)
 
         """
         if not isinstance(prefix, str):
@@ -59,7 +75,7 @@ class Unit:
         value = float(value)
         if unit == 'U':
             return value, unit
-        for base_unit in {'mol', 'g', 'L', 'M'}:
+        for base_unit in ['mol', 'g', 'L', 'M']:
             if unit.endswith(base_unit):
                 prefix = unit[:-len(base_unit)]
                 value = value * Unit.convert_prefix_to_multiplier(prefix)
@@ -103,7 +119,7 @@ class Unit:
             else:
                 raise ValueError("We only measure solids in grams and moles.")
             return Unit.convert_to_storage(result, 'mol')
-        elif substance.is_liquid():
+        if substance.is_liquid():
             if unit == 'g':  # mass
                 # g -> mL
                 result = value / substance.density
@@ -115,7 +131,7 @@ class Unit:
             else:
                 raise ValueError
             return Unit.convert_to_storage(result, 'mL')
-        elif substance.is_enzyme():
+        if substance.is_enzyme():
             if unit == 'U':
                 return value
             raise ValueError
@@ -192,8 +208,7 @@ class Substance:
             return f"SOLID ({self.name}: {self.mol_weight})"
         if self.is_liquid():
             return f"LIQUID ({self.name}: {self.mol_weight}, {self.density})"
-        else:
-            return f"ENZYME ({self.name})"
+        return f"ENZYME ({self.name})"
 
     def __eq__(self, other):
         if not isinstance(other, Substance):
@@ -289,7 +304,7 @@ class Container:
             initial_contents: (optional) Iterable of tuples of the form (Substance, quantity)
         """
         self.name = name
-        self.contents: Dict[Substance, float] = dict()
+        self.contents: Dict[Substance, float] = {}
         self.volume = 0.0
         self.max_volume = Unit.convert_to_storage(max_volume, 'mL')
         if initial_contents:
@@ -356,7 +371,8 @@ class Container:
         source_container, to = source_container.copy(), self.copy()
         ratio = volume_to_transfer / source_container.volume
         for substance, amount in source_container.contents.items():
-            to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio, config['internal_precision'])
+            to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio,
+                                           config['internal_precision'])
             source_container.contents[substance] = round(source_container.contents[substance] - amount * ratio,
                                                          config['internal_precision'])
         to.volume = round(to.volume + volume_to_transfer, config['internal_precision'])
@@ -432,10 +448,9 @@ class Container:
             raise TypeError("You can only use Container.transfer into a Container")
         if isinstance(source, Container):
             return destination._transfer(source, volume)
-        elif isinstance(source, (Plate, PlateSlicer)):
+        if isinstance(source, (Plate, PlateSlicer)):
             return destination._transfer_slice(source, volume)
-        else:
-            raise TypeError("Invalid source type.")
+        raise TypeError("Invalid source type.")
 
     @staticmethod
     def create_stock_solution(what: Substance, concentration: float, solvent: Substance, volume: float):
@@ -455,7 +470,7 @@ class Container:
         moles_to_add = volume * concentration
         if what.is_enzyme():
             raise TypeError("You can't add enzymes by molarity.")
-        elif what.is_solid():
+        if what.is_solid():
             container = container.add(solvent, container, f"{volume} mL")
             container = container.add(what, container, f"{round(moles_to_add, config['internal_precision'])} mol")
         else:  # Liquid
@@ -530,8 +545,8 @@ class Plate:
             if max_volume_per_well <= 0:
                 raise ValueError("max volume per well must be greater than zero")
             self.max_volume_per_well = Unit.convert_to_storage(max_volume_per_well, 'uL')
-        except (ValueError, OverflowError):
-            raise ValueError(f"invalid max volume per well {max_volume_per_well}")
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(f"invalid max volume per well {max_volume_per_well}") from exc
 
         if isinstance(columns, int):
             if columns < 1:
@@ -581,15 +596,15 @@ class Plate:
         """
         if substance is None:
             return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, 'uL'))(self.wells)
-        else:
-            def helper(elem):
-                """ Returns volume of elem. """
-                if substance.is_liquid() and substance in elem.contents:
-                    return round(Unit.convert_from_storage(elem.contents[substance], 'uL'), config['external_precision'])
-                else:
-                    return 0
 
-            return numpy.vectorize(helper)(self.wells)
+        def helper(elem):
+            """ Returns volume of elem. """
+            if substance.is_liquid() and substance in elem.contents:
+                return round(Unit.convert_from_storage(elem.contents[substance], 'uL'),
+                             config['external_precision'])
+            return 0
+
+        return numpy.vectorize(helper)(self.wells)
 
     def substances(self):
         """
@@ -612,7 +627,7 @@ class Plate:
             if substance.is_liquid():
                 return round(Unit.convert_from_storage(elem.contents[substance], 'mL') * substance.density /
                              substance.mol_weight, config['external_precision'])
-            elif substance.is_solid():
+            if substance.is_solid():
                 return round(Unit.convert_from_storage(elem.contents[substance], 'mol'), config['external_precision'])
 
         return numpy.vectorize(helper, cache=True)(self.wells)
@@ -674,7 +689,7 @@ class Recipe:
     """
 
     def __init__(self):
-        self.indexes = dict()
+        self.indexes = {}
         self.results = []
         self.steps = []
         self.locked = False
@@ -907,7 +922,7 @@ class PlateSlicer(Slicer):
                 result = result.item()
             to.set(result)
             return frm_array[0], to.plate
-        elif not isinstance(frm, (Plate, PlateSlicer)):
+        if not isinstance(frm, (Plate, PlateSlicer)):
             raise TypeError("Invalid source type.")
 
         to = to.copy()
