@@ -20,10 +20,6 @@ try:
 except (OSError, yaml.YAMLError):
     raise RuntimeError("Config file could not be read")
 
-# Numbers like '1e-6' aren't loaded from yaml correctly.
-config['volume_storage'] = float(config['volume_storage'])
-config['moles_storage'] = float(config['moles_storage'])
-
 
 class Unit:
     """

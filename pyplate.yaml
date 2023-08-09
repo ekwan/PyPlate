@@ -1,4 +1,9 @@
+# How many digits of precision to maintain in internal calculations
 internal_precision: 10
+# How many digits of precision to return to the user
 external_precision: 3
-volume_storage: 1e-6
-moles_storage: 1e-6
+# How to store volumes internally
+# Example 1e-6 means we will store volumes in microliters
+volume_storage: !!float 1e-6
+# How to store moles internally
+moles_storage: !!float 1e-6
