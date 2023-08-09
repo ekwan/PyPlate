@@ -11,12 +11,18 @@ from __future__ import annotations
 import re
 from typing import Tuple, Dict
 import numpy
+import yaml
 from pyplate.slicer import Slicer
 
-EXTERNAL_PRECISION = 3
-INTERNAL_PRECISION = 10
-VOLUME_STORAGE = 1e-6  # uL
-MOLES_STORAGE = 1e-6  # umol
+try:
+    with open('../pyplate.yaml', 'r') as config_file:
+        config = yaml.safe_load(config_file)
+except (OSError, yaml.YAMLError):
+    raise RuntimeError("Config file could not be read")
+
+# Numbers like '1e-6' aren't loaded from yaml correctly.
+config['volume_storage'] = float(config['volume_storage'])
+config['moles_storage'] = float(config['moles_storage'])
 
 
 class Unit:
@@ -25,12 +31,15 @@ class Unit:
     """
 
     @staticmethod
-    def convert_prefix(prefix):
+    def convert_prefix_to_multiplier(prefix: str) -> float:
         """
 
         Converts an SI prefix into a multiplier.
+        Example: "m" -> 1e-3, "u" -> 1e-6
 
         """
+        if not isinstance(prefix, str):
+            raise TypeError("SI prefix must be a string.")
         prefixes = {'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
         if prefix in prefixes:
             return prefixes[prefix]
@@ -45,7 +54,7 @@ class Unit:
 
         """
         if not isinstance(s, str):
-            raise TypeError
+            raise TypeError("Amount must be a string.")
         # (floating point number in 1.0e1 format) possibly some white space (alpha string)
         match = re.fullmatch(r"([_\d]+(?:\.\d+)?(?:e-?\d+)?)\s*([a-zA-Z]+)", s)
         if not match:
@@ -57,7 +66,7 @@ class Unit:
         for base_unit in {'mol', 'g', 'L', 'M'}:
             if unit.endswith(base_unit):
                 prefix = unit[:-len(base_unit)]
-                value = value * Unit.convert_prefix(prefix)
+                value = value * Unit.convert_prefix_to_multiplier(prefix)
                 return value, base_unit
         raise ValueError("Invalid unit.")
 
@@ -124,12 +133,12 @@ class Unit:
 
         """
         if unit[-1] == 'L':
-            prefix_value = Unit.convert_prefix(unit[:-1])
-            result = value * prefix_value / VOLUME_STORAGE
+            prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
+            result = value * prefix_value / config['volume_storage']
         else:  # moles
-            prefix_value = Unit.convert_prefix(unit[:-3])
-            result = value * prefix_value / MOLES_STORAGE
-        return round(result, INTERNAL_PRECISION)
+            prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
+            result = value * prefix_value / config['moles_storage']
+        return round(result, config['internal_precision'])
 
     @staticmethod
     def convert_from_storage(value, unit):
@@ -140,12 +149,12 @@ class Unit:
 
         """
         if unit[-1] == 'L':
-            prefix_value = Unit.convert_prefix(unit[:-1])
-            result = value * VOLUME_STORAGE / prefix_value
+            prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
+            result = value * config['volume_storage'] / prefix_value
         else:  # moles
-            prefix_value = Unit.convert_prefix(unit[:-3])
-            result = value * MOLES_STORAGE / prefix_value
-        return round(result, INTERNAL_PRECISION)
+            prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
+            result = value * config['moles_storage'] / prefix_value
+        return round(result, config['internal_precision'])
 
 
 def is_integer(s):
@@ -327,10 +336,10 @@ class Container:
             # TODO: molarity from liquids?
             raise ValueError("Molarity solutions can only be made from solids.")
         volume = Unit.convert_from_storage(self.volume, 'mL')
-        amount_to_transfer = round(Unit.convert_to_unit_value(source, how_much, volume), INTERNAL_PRECISION)
-        self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, INTERNAL_PRECISION)
+        amount_to_transfer = round(Unit.convert_to_unit_value(source, how_much, volume), config['internal_precision'])
+        self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, config['internal_precision'])
         if source.is_liquid():
-            self.volume = round(self.volume + amount_to_transfer, INTERNAL_PRECISION)
+            self.volume = round(self.volume + amount_to_transfer, config['internal_precision'])
         if self.volume > self.max_volume:
             raise ValueError("Exceeded maximum volume")
 
@@ -340,7 +349,7 @@ class Container:
             raise TypeError("Invalid source type.")
         volume_to_transfer, unit = Unit.extract_value_unit(volume)
         volume_to_transfer = Unit.convert_to_storage(volume_to_transfer, 'L')
-        volume_to_transfer = round(volume_to_transfer, INTERNAL_PRECISION)
+        volume_to_transfer = round(volume_to_transfer, config['internal_precision'])
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
         if volume_to_transfer > source_container.volume:
@@ -351,13 +360,13 @@ class Container:
         source_container, to = source_container.copy(), self.copy()
         ratio = volume_to_transfer / source_container.volume
         for substance, amount in source_container.contents.items():
-            to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio, INTERNAL_PRECISION)
+            to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio, config['internal_precision'])
             source_container.contents[substance] = round(source_container.contents[substance] - amount * ratio,
-                                                         INTERNAL_PRECISION)
-        to.volume = round(to.volume + volume_to_transfer, INTERNAL_PRECISION)
+                                                         config['internal_precision'])
+        to.volume = round(to.volume + volume_to_transfer, config['internal_precision'])
         if to.volume > to.max_volume:
             raise ValueError(f"Exceeded maximum volume in {to.name}.")
-        source_container.volume = round(source_container.volume - volume_to_transfer, INTERNAL_PRECISION)
+        source_container.volume = round(source_container.volume - volume_to_transfer, config['internal_precision'])
         return source_container, to
 
     def _transfer_slice(self, source_slice, volume):
@@ -383,7 +392,7 @@ class Container:
         volume_to_transfer, unit = Unit.extract_value_unit(volume)
         volume_to_transfer = Unit.convert_to_storage(volume_to_transfer, 'L')
         # volume_to_transfer *= 1000.0  # convert L to mL
-        volume_to_transfer = round(volume_to_transfer, INTERNAL_PRECISION)
+        volume_to_transfer = round(volume_to_transfer, config['internal_precision'])
         if unit != 'L':
             raise ValueError("We can only transfer liquid from other containers.")
         if source_slice.get().size * volume_to_transfer > (to.max_volume - to.volume):
@@ -452,9 +461,9 @@ class Container:
             raise TypeError("You can't add enzymes by molarity.")
         elif what.is_solid():
             container = container.add(solvent, container, f"{volume} mL")
-            container = container.add(what, container, f"{round(moles_to_add, INTERNAL_PRECISION)} mol")
+            container = container.add(what, container, f"{round(moles_to_add, config['internal_precision'])} mol")
         else:  # Liquid
-            volume_to_add = round(moles_to_add * what.mol_weight / (what.density * 1000), EXTERNAL_PRECISION)
+            volume_to_add = round(moles_to_add * what.mol_weight / (what.density * 1000), config['external_precision'])
             container = container.add(solvent, container, f"{volume - volume_to_add} mL")
             container = container.add(what, container, f"{volume_to_add} mL")
         return container
@@ -465,6 +474,7 @@ class Plate:
     A spatially ordered collection of Containers, like a 96 well plate.
     The spatial arrangement must be rectangular. Immutable.
     """
+
     def __init__(self, name: str, max_volume_per_well: float, make: str = "generic", rows=8, columns=12):
         """
             Creates a generic plate.
@@ -579,7 +589,7 @@ class Plate:
             def helper(elem):
                 """ Returns volume of elem. """
                 if substance.is_liquid() and substance in elem.contents:
-                    return round(Unit.convert_from_storage(elem.contents[substance], 'uL'), EXTERNAL_PRECISION)
+                    return round(Unit.convert_from_storage(elem.contents[substance], 'uL'), config['external_precision'])
                 else:
                     return 0
 
@@ -605,9 +615,9 @@ class Plate:
                 return 0
             if substance.is_liquid():
                 return round(Unit.convert_from_storage(elem.contents[substance], 'mL') * substance.density /
-                             substance.mol_weight, EXTERNAL_PRECISION)
+                             substance.mol_weight, config['external_precision'])
             elif substance.is_solid():
-                return round(Unit.convert_from_storage(elem.contents[substance], 'mol'), EXTERNAL_PRECISION)
+                return round(Unit.convert_from_storage(elem.contents[substance], 'mol'), config['external_precision'])
 
         return numpy.vectorize(helper, cache=True)(self.wells)
 
@@ -666,6 +676,7 @@ class Recipe:
     will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is
     considered immutable.
     """
+
     def __init__(self):
         self.indexes = dict()
         self.results = []
@@ -857,6 +868,7 @@ class Recipe:
 
 class PlateSlicer(Slicer):
     """ @private """
+
     def __init__(self, plate, item):
         self.plate = plate
         super().__init__(plate.wells, plate.row_names, plate.column_names, item)
