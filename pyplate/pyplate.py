@@ -12,27 +12,36 @@ Plate: A spatially ordered collection of Containers, like a 96 well plate.
 
 Recipe: A list of instructions for transforming one set of containers into another.
 
+Storage format is defined in pyplate.yaml for volumes and moles.
+
+    Example:
+        # 1e-6 means we will store volumes as microliters
+        volume_storage: 'uL'
+
+        # 1e-6 means we will store moles as micromoles.
+        moles_storage: 'umol'
+
 All classes in this package are friends and use private methods of other classes freely.
 
+All internal computations are rounded to config.internal_precision to maintain sanity.
+    Rounding errors quickly compound.
+All values returned to the user are rounded to config.external_precision for ease of use.
 """
 
 # Allow typing reference while still building classes
 from __future__ import annotations
 import re
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Iterable
+from copy import deepcopy, copy
 import numpy
-import yaml
 from pyplate.slicer import Slicer
-
-try:
-    with open('../pyplate.yaml', 'r') as config_file:
-        config = yaml.safe_load(config_file)
-except (FileNotFoundError, yaml.YAMLError) as exc:
-    raise RuntimeError("Config file could not be read") from exc
+from pyplate import config
 
 
 class Unit:
     """
+    @private
+
     Provides unit conversion utility functions.
     """
 
@@ -58,19 +67,25 @@ class Unit:
         raise ValueError(f"Invalid prefix: {prefix}")
 
     @staticmethod
-    def extract_value_unit(s: str) -> Tuple[float, str]:
+    def parse_quantity(quantity: str) -> Tuple[float, str]:
         """
 
-        Splits an amount into a value and unit, converting any SI prefix.
+        Splits a quantity into a value and unit, converting any SI prefix.
         Example: '10 mL' -> (0.01, 'L')
 
+        Arguments:
+            quantity: Quantity to convert.
+
+        Returns: A tuple of float and str. The float will be the parsed value
+         and the str will be the unit ('L', 'mol', 'g', etc.).
+
         """
-        if not isinstance(s, str):
+        if not isinstance(quantity, str):
             raise TypeError("Amount must be a string.")
         # (floating point number in 1.0e1 format) possibly some white space (alpha string)
-        match = re.fullmatch(r"([_\d]+(?:\.\d+)?(?:e-?\d+)?)\s*([a-zA-Z]+)", s)
+        match = re.fullmatch(r"([_\d]+(?:\.\d+)?(?:e-?\d+)?)\s*([a-zA-Z]+)", quantity)
         if not match:
-            raise ValueError("Invalid quantity.")
+            raise ValueError("Invalid quantity. Quantity should be in the format '10 mL'.")
         value, unit = match.groups()
         value = float(value)
         if unit == 'U':
@@ -80,40 +95,66 @@ class Unit:
                 prefix = unit[:-len(base_unit)]
                 value = value * Unit.convert_prefix_to_multiplier(prefix)
                 return value, base_unit
-        raise ValueError("Invalid unit.")
+        raise ValueError("Invalid unit {base_unit}.")
 
     @staticmethod
-    def convert_to_unit_value(substance, how_much: str, volume: float = 0.0):
-        """
-        @private
-        Converts amount to standard units.
-
-        :param substance: Substance in question
-        :param how_much: Amount of substance to convert
-        :param volume: Volume of containing Mixture in mL
-        :return: Value as per table below, but converted to storage format.
-
-                 +--------+--------+--------+--------+--------+--------+
-                 |              Valid Input                   | Output |
-                 |    g   |    L   |   mol  |    M   |    U   |        |
-        +--------+--------+--------+--------+--------+--------+--------+
-        |SOLID   |   Yes  |   No   |   Yes  |   Yes  |   No   |   mol  |
-        +--------+--------+--------+--------+--------+--------+--------+
-        |LIQUID  |   Yes  |   Yes  |   Yes  |   ??   |   No   |   mL   |
-        +--------+--------+--------+--------+--------+--------+--------+
-        |ENZYME  |   No   |   No   |   No   |   No   |   Yes  |   U    |
-        +--------+--------+--------+--------+--------+--------+--------+
+    def convert_to_unit_value(substance: Substance, quantity: str, volume: float = 0.0) -> float:
         """
 
-        value, unit = Unit.extract_value_unit(how_much)
+        Converts amount to standard unit.
+
+
+        Arguments:
+            substance: Substance in question.
+            quantity: Quantity of substance.
+            volume: Volume of containing Mixture in mL
+
+        Returns: Value in standard unit, converted to storage format.
+
+        ---
+
+        Standard units:
+
+        - SOLID: moles
+
+        - LIQUID: liter
+
+        - ENZYME: activity unit
+
+        """
+
+        #          +--------+--------+--------+--------+--------+----------+
+        #          |              Valid Input                   | Standard |
+        #          |    g   |    L   |   mol  |    M   |    U   |   Unit   |
+        # +--------+--------+--------+--------+--------+--------+----------+
+        # |SOLID   |   Yes  |   No   |   Yes  |   Yes  |   No   |    mol   |
+        # +--------+--------+--------+--------+--------+--------+----------+
+        # |LIQUID  |   Yes  |   Yes  |   Yes  |   No   |   No   |    mL    |
+        # +--------+--------+--------+--------+--------+--------+----------+
+        # |ENZYME  |   No   |   No   |   No   |   No   |   Yes  |    U     |
+        # +--------+--------+--------+--------+--------+--------+----------+
+
+        # TODO: Explain why moles and mL were chosen as units.
+        # TODO: Enzyme could be in solution.
+
+        if not isinstance(substance, Substance):
+            raise TypeError(f"Invalid type for substance, {type(substance)}")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str.")
+        if not isinstance(volume, float):
+            raise TypeError("Volume, if provided, must be a float.")
+
+        value, unit = Unit.parse_quantity(quantity)
         if substance.is_solid():  # Convert to moles
             if unit == 'g':  # mass
                 result = value / substance.mol_weight
             elif unit == 'mol':  # moles
                 result = value
             elif unit == 'M':  # molar
+                # A molar concentration with zero volume would be undefined.
                 if volume <= 0.0:
-                    raise ValueError('Must have a liquid to add a molar concentration.')
+                    raise ValueError('Must have a liquid in which to dissolve the solid ' +
+                                     'in order to create a molar concentration')
                 # value = molar concentration in mol/L, volume = volume in mL
                 result = value * volume / 1000
             else:
@@ -137,53 +178,71 @@ class Unit:
             raise ValueError
 
     @staticmethod
-    def convert_to_storage(value: float, unit: str):
+    def convert_to_storage(value: float, unit: str) -> float:
         """
 
         Converts value to storage format.
         Example: (1, 'L') -> 1e6 uL
 
+        Arguments:
+            value: Value to be converted.
+            unit: Unit value is in. ('uL', 'mL', 'mol', etc.)
+
+        Returns: Converted value.
         """
+
+        if not isinstance(value, (int, float)):
+            raise TypeError("Value must be a float.")
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
-            result = value * prefix_value / config['volume_storage']
+            result = value * prefix_value / config.volume_storage
         else:  # moles
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
-            result = value * prefix_value / config['moles_storage']
-        return round(result, config['internal_precision'])
+            result = value * prefix_value / config.moles_storage
+        return round(result, config.internal_precision)
 
     @staticmethod
-    def convert_from_storage(value, unit):
+    def convert_from_storage(value: float, unit: str) -> float:
         """
 
         Converts value from storage format.
         Example: (1e3 uL, 'mL') -> 1
 
+        Arguments:
+            value: Value to be converted.
+            unit: Unit value should be in. ('uL', 'mL', 'mol', etc.)
+
+        Returns: Converted value.
+
         """
+        if not isinstance(value, float):
+            raise TypeError("Value must be a float.")
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
-            result = value * config['volume_storage'] / prefix_value
+            result = value * config.volume_storage / prefix_value
         else:  # moles
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
-            result = value * config['moles_storage'] / prefix_value
-        return round(result, config['internal_precision'])
-
-
-def is_integer(s):
-    """
-    Helper method to check if variable is integer.
-    """
-    try:
-        int(s)
-        return True
-    except ValueError:
-        return False
+            result = value * config.moles_storage / prefix_value
+        return round(result, config.internal_precision)
 
 
 class Substance:
     """
     An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.). Immutable.
     Solids and enzymes are assumed to require zero volume.
+
+    Attributes:
+        name: Name of substance.
+        mol_weight: Molecular weight (g/mol).
+        density: Density if `Substance` is a liquid (g/mL).
+        concentration: Calculated concentration if `Substance` is a liquid (mol/mL).
+        molecule: `cctk.Molecule` if provided.
     """
     SOLID = 1
     LIQUID = 2
@@ -193,11 +252,20 @@ class Substance:
         """
         Create a new substance.
 
-        Args:
+        Arguments:
             name: Name of substance.
             mol_type: Substance.LIQUID, Substance.SOLID, or Substance.ENZYME.
-            molecule: (optional) A cctk molecule.
+            molecule: (optional) A cctk.Molecule.
+
+        If  cctk.Molecule is provided, molecular weight will automatically populate.
+        Note: Support for isotopologues will be added in the future.
+
         """
+        if not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+        if not isinstance(mol_type, int):
+            raise TypeError("Type must be an int.")
+
         self.name = name
         self._type = mol_type
         self.mol_weight = self.density = self.concentration = None
@@ -224,14 +292,19 @@ class Substance:
         """
         Creates a solid substance.
 
-        Args:
+        Arguments:
             name: Name of substance.
             mol_weight: Molecular weight in g/mol
-            molecule: (optional) cctk molecule
+            molecule: (optional) A cctk.Molecule
 
         Returns: New substance.
 
         """
+        if not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+        if not isinstance(mol_weight, float):
+            raise TypeError("Molecular weight must be a float.")
+
         substance = Substance(name, Substance.SOLID, molecule)
         substance.mol_weight = mol_weight
         return substance
@@ -241,15 +314,20 @@ class Substance:
         """
         Creates a liquid substance.
 
-        Args:
+        Arguments:
             name: Name of substance.
             mol_weight: Molecular weight in g/mol
             density: Density in g/mL
-            molecule: (optional) cctk molecule
+            molecule: (optional) A cctk.Molecule
 
         Returns: New substance.
 
         """
+        if not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+        if not isinstance(mol_weight, float):
+            raise TypeError("Molecular weight must be a float.")
+
         substance = Substance(name, Substance.LIQUID, molecule)
         substance.mol_weight = mol_weight  # g / mol
         substance.density = density  # g / mL
@@ -261,30 +339,33 @@ class Substance:
         """
         Creates an enzyme.
 
-        Args:
+        Arguments:
             name: Name of enzyme.
-            molecule: (optional) cctk molecule
+            molecule: (optional) A cctk.Molecule
 
         Returns: New substance.
 
         """
+        if not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+
         return Substance(name, Substance.ENZYME, molecule)
 
     def is_solid(self):
         """
-        Return true if Substance is a solid.
+        Return true if `Substance` is a solid.
         """
         return self._type == Substance.SOLID
 
     def is_liquid(self):
         """
-        Return true if Substance is a liquid.
+        Return true if `Substance` is a liquid.
         """
         return self._type == Substance.LIQUID
 
     def is_enzyme(self):
         """
-        Return true if Substance is an enzyme.
+        Return true if `Substance` is an enzyme.
         """
         return self._type == Substance.ENZYME
 
@@ -292,34 +373,40 @@ class Substance:
 class Container:
     """
     Stores specified quantities of Substances in a vessel with a given maximum volume. Immutable.
+
+    Attributes:
+        name: Name of the Container.
+        contents: A dictionary of Substances to floats denoting how much of each Substance is the Container.
+        volume: Current volume held in the Container in storage format.
+        max_volume: Maximum volume Container can hold in storage format.
     """
 
-    def __init__(self, name, max_volume=float('inf'), initial_contents=None):
+    def __init__(self, name: str, max_volume: float = float('inf'),
+                 initial_contents: Iterable[Tuple[Substance, str]] = None):
         """
         Create a Container.
 
-        Args:
+        Arguments:
             name: Name of container
             max_volume: Maximum volume that can be stored in the container in mL
             initial_contents: (optional) Iterable of tuples of the form (Substance, quantity)
         """
+        # TODO: make max_volume a str
+        if not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+        if not isinstance(max_volume, (int, float)):
+            raise TypeError("Maximum volume must be a float.")
         self.name = name
         self.contents: Dict[Substance, float] = {}
         self.volume = 0.0
         self.max_volume = Unit.convert_to_storage(max_volume, 'mL')
         if initial_contents:
-            for substance, how_much in initial_contents:
-                self._self_add(substance, how_much)
-
-    def copy(self) -> Container:
-        """
-        Clones current Container.
-        """
-        new_container = Container(self.name, self.max_volume)
-        new_container.contents = self.contents.copy()
-        new_container.volume = self.volume
-        new_container.max_volume = self.max_volume  # Don't readjust this value
-        return new_container
+            if not isinstance(initial_contents, Iterable):
+                raise TypeError("Initial contents must be iterable.")
+            for substance, quantity in initial_contents:
+                if not isinstance(substance, Substance) or not isinstance(quantity, str):
+                    raise TypeError("Element in initial_contents must be a (Substance, str) tuple.")
+                self._self_add(substance, quantity)
 
     def __eq__(self, other):
         if not isinstance(other, Container):
@@ -330,63 +417,80 @@ class Container:
     def __hash__(self):
         return hash((self.name, self.volume, self.max_volume, *tuple(map(tuple, self.contents.items()))))
 
-    def _self_add(self, source: Substance, how_much: str) -> None:
+    def _self_add(self, source: Substance, quantity: str) -> None:
         """
 
-        Adds to current Container, mutating it.
-        Only to be used in the constructor and immediately after copy
+        Adds `Substance` to current `Container`, mutating it.
+        Only to be used in the constructor and immediately after copy.
 
-        Args:
+        Arguments:
             source: Substance to add.
-            how_much: How much to add. ('10 mol')
+            quantity: How much to add. ('10 mol')
 
         """
         if not isinstance(source, Substance):
-            raise TypeError("Invalid source type.")
-        if how_much.endswith('M') and not source.is_solid():
+            raise TypeError("Source must be a Substance.")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str.")
+        if quantity.endswith('M') and not source.is_solid():
             # TODO: molarity from liquids?
             raise ValueError("Molarity solutions can only be made from solids.")
         volume = Unit.convert_from_storage(self.volume, 'mL')
-        amount_to_transfer = round(Unit.convert_to_unit_value(source, how_much, volume), config['internal_precision'])
-        self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, config['internal_precision'])
+        amount_to_transfer = round(Unit.convert_to_unit_value(source, quantity, volume), config.internal_precision)
+        # add source Substance to self.contents
+        self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, config.internal_precision)
         if source.is_liquid():
-            self.volume = round(self.volume + amount_to_transfer, config['internal_precision'])
+            self.volume = round(self.volume + amount_to_transfer, config.internal_precision)
         if self.volume > self.max_volume:
             raise ValueError("Exceeded maximum volume")
 
     def _transfer(self, source_container: Container, volume: str):
-        """ transfer volume ('10 mL') from container to self """
+        """
+        Move volume ('10 mL') from container to self.
+
+        Arguments:
+            source_container: `Container` to transfer from.
+            volume: How much to transfer.
+
+        Returns: New source and destination container.
+        """
+
         if not isinstance(source_container, Container):
             raise TypeError("Invalid source type.")
-        volume_to_transfer, unit = Unit.extract_value_unit(volume)
+        volume_to_transfer, unit = Unit.parse_quantity(volume)
         volume_to_transfer = Unit.convert_to_storage(volume_to_transfer, 'L')
-        volume_to_transfer = round(volume_to_transfer, config['internal_precision'])
+        volume_to_transfer = round(volume_to_transfer, config.internal_precision)
         if unit != 'L':
-            raise ValueError("We can only transfer liquid from other containers.")
+            raise ValueError("We can only transfer volumes from other containers.")
         if volume_to_transfer > source_container.volume:
             raise ValueError("Not enough mixture left in source container." +
                              f" {Unit.convert_from_storage(volume_to_transfer, 'mL')} mL "
                              f" needed of {source_container.name}" +
                              f" out of {Unit.convert_from_storage(source_container.volume, 'mL')} mL.")
-        source_container, to = source_container.copy(), self.copy()
+        # source_container, to = source_container.copy(), self.copy()
+        source_container, to = deepcopy(source_container), deepcopy(self)
         ratio = volume_to_transfer / source_container.volume
         for substance, amount in source_container.contents.items():
             to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio,
-                                           config['internal_precision'])
+                                           config.internal_precision)
             source_container.contents[substance] = round(source_container.contents[substance] - amount * ratio,
-                                                         config['internal_precision'])
-        to.volume = round(to.volume + volume_to_transfer, config['internal_precision'])
+                                                         config.internal_precision)
+        to.volume = round(to.volume + volume_to_transfer, config.internal_precision)
         if to.volume > to.max_volume:
             raise ValueError(f"Exceeded maximum volume in {to.name}.")
-        source_container.volume = round(source_container.volume - volume_to_transfer, config['internal_precision'])
+        source_container.volume = round(source_container.volume - volume_to_transfer, config.internal_precision)
         return source_container, to
 
-    def _transfer_slice(self, source_slice, volume):
+    def _transfer_slice(self, source_slice: Plate or PlateSlicer, volume: str):
         """
-        Transfer volume ('10 mL') from slice to self
+        Move volume ('10 mL') from slice to self.
+
+        Arguments:
+            source_slice: Slice or Plate to transfer from.
+            volume: How much to transfer.
 
         Returns:
-            A tuple of a new plate and a new container, both modified.
+            A new plate and a new container, both modified.
         """
 
         def helper_func(elem):
@@ -398,17 +502,16 @@ class Container:
             source_slice = source_slice[:]
         if not isinstance(source_slice, PlateSlicer):
             raise TypeError("Invalid source type.")
-        to = self.copy()
-        source_slice = source_slice.copy()
-        source_slice.plate = source_slice.plate.copy()
-        volume_to_transfer, unit = Unit.extract_value_unit(volume)
+        to = deepcopy(self)
+        source_slice = copy(source_slice)
+        source_slice.plate = deepcopy(source_slice.plate)
+        volume_to_transfer, unit = Unit.parse_quantity(volume)
         volume_to_transfer = Unit.convert_to_storage(volume_to_transfer, 'L')
-        # volume_to_transfer *= 1000.0  # convert L to mL
-        volume_to_transfer = round(volume_to_transfer, config['internal_precision'])
+        volume_to_transfer = round(volume_to_transfer, config.internal_precision)
         if unit != 'L':
-            raise ValueError("We can only transfer liquid from other containers.")
+            raise ValueError("We can only transfer volumes from other containers.")
         if source_slice.get().size * volume_to_transfer > (to.max_volume - to.volume):
-            raise ValueError("Not enough room left in destination container.")
+            raise ValueError(f"Exceeded maximum volume in {to.name}.")
 
         to_array = [to]
         result = numpy.vectorize(helper_func, cache=True)(source_slice.get())
@@ -419,27 +522,37 @@ class Container:
         max_volume = ('/' + str(Unit.convert_from_storage(self.max_volume, 'mL'))) \
             if self.max_volume != float('inf') else ''
         return f"Container ({self.name}) ({Unit.convert_from_storage(self.volume, 'mL')}" + \
-            f"{max_volume} of ({self.contents})"
+            f"{max_volume} mL of ({self.contents})"
 
     @staticmethod
-    def add(source: Substance, destination: Container, how_much: str) -> Container:
+    def add(source: Substance, destination: Container, quantity: str) -> Container:
         """
-        Move the given quantity ('10 mol') of the source substance to the destination container.
+        Add the given quantity ('10 mol') of the source substance to the destination container.
+
+        Arguments:
+            source: Substance to add to `destination`.
+            destination: Container to add to.
+            quantity: How much `Substance` to add.
 
         Returns:
-            A new copy of destination.
+            A new copy of `destination` container.
         """
         if not isinstance(destination, Container):
             raise TypeError("You can only use Container.add to add to a Container")
-        destination = destination.copy()
-        destination._self_add(source, how_much)
+        destination = deepcopy(destination)
+        destination._self_add(source, quantity)
         return destination
 
     @staticmethod
-    def transfer(source, destination: Container, volume):
+    def transfer(source: Container or Plate or PlateSlicer, destination: Container, volume):
         """
         Move volume ('10 mL') from source to destination container,
         returning copies of the objects with amounts adjusted accordingly.
+
+        Arguments:
+            source: Container, plate, or slice to transfer from.
+            destination: Container to transfer to:
+            volume: How much to transfer.
 
         Returns:
             A tuple of (T, Container) where T is the type of the source.
@@ -457,10 +570,12 @@ class Container:
         """
         Create a stock solution.
 
-        Args:
-            what: What to dilute.
-            concentration: Desired concentration in mol/L
-            solvent: What to dilute with.
+        Note: solids are assumed to have zero volume.
+
+        Arguments:
+            what: What to dissolve.
+            concentration: Desired concentration in mol/L.
+            solvent: What to dissolve with.
             volume: Desired total volume in mL.
 
         Returns:
@@ -472,9 +587,9 @@ class Container:
             raise TypeError("You can't add enzymes by molarity.")
         if what.is_solid():
             container = container.add(solvent, container, f"{volume} mL")
-            container = container.add(what, container, f"{round(moles_to_add, config['internal_precision'])} mol")
+            container = container.add(what, container, f"{round(moles_to_add, config.internal_precision)} mol")
         else:  # Liquid
-            volume_to_add = round(moles_to_add * what.mol_weight / (what.density * 1000), config['external_precision'])
+            volume_to_add = round(moles_to_add * what.mol_weight / (what.density * 1000), config.external_precision)
             container = container.add(solvent, container, f"{volume - volume_to_add} mL")
             container = container.add(what, container, f"{volume_to_add} mL")
         return container
@@ -518,7 +633,6 @@ class Plate:
                     result.append(chr(ord('A') + n % 26))
                     n //= 26
                 self.row_names.append(''.join(reversed(result)))
-            # self.row_names = [f"{i + 1}" for i in range(rows)]
         elif isinstance(rows, list):
             if len(rows) == 0:
                 raise ValueError("must have at least one row")
@@ -528,10 +642,6 @@ class Plate:
                 if len(row.strip()) == 0:
                     raise ValueError(
                         "zero length strings are not allowed as column labels"
-                    )
-                if is_integer(row):
-                    raise ValueError(
-                        f"please don't confuse me with row names that are integers ({row})"
                     )
             if len(rows) != len(set(rows)):
                 raise ValueError("duplicate row names found")
@@ -555,17 +665,13 @@ class Plate:
             self.column_names = [f"{i + 1}" for i in range(columns)]
         elif isinstance(columns, list):
             if len(columns) == 0:
-                raise ValueError("must have at least one row")
+                raise ValueError("must have at least one column")
             for column in columns:
                 if not isinstance(column, str):
-                    raise ValueError("row names must be strings")
+                    raise ValueError("column names must be strings")
                 if len(column.strip()) == 0:
                     raise ValueError(
                         "zero length strings are not allowed as column labels"
-                    )
-                if is_integer(column):
-                    raise ValueError(
-                        f"please don't confuse me with column names that are integers({column})"
                     )
             if len(columns) != len(set(columns)):
                 raise ValueError("duplicate column names found")
@@ -584,10 +690,10 @@ class Plate:
     def __repr__(self):
         return f"Plate: {self.name}"
 
-    def volumes(self, substance=None):
+    def volumes(self, substance: Substance = None) -> numpy.ndarray:
         """
 
-        Args:
+        Arguments:
             substance: (optional) Substance to display volumes of.
 
         Returns:
@@ -597,11 +703,14 @@ class Plate:
         if substance is None:
             return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, 'uL'))(self.wells)
 
+        if not isinstance(substance, Substance):
+            raise TypeError(f"Substance is not a valid type, {type(substance)}.")
+
         def helper(elem):
             """ Returns volume of elem. """
             if substance.is_liquid() and substance in elem.contents:
                 return round(Unit.convert_from_storage(elem.contents[substance], 'uL'),
-                             config['external_precision'])
+                             config.external_precision)
             return 0
 
         return numpy.vectorize(helper)(self.wells)
@@ -615,10 +724,16 @@ class Plate:
         substances_arr = numpy.vectorize(lambda elem: elem.contents.keys())(self.wells)
         return set.union(*map(set, substances_arr.flatten()))
 
-    def moles(self, substance):
+    def moles(self, substance: Substance) -> numpy.ndarray:
         """
+        Arguments:
+            substance: Substance to display moles of.
+
         Returns: moles of substance in each well.
         """
+
+        if not isinstance(substance, Substance):
+            raise TypeError(f"Substance is not a valid type, {type(substance)}.")
 
         def helper(elem):
             """ Returns moles of substance in elem. """
@@ -626,9 +741,9 @@ class Plate:
                 return 0
             if substance.is_liquid():
                 return round(Unit.convert_from_storage(elem.contents[substance], 'mL') * substance.density /
-                             substance.mol_weight, config['external_precision'])
+                             substance.mol_weight, config.external_precision)
             if substance.is_solid():
-                return round(Unit.convert_from_storage(elem.contents[substance], 'mol'), config['external_precision'])
+                return round(Unit.convert_from_storage(elem.contents[substance], 'mol'), config.external_precision)
 
         return numpy.vectorize(helper, cache=True)(self.wells)
 
@@ -638,37 +753,35 @@ class Plate:
         """
         return self.volumes().sum()
 
-    def copy(self):
-        """
-        Returns: A clone of the current plate.
-        """
-        new_plate = Plate(self.name, self.max_volume_per_well, self.make, 1, 1)
-        new_plate.n_rows, new_plate.n_columns = self.n_rows, self.n_columns
-        new_plate.row_names, new_plate.column_names = self.row_names, self.column_names
-        new_plate.max_volume_per_well = self.max_volume_per_well  # Don't readjust this value
-        new_plate.wells = self.wells.copy()
-        return new_plate
-
     @staticmethod
-    def add(source: Substance, destination: Plate | PlateSlicer, how_much):
+    def add(source: Substance, destination: Plate | PlateSlicer, quantity: str):
         """
-        Move the given quantity ('10 mol') of the source substance to the destination.
+        Add the given quantity ('10 mol') of the source substance to the destination.
 
+        Arguments:
+            source: `Substance` to add.
+            destination: Plate or slice of a plate to add to.
+            quantity: How much to add.
         Returns:
-            A new copy of destination plate.
+            A new copy of `destination` plate.
         """
         if not isinstance(destination, (Plate, PlateSlicer)):
             raise TypeError("You can only use Plate.add to add to a Plate")
         if isinstance(destination, Plate):
             destination = destination[:]
         # noinspection PyProtectedMember
-        return PlateSlicer._add(source, destination, how_much)
+        return PlateSlicer._add(source, destination, quantity)
 
     @staticmethod
     def transfer(source, destination: Plate | PlateSlicer, volume):
         """
         Move volume ('10 mL') from source to destination,
         returning copies of the objects with amounts adjusted accordingly.
+
+        Arguments:
+            source: What to transfer.
+            destination: Plate or slice of a plate to transfer to.
+            volume: How much to transfer.
 
         Returns:
             A tuple of (T, Plate) where T is the type of the source.
@@ -686,6 +799,13 @@ class Recipe:
     that all solid and liquid handling instructions are valid. If they are indeed valid, then the updated containers
     will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is
     considered immutable.
+
+    Attributes:
+        locked (boolean): Is the recipe locked from changes?
+        steps (list): A list of steps to be completed upon bake() bring called.
+        used (list): A list of Containers and Plates to be used in the recipe.
+        results (list): A list used in bake to return the mutated objects.
+        indexes (dict): A dictionary used to locate objects in the used list.
     """
 
     def __init__(self):
@@ -707,10 +827,10 @@ class Recipe:
                 if isinstance(arg, Substance):
                     self.results.append(arg)
                 else:
-                    self.results.append(arg.copy())
+                    self.results.append(deepcopy(arg))
         return self
 
-    def add(self, source, destination, how_much):
+    def add(self, source, destination, quantity):
         """
         Adds a step to the recipe which will move the given quantity ('10 mol')
         of the source substance to the destination.
@@ -723,10 +843,11 @@ class Recipe:
         if not isinstance(destination, (Container, Plate, PlateSlicer)):
             raise TypeError("Invalid destination type.")
         if (destination.plate if isinstance(destination, PlateSlicer) else destination) not in self.indexes:
-            raise ValueError("Destination not found in declared uses.")
+            name = destination.plate.name if isinstance(destination, PlateSlicer) else destination.name
+            raise ValueError(f"Destination {name} has not been previously declared for use.")
         if isinstance(destination, Plate):
             destination = destination[:]
-        self.steps.append(('add', source, destination, how_much))
+        self.steps.append(('add', source, destination, quantity))
         return self
 
     def transfer(self, source: Container, destination: Container | Plate, volume: str):
@@ -744,7 +865,8 @@ class Recipe:
         if (source.plate if isinstance(source, PlateSlicer) else source) not in self.indexes:
             raise ValueError("Source not found in declared uses.")
         if (destination.plate if isinstance(destination, PlateSlicer) else destination) not in self.indexes:
-            raise ValueError("Destination not found in declared uses.")
+            name = destination.plate.name if isinstance(destination, PlateSlicer) else destination.name
+            raise ValueError(f"Destination {name} has not been previously declared for use.")
         if isinstance(source, Plate):
             source = source[:]
         if isinstance(destination, Plate):
@@ -757,7 +879,7 @@ class Recipe:
         """
         Adds a step to the recipe which creates a container.
 
-        Args:
+        Arguments:
             name: Name of container
             max_volume: Maximum volume that can be stored in the container in mL
             initial_contents: (optional) Iterable of tuples of the form (Substance, quantity)
@@ -770,10 +892,10 @@ class Recipe:
         new_container = Container(name, max_volume)
         self.uses(new_container)
         if initial_contents:
-            for substance, how_much in initial_contents:
+            for substance, quantity in initial_contents:
                 if not isinstance(substance, Substance):
                     raise ValueError("Containers can only be created from substances.")
-                self.steps.append(('add', substance, new_container, how_much))
+                self.steps.append(('add', substance, new_container, quantity))
         return new_container
 
     def create_stock_solution(self, what: Substance, concentration: float, solvent: Substance, volume: float):
@@ -781,7 +903,7 @@ class Recipe:
 
         Adds a step to the recipe which creates a stock solution.
 
-        Args:
+        Arguments:
             what: What to dilute.
             concentration: Desired concentration in mol/L
             solvent: What to dilute with.
@@ -810,26 +932,26 @@ class Recipe:
         """
         for operation, *rest in self.steps:
             if operation == 'add':
-                frm, to, how_much = rest
+                frm, to, quantity = rest
                 to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
 
                 # containers and such can change while building the recipe
                 if isinstance(to, PlateSlicer):
-                    new_to = to.copy()
+                    new_to = deepcopy(to)
                     new_to.plate = self.results[to_index]
                     to = new_to
                 else:
                     to = self.results[to_index]
 
                 if isinstance(to, Container):
-                    to = Container.add(frm, to, how_much)
+                    to = Container.add(frm, to, quantity)
                 elif isinstance(to, PlateSlicer):
-                    to = Plate.add(frm, to, how_much)
+                    to = Plate.add(frm, to, quantity)
 
                 self.results[to_index] = to
                 self.used.add(to_index)
             elif operation == 'transfer':
-                frm, to, how_much = rest
+                frm, to, quantity = rest
                 # used items can change in a recipe
                 frm_index = self.indexes[frm] if not isinstance(frm, PlateSlicer) else self.indexes[frm.plate]
                 to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
@@ -839,14 +961,14 @@ class Recipe:
 
                 # containers and such can change while baking the recipe
                 if isinstance(frm, PlateSlicer):
-                    new_frm = frm.copy()
+                    new_frm = deepcopy(frm)
                     new_frm.plate = self.results[frm_index]
                     frm = new_frm
                 else:
                     frm = self.results[frm_index]
 
                 if isinstance(to, PlateSlicer):
-                    new_to = to.copy()
+                    new_to = deepcopy(to)
                     new_to.plate = self.results[to_index]
                     to = new_to
                 else:
@@ -854,14 +976,13 @@ class Recipe:
 
                 if isinstance(frm, Substance):  # Adding a substance is handled differently
                     if isinstance(to, Container):
-                        to = Container.add(frm, to, how_much)
+                        to = Container.add(frm, to, quantity)
                     elif isinstance(to, PlateSlicer):
-                        to = Plate.add(frm, to, how_much)
-                    # to = to.add(frm, how_much)
+                        to = Plate.add(frm, to, quantity)
                 elif isinstance(to, Container):
-                    frm, to = Container.transfer(frm, to, how_much)
+                    frm, to = Container.transfer(frm, to, quantity)
                 elif isinstance(to, PlateSlicer):
-                    frm, to = Plate.transfer(frm, to, how_much)
+                    frm, to = Plate.transfer(frm, to, quantity)
 
                 self.results[frm_index] = frm
                 self.results[to_index] = to
@@ -893,27 +1014,23 @@ class PlateSlicer(Slicer):
     def array(self, array):
         self.plate.wells = array
 
-    def copy(self):
-        """ @private """
-        return PlateSlicer(self.plate, self.item)
-
     @staticmethod
-    def _add(frm, to, how_much):
-        to = to.copy()
-        to.plate = to.plate.copy()
-        result = numpy.vectorize(lambda elem: Container.add(frm, elem, how_much), cache=True)(to.get())
+    def _add(frm, to, quantity):
+        to = copy(to)
+        to.plate = deepcopy(to.plate)
+        result = numpy.vectorize(lambda elem: Container.add(frm, elem, quantity), cache=True)(to.get())
         to.set(result)
         return to.plate
 
     @staticmethod
-    def _transfer(frm, to, how_much):
+    def _transfer(frm, to, quantity):
         if isinstance(frm, Container):
-            to = to.copy()
-            to.plate = to.plate.copy()
+            to = copy(to)
+            to.plate = deepcopy(to.plate)
 
             def helper_func(elem):
                 """ @private """
-                frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
+                frm_array[0], elem = Container.transfer(frm_array[0], elem, quantity)
                 return elem
 
             frm_array = [frm]
@@ -925,14 +1042,14 @@ class PlateSlicer(Slicer):
         if not isinstance(frm, (Plate, PlateSlicer)):
             raise TypeError("Invalid source type.")
 
-        to = to.copy()
-        frm = frm.copy()
+        to = copy(to)
+        frm = copy(frm)
 
         if to.plate != frm.plate:
-            to.plate = to.plate.copy()
-            frm.plate = frm.plate.copy()
+            to.plate = deepcopy(to.plate)
+            frm.plate = deepcopy(frm.plate)
         else:
-            to.plate = frm.plate = to.plate.copy()
+            to.plate = frm.plate = deepcopy(to.plate)
 
         if frm.size == 1:
             # Source from the single element in frm
@@ -941,7 +1058,7 @@ class PlateSlicer(Slicer):
 
             def helper_func(elem):
                 """ @private """
-                frm_array[0], elem = Container.transfer(frm_array[0], elem, how_much)
+                frm_array[0], elem = Container.transfer(frm_array[0], elem, quantity)
                 return elem
 
             frm_array = [frm.get()]
@@ -956,7 +1073,7 @@ class PlateSlicer(Slicer):
 
             def helper_func(elem):
                 """ @private """
-                elem, to_array[0] = to_array[0].transfer(elem, how_much)
+                elem, to_array[0] = to_array[0].transfer(elem, quantity)
                 return elem
 
             to_array = [to.get()]
@@ -966,7 +1083,7 @@ class PlateSlicer(Slicer):
         elif frm.size == to.size and frm.shape == to.shape:
             def helper(elem1, elem2):
                 """ @private """
-                return Container.transfer(elem1, elem2, how_much)
+                return Container.transfer(elem1, elem2, quantity)
 
             func = numpy.frompyfunc(helper, 2, 2)
             frm_result, to_result = func(frm.get(), to.get())

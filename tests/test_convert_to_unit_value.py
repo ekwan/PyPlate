@@ -41,8 +41,7 @@ def test_convert_to_unit_value_solid_L(salt):
 
 
 def test_convert_to_unit_value_solid_mol(salt):
-    solid = Substance.solid(salt, 58.4428)
-    moles = Unit.convert_to_unit_value(solid, '1 mol')
+    moles = Unit.convert_to_unit_value(salt, '1 mol')
     assert moles == Unit.convert_to_storage(1, 'mol')
 
 
