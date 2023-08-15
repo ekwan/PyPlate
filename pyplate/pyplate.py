@@ -265,6 +265,8 @@ class Substance:
             raise TypeError("Name must be a str.")
         if not isinstance(mol_type, int):
             raise TypeError("Type must be an int.")
+        if len(name) == 0:
+            raise ValueError("Name must not be empty.")
 
         self.name = name
         self._type = mol_type
@@ -302,8 +304,11 @@ class Substance:
         """
         if not isinstance(name, str):
             raise TypeError("Name must be a str.")
-        if not isinstance(mol_weight, float):
+        if not isinstance(mol_weight, (int, float)):
             raise TypeError("Molecular weight must be a float.")
+
+        if not mol_weight > 0:
+            raise ValueError("Molecular weight must be positive.")
 
         substance = Substance(name, Substance.SOLID, molecule)
         substance.mol_weight = mol_weight
@@ -325,8 +330,15 @@ class Substance:
         """
         if not isinstance(name, str):
             raise TypeError("Name must be a str.")
-        if not isinstance(mol_weight, float):
+        if not isinstance(mol_weight, (int, float)):
             raise TypeError("Molecular weight must be a float.")
+        if not isinstance(density, (int, float)):
+            raise TypeError("Density must be a float.")
+
+        if not mol_weight > 0:
+            raise ValueError("Molecular weight must be positive.")
+        if not density > 0:
+            raise ValueError("Density must be positive.")
 
         substance = Substance(name, Substance.LIQUID, molecule)
         substance.mol_weight = mol_weight  # g / mol
@@ -394,8 +406,13 @@ class Container:
         # TODO: make max_volume a str
         if not isinstance(name, str):
             raise TypeError("Name must be a str.")
+        if len(name) == 0:
+            raise ValueError("Name must not be empty.")
+
         if not isinstance(max_volume, (int, float)):
             raise TypeError("Maximum volume must be a float.")
+        if not max_volume > 0:
+            raise ValueError("Maximum volume must be positive.")
         self.name = name
         self.contents: Dict[Substance, float] = {}
         self.volume = 0.0
@@ -403,7 +420,10 @@ class Container:
         if initial_contents:
             if not isinstance(initial_contents, Iterable):
                 raise TypeError("Initial contents must be iterable.")
-            for substance, quantity in initial_contents:
+            for entry in initial_contents:
+                if not isinstance(entry, Iterable) or not len(entry) == 2:
+                    raise TypeError("Element in initial_contents must be a (Substance, str) tuple.")
+                substance, quantity = entry
                 if not isinstance(substance, Substance) or not isinstance(quantity, str):
                     raise TypeError("Element in initial_contents must be a (Substance, str) tuple.")
                 self._self_add(substance, quantity)
