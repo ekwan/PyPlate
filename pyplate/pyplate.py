@@ -585,15 +585,16 @@ class Container:
             return destination._transfer_slice(source, volume)
         raise TypeError("Invalid source type.")
 
+
     @staticmethod
-    def create_stock_solution(what: Substance, concentration: float, solvent: Substance, volume: float):
+    def create_stock_solution(solute: Substance, concentration: float, solvent: Substance, volume: float):
         """
         Create a stock solution.
 
         Note: solids are assumed to have zero volume.
 
         Arguments:
-            what: What to dissolve.
+            solute: What to dissolve.
             concentration: Desired concentration in mol/L.
             solvent: What to dissolve with.
             volume: Desired total volume in mL.
@@ -601,17 +602,26 @@ class Container:
         Returns:
             New container with desired solution.
         """
-        container = Container(f"{what.name} {concentration:.2}M", max_volume=volume)
+        if not isinstance(solute, Substance):
+            raise TypeError("Solute must be a Substance.")
+        if not isinstance(concentration, (int, float)):
+            raise TypeError("Concentration must be a float.")
+        if not isinstance(solvent, Substance):
+            raise TypeError("Solvent must be a Substance.")
+        if not isinstance(volume, (int, float)):
+            raise TypeError("Volume must be a float.")
+
+        container = Container(f"{solute.name} {concentration:.2}M", max_volume=volume)
         moles_to_add = volume * concentration
-        if what.is_enzyme():
+        if solute.is_enzyme():
             raise TypeError("You can't add enzymes by molarity.")
-        if what.is_solid():
+        if solute.is_solid():
             container = container.add(solvent, container, f"{volume} mL")
-            container = container.add(what, container, f"{round(moles_to_add, config.internal_precision)} mol")
+            container = container.add(solute, container, f"{round(moles_to_add, config.internal_precision)} mol")
         else:  # Liquid
-            volume_to_add = round(moles_to_add * what.mol_weight / (what.density * 1000), config.external_precision)
+            volume_to_add = round(moles_to_add * solute.mol_weight / (solute.density * 1000), config.external_precision)
             container = container.add(solvent, container, f"{volume - volume_to_add} mL")
-            container = container.add(what, container, f"{volume_to_add} mL")
+            container = container.add(solute, container, f"{volume_to_add} mL")
         return container
 
 

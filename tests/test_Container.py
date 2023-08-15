@@ -62,6 +62,13 @@ def test_Container_add(water):
 
 
 def test_Container_transfer(water, salt, water_stock, salt_water):
+    with pytest.raises(TypeError, match='into a Container'):
+        Container.transfer(1, 1, '10 mL')
+    with pytest.raises(TypeError, match='Invalid source type'):
+        Container.transfer(1, water_stock, '10 mL')
+    with pytest.raises(TypeError, match='Amount must be a str'):
+        Container.transfer(salt_water, water_stock, 1)
+
     initial_hashes = hash(water_stock), hash(salt_water)
     # water_stock is 10 mL, salt_water is 100 mL and 50 mol
     container1, container2 = Container.transfer(salt_water, water_stock, '10 mL')
@@ -78,6 +85,15 @@ def test_Container_transfer(water, salt, water_stock, salt_water):
 
 
 def test_create_stock_solution(water, salt, salt_water):
+    with pytest.raises(TypeError, match='Solute must be a Substance'):
+        Container.create_stock_solution('salt', 0.5, water, 100)
+    with pytest.raises(TypeError, match='Concentration must be a float'):
+        Container.create_stock_solution(salt, '0.5', water, 100)
+    with pytest.raises(TypeError, match='Solvent must be a Substance'):
+        Container.create_stock_solution(salt, 0.5, 'water', 100)
+    with pytest.raises(TypeError, match='Volume must be a float'):
+        Container.create_stock_solution(salt, 0.5, water, '100')
+
     stock = Container.create_stock_solution(salt, 0.5, water, 100)
     assert water in stock.contents and salt in stock.contents
     assert stock.contents[water] == salt_water.contents[water]
