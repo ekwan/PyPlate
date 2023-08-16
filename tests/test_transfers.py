@@ -100,6 +100,12 @@ def test_add_to_slice(plate1, salt):
     # Original plate should be unchanged
     assert numpy.array_equal(plate1.moles(salt), numpy.zeros(plate1.wells.shape))
 
+    plate3 = Plate.add(salt, plate1[1, 1], '10 mol')
+    expected_moles = numpy.zeros(plate3.wells.shape)
+    expected_moles[0, 0] = 10
+    assert numpy.array_equal(plate3.moles(salt), expected_moles)
+    assert numpy.array_equal(plate1.moles(salt), numpy.zeros(plate1.wells.shape))
+
 
 def test_transfer_to_slice(plate1, solution1):
     """
@@ -107,11 +113,15 @@ def test_transfer_to_slice(plate1, solution1):
     """
     solution3, plate3 = Plate.transfer(solution1, plate1[:], '1 mL')  # plate1[:].transfer(solution1, '1 mL')
     # 1 mL should have been transferred to each well in the plate
-    assert plate3.volume() == plate3[:].size * 1000         # volume() is in uL
+    assert plate3.volume() == plate3[:].size * 1000  # volume() is in uL
     assert numpy.all(numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, 'mL') == 1)(plate3.wells))
     # Original solution and plate should be unchanged
     assert Unit.convert_from_storage(solution1.volume, 'mL') == 100
     assert plate1.volume() == 0
+
+    solution4, plate4 = Plate.transfer(solution1, plate1[1, 1], '1 mL')
+    assert plate4.volume() == 1000
+    assert solution1.volume - solution4.volume == Unit.convert_to_storage(1, 'mL')
 
 
 def test_transfer_between_slices(plate1, plate2, solution1, solution2):
@@ -163,3 +173,6 @@ def test_transfer_from_slice(plate1, solution1):
     assert destination_solution.volume == Unit.convert_to_storage(0.5 * plate3[:].size, 'mL')
     # Source wells should all have 0.5 mL
     assert numpy.array_equal(plate4.volumes(), numpy.ones(plate4[:].shape) * 0.5 * 1000)
+
+    plate4, destination_solution = Container.transfer(plate3[1, :], destination_solution, '0.5 mL')
+    assert plate3.volume() - plate4.volume() == 500 * plate3.n_columns

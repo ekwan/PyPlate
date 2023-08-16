@@ -30,7 +30,6 @@ All values returned to the user are rounded to config.external_precision for eas
 
 # Allow typing reference while still building classes
 from __future__ import annotations
-import re
 from typing import Tuple, Dict, Iterable
 from copy import deepcopy, copy
 import numpy
@@ -82,12 +81,16 @@ class Unit:
         """
         if not isinstance(quantity, str):
             raise TypeError("Amount must be a string.")
-        # (floating point number in 1.0e1 format) possibly some white space (alpha string)
-        match = re.fullmatch(r"([_\d]+(?:\.\d+)?(?:e-?\d+)?)\s*([a-zA-Z]+)", quantity)
-        if not match:
-            raise ValueError("Invalid quantity. Quantity should be in the format '10 mL'.")
-        value, unit = match.groups()
-        value = float(value)
+
+        if quantity.count(' ') != 1:
+            raise ValueError("Value and unit must be separated by a single space.")
+
+        value, unit = quantity.split(' ')
+        try:
+            value = float(value)
+        except ValueError:
+            raise ValueError("Value is not a valid float.")
+
         if unit == 'U':
             return value, unit
         for base_unit in ['mol', 'g', 'L', 'M']:
@@ -651,6 +654,9 @@ class Plate:
             raise ValueError("invalid plate make")
         self.make = make
 
+        if not isinstance(max_volume_per_well, (int, float)):
+            raise TypeError("Max volume must be a float")
+
         if isinstance(rows, int):
             if rows < 1:
                 raise ValueError("illegal number of rows")
@@ -934,9 +940,9 @@ class Recipe:
         Adds a step to the recipe which creates a stock solution.
 
         Arguments:
-            what: What to dilute.
+            what: What to dissolve.
             concentration: Desired concentration in mol/L
-            solvent: What to dilute with.
+            solvent: What to dissolve with.
             volume: Desired total volume in mL.
 
         Returns:
@@ -1049,7 +1055,10 @@ class PlateSlicer(Slicer):
         to = copy(to)
         to.plate = deepcopy(to.plate)
         result = numpy.vectorize(lambda elem: Container.add(frm, elem, quantity), cache=True)(to.get())
-        to.set(result)
+        if to.size == 1:
+            to.set(result.item())
+        else:
+            to.set(result)
         return to.plate
 
     @staticmethod
