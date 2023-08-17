@@ -80,7 +80,7 @@ class Unit:
 
         """
         if not isinstance(quantity, str):
-            raise TypeError("Amount must be a string.")
+            raise TypeError("Quantity must be a string.")
 
         if quantity.count(' ') != 1:
             raise ValueError("Value and unit must be separated by a single space.")
@@ -88,8 +88,8 @@ class Unit:
         value, unit = quantity.split(' ')
         try:
             value = float(value)
-        except ValueError:
-            raise ValueError("Value is not a valid float.")
+        except ValueError as exc:
+            raise ValueError("Value is not a valid float.") from exc
 
         if unit == 'U':
             return value, unit
@@ -396,7 +396,7 @@ class Container:
         max_volume: Maximum volume Container can hold in storage format.
     """
 
-    def __init__(self, name: str, max_volume: float = float('inf'),
+    def __init__(self, name: str, max_volume: str = 'inf L',
                  initial_contents: Iterable[Tuple[Substance, str]] = None):
         """
         Create a Container.
@@ -412,14 +412,15 @@ class Container:
         if len(name) == 0:
             raise ValueError("Name must not be empty.")
 
-        if not isinstance(max_volume, (int, float)):
-            raise TypeError("Maximum volume must be a float.")
+        if not isinstance(max_volume, str):
+            raise TypeError("Maximum volume must be a str, ('10 mL').")
+        max_volume, _ = Unit.parse_quantity(max_volume)
         if not max_volume > 0:
             raise ValueError("Maximum volume must be positive.")
         self.name = name
         self.contents: Dict[Substance, float] = {}
         self.volume = 0.0
-        self.max_volume = Unit.convert_to_storage(max_volume, 'mL')
+        self.max_volume = Unit.convert_to_storage(max_volume, 'L')
         if initial_contents:
             if not isinstance(initial_contents, Iterable):
                 raise TypeError("Initial contents must be iterable.")
@@ -567,7 +568,7 @@ class Container:
         return destination
 
     @staticmethod
-    def transfer(source: Container or Plate or PlateSlicer, destination: Container, volume):
+    def transfer(source: Container or Plate or PlateSlicer, destination: Container, volume: str):
         """
         Move volume ('10 mL') from source to destination container,
         returning copies of the objects with amounts adjusted accordingly.
@@ -588,9 +589,8 @@ class Container:
             return destination._transfer_slice(source, volume)
         raise TypeError("Invalid source type.")
 
-
     @staticmethod
-    def create_stock_solution(solute: Substance, concentration: float, solvent: Substance, volume: float):
+    def create_stock_solution(solute: Substance, concentration: float, solvent: Substance, volume: str):
         """
         Create a stock solution.
 
@@ -611,19 +611,25 @@ class Container:
             raise TypeError("Concentration must be a float.")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a Substance.")
-        if not isinstance(volume, (int, float)):
-            raise TypeError("Volume must be a float.")
+        if not isinstance(volume, str):
+            raise TypeError("Volume must be a str.")
 
-        container = Container(f"{solute.name} {concentration:.2}M", max_volume=volume)
+        volume, _ = Unit.parse_quantity(volume)
+        if not volume > 0:
+            raise ValueError("Volume must be positive.")
+
+        container = Container(f"{solute.name} {concentration:.2}M")
         moles_to_add = volume * concentration
         if solute.is_enzyme():
             raise TypeError("You can't add enzymes by molarity.")
         if solute.is_solid():
-            container = container.add(solvent, container, f"{volume} mL")
+            container = container.add(solvent, container, f"{volume} L")
             container = container.add(solute, container, f"{round(moles_to_add, config.internal_precision)} mol")
         else:  # Liquid
-            volume_to_add = round(moles_to_add * solute.mol_weight / (solute.density * 1000), config.external_precision)
-            container = container.add(solvent, container, f"{volume - volume_to_add} mL")
+            volume_to_add = round(moles_to_add * solute.mol_weight / solute.density, config.external_precision)
+            if volume_to_add >= volume * 1000:
+                raise ValueError("Solution could not be made. No room for the solvent and/or some of the solute.")
+            container = container.add(solvent, container, f"{volume * 1000 - volume_to_add} mL")
             container = container.add(solute, container, f"{volume_to_add} mL")
         return container
 
@@ -634,13 +640,13 @@ class Plate:
     The spatial arrangement must be rectangular. Immutable.
     """
 
-    def __init__(self, name: str, max_volume_per_well: float, make: str = "generic", rows=8, columns=12):
+    def __init__(self, name: str, max_volume_per_well: str, make: str = "generic", rows=8, columns=12):
         """
             Creates a generic plate.
 
             Attributes:
                 name: name of plate
-                max_volume_per_well: maximum volume of each well in uL
+                max_volume_per_well: maximum volume of each well. (50 uL)
                 make: name of this kind of plate
                 rows (int or list): number of rows or list of names of rows
                 columns (int or list): number of columns or list of names of columns
@@ -654,8 +660,9 @@ class Plate:
             raise ValueError("invalid plate make")
         self.make = make
 
-        if not isinstance(max_volume_per_well, (int, float)):
-            raise TypeError("Max volume must be a float")
+        if not isinstance(max_volume_per_well, str):
+            raise TypeError("Maximum volume must be a str, ('10 mL').")
+        max_volume_per_well, _ = Unit.parse_quantity(max_volume_per_well)
 
         if isinstance(rows, int):
             if rows < 1:
@@ -686,13 +693,9 @@ class Plate:
         else:
             raise ValueError("rows must be int or list")
 
-        try:
-            max_volume_per_well = float(max_volume_per_well)
-            if max_volume_per_well <= 0:
-                raise ValueError("max volume per well must be greater than zero")
-            self.max_volume_per_well = Unit.convert_to_storage(max_volume_per_well, 'uL')
-        except (ValueError, OverflowError) as exc:
-            raise ValueError(f"invalid max volume per well {max_volume_per_well}") from exc
+        if max_volume_per_well <= 0:
+            raise ValueError("max volume per well must be greater than zero")
+        self.max_volume_per_well = Unit.convert_to_storage(max_volume_per_well, 'L')
 
         if isinstance(columns, int):
             if columns < 1:
@@ -717,7 +720,7 @@ class Plate:
             raise ValueError("columns must be int or list")
 
         self.wells = numpy.array([[Container(f"well {row + 1},{col + 1}",
-                                             max_volume=Unit.convert_from_storage(self.max_volume_per_well, 'mL'))
+                                             max_volume=f"{max_volume_per_well} L")
                                    for col in range(self.n_columns)] for row in range(self.n_rows)])
 
     def __getitem__(self, item) -> PlateSlicer:
@@ -726,68 +729,45 @@ class Plate:
     def __repr__(self):
         return f"Plate: {self.name}"
 
-    def volumes(self, substance: Substance = None) -> numpy.ndarray:
+    def volumes(self, substance: Substance = None, unit: str = 'uL') -> numpy.ndarray:
         """
 
         Arguments:
+            unit: unit to return volumes in.
             substance: (optional) Substance to display volumes of.
 
         Returns:
-            numpy.ndarray of volumes for each well in uL
+            numpy.ndarray of volumes for each well in desired unit.
 
         """
-        if substance is None:
-            return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, 'uL'))(self.wells)
-
-        if not isinstance(substance, Substance):
-            raise TypeError(f"Substance is not a valid type, {type(substance)}.")
-
-        def helper(elem):
-            """ Returns volume of elem. """
-            if substance.is_liquid() and substance in elem.contents:
-                return round(Unit.convert_from_storage(elem.contents[substance], 'uL'),
-                             config.external_precision)
-            return 0
-
-        return numpy.vectorize(helper)(self.wells)
+        return self[:].volumes(substance=substance, unit=unit)
 
     def substances(self):
         """
 
-        Returns: A set of substances present in the plate.
+        Returns: A set of substances present in the slice.
 
         """
-        substances_arr = numpy.vectorize(lambda elem: elem.contents.keys())(self.wells)
-        return set.union(*map(set, substances_arr.flatten()))
+        return self[:].substances()
 
-    def moles(self, substance: Substance) -> numpy.ndarray:
+    def moles(self, substance: Substance, unit: str = 'mol') -> numpy.ndarray:
         """
         Arguments:
+            unit: unit to return moles in. ('mol', 'mmol', 'umol', etc.)
             substance: Substance to display moles of.
 
         Returns: moles of substance in each well.
         """
+        return self[:].moles(substance=substance, unit=unit)
 
-        if not isinstance(substance, Substance):
-            raise TypeError(f"Substance is not a valid type, {type(substance)}.")
-
-        def helper(elem):
-            """ Returns moles of substance in elem. """
-            if substance not in elem.contents:
-                return 0
-            if substance.is_liquid():
-                return round(Unit.convert_from_storage(elem.contents[substance], 'mL') * substance.density /
-                             substance.mol_weight, config.external_precision)
-            if substance.is_solid():
-                return round(Unit.convert_from_storage(elem.contents[substance], 'mol'), config.external_precision)
-
-        return numpy.vectorize(helper, cache=True)(self.wells)
-
-    def volume(self):
+    def volume(self, unit: str = 'uL'):
         """
-        Returns: total volume stored in plate in uL.
+        Arguments:
+            unit: unit to return volumes in.
+
+        Returns: total volume stored in slice in uL.
         """
-        return self.volumes().sum()
+        return self.volumes(unit=unit).sum()
 
     @staticmethod
     def add(source: Substance, destination: Plate | PlateSlicer, quantity: str):
@@ -809,7 +789,7 @@ class Plate:
         return PlateSlicer._add(source, destination, quantity)
 
     @staticmethod
-    def transfer(source, destination: Plate | PlateSlicer, volume):
+    def transfer(source, destination: Plate | PlateSlicer, volume: str):
         """
         Move volume ('10 mL') from source to destination,
         returning copies of the objects with amounts adjusted accordingly.
@@ -866,7 +846,7 @@ class Recipe:
                     self.results.append(deepcopy(arg))
         return self
 
-    def add(self, source, destination, quantity):
+    def add(self, source: Substance, destination: Container | Plate | PlateSlicer, quantity: str):
         """
         Adds a step to the recipe which will move the given quantity ('10 mol')
         of the source substance to the destination.
@@ -881,6 +861,8 @@ class Recipe:
         if (destination.plate if isinstance(destination, PlateSlicer) else destination) not in self.indexes:
             name = destination.plate.name if isinstance(destination, PlateSlicer) else destination.name
             raise ValueError(f"Destination {name} has not been previously declared for use.")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str. ('5 mol', '5 g')")
         if isinstance(destination, Plate):
             destination = destination[:]
         self.steps.append(('add', source, destination, quantity))
@@ -903,6 +885,8 @@ class Recipe:
         if (destination.plate if isinstance(destination, PlateSlicer) else destination) not in self.indexes:
             name = destination.plate.name if isinstance(destination, PlateSlicer) else destination.name
             raise ValueError(f"Destination {name} has not been previously declared for use.")
+        if not isinstance(volume, str):
+            raise TypeError("Volume must be a str. ('5 mL')")
         if isinstance(source, Plate):
             source = source[:]
         if isinstance(destination, Plate):
@@ -910,14 +894,14 @@ class Recipe:
         self.steps.append(('transfer', source, destination, volume))
         return self
 
-    def create_container(self, name, max_volume, initial_contents=None):
+    def create_container(self, name: str, max_volume: str = 'inf L', initial_contents=None):
 
         """
         Adds a step to the recipe which creates a container.
 
         Arguments:
             name: Name of container
-            max_volume: Maximum volume that can be stored in the container in mL
+            max_volume: Maximum volume that can be stored in the container. ('10 mL')
             initial_contents: (optional) Iterable of tuples of the form (Substance, quantity)
 
         Returns:
@@ -925,6 +909,10 @@ class Recipe:
         """
         if self.locked:
             raise RuntimeError("This recipe is locked.")
+        if not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+        if not isinstance(max_volume, str):
+            raise TypeError("Maximum volume must be a str.")
         new_container = Container(name, max_volume)
         self.uses(new_container)
         if initial_contents:
@@ -934,7 +922,7 @@ class Recipe:
                 self.steps.append(('add', substance, new_container, quantity))
         return new_container
 
-    def create_stock_solution(self, what: Substance, concentration: float, solvent: Substance, volume: float):
+    def create_stock_solution(self, what: Substance, concentration: float, solvent: Substance, volume: str):
         """
 
         Adds a step to the recipe which creates a stock solution.
@@ -943,7 +931,7 @@ class Recipe:
             what: What to dissolve.
             concentration: Desired concentration in mol/L
             solvent: What to dissolve with.
-            volume: Desired total volume in mL.
+            volume: Desired total volume. ('10 mL')
 
         Returns:
             A new Container so that it may be used in later recipe steps.
@@ -951,7 +939,15 @@ class Recipe:
         """
         if self.locked:
             raise RuntimeError("This recipe is locked.")
-        new_container = Container("{what.name} {concentration:.2}M", max_volume=volume)
+        if not isinstance(what, Substance):
+            raise TypeError("What must be a Substance.")
+        if not isinstance(concentration, float):
+            raise TypeError("Concentration must be a float.")
+        if not isinstance(solvent, Substance):
+            raise TypeError("Solvent must be a Substance.")
+        if not isinstance(volume, str):
+            raise TypeError("Volume must be a str.")
+        new_container = Container("{what.name} {concentration:.2}M")
         self.uses(new_container)
         self.steps.append(('stock', new_container, what, concentration, solvent, volume))
         return new_container
@@ -1132,3 +1128,62 @@ class PlateSlicer(Slicer):
             raise ValueError("Source and destination slices must be the same size and shape.")
 
         return frm.plate, to.plate
+
+    def volumes(self, substance: Substance = None, unit: str = 'uL') -> numpy.ndarray:
+        """
+
+        Arguments:
+            unit:  unit to return volumes in.
+            substance: (optional) Substance to display volumes of.
+
+        Returns:
+            numpy.ndarray of volumes for each well in uL
+
+        """
+        if substance is None:
+            return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, unit))(self.get())
+
+        if not isinstance(substance, Substance):
+            raise TypeError(f"Substance is not a valid type, {type(substance)}.")
+
+        def helper(elem):
+            """ Returns volume of elem. """
+            if substance.is_liquid() and substance in elem.contents:
+                return round(Unit.convert_from_storage(elem.contents[substance], unit),
+                             config.external_precision)
+            return 0
+
+        return numpy.vectorize(helper)(self.get())
+
+    def substances(self):
+        """
+
+        Returns: A set of substances present in the plate.
+
+        """
+        substances_arr = numpy.vectorize(lambda elem: elem.contents.keys())(self.get())
+        return set.union(*map(set, substances_arr.flatten()))
+
+    def moles(self, substance: Substance, unit: str = 'mol') -> numpy.ndarray:
+        """
+        Arguments:
+            unit: unit to return moles in. ('mol', 'mmol', 'umol', etc.)
+            substance: Substance to display moles of.
+
+        Returns: moles of substance in each well.
+        """
+
+        if not isinstance(substance, Substance):
+            raise TypeError(f"Substance is not a valid type, {type(substance)}.")
+
+        def helper(elem):
+            """ Returns moles of substance in elem. """
+            if substance not in elem.contents:
+                return 0
+            if substance.is_liquid():
+                return round(Unit.convert_from_storage(elem.contents[substance], 'mL') * substance.density /
+                             substance.mol_weight, config.external_precision)
+            if substance.is_solid():
+                return round(Unit.convert_from_storage(elem.contents[substance], unit), config.external_precision)
+
+        return numpy.vectorize(helper, cache=True)(self.get())

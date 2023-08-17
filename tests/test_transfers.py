@@ -25,35 +25,35 @@ def sodium_sulfate() -> Substance:
 
 @pytest.fixture
 def plate1() -> Plate:
-    return Plate('plate1', 50_000)
+    return Plate('plate1', '50 mL')
 
 
 @pytest.fixture
 def plate2() -> Plate:
-    return Plate('plate2', 50_000)
+    return Plate('plate2', '50 mL')
 
 
 @pytest.fixture
 def solution1(water, salt) -> Container:
-    return Container('sol1', max_volume=1_000, initial_contents=[(water, '100 mL'), (salt, '50 mol')])
+    return Container('sol1', initial_contents=[(water, '100 mL'), (salt, '50 mol')])
 
 
 @pytest.fixture
 def solution2(dmso, sodium_sulfate) -> Container:
-    return Container('sol2', max_volume=1_000, initial_contents=[(dmso, '100 mL'), (sodium_sulfate, '50 mol')])
+    return Container('sol2', initial_contents=[(dmso, '100 mL'), (sodium_sulfate, '50 mol')])
 
 
 def test_add_to_container(salt, water):
     """
     Tests adding a substance to a container.
     """
-    container = Container('container', max_volume=10)
+    container = Container('container', max_volume='10 mL')
     container = Container.add(salt, container, '10 mol')
 
     # container should contain 10 moles of salt
     assert salt in container.contents and Unit.convert_from_storage(container.contents[salt], 'mol') == 10
 
-    container1 = Container('container', max_volume=20)
+    container1 = Container('container', max_volume='20 mL')
     container1 = Container.add(water, container1, '10 mL')
     # container1 should contain 10 mL of water and its volume should be 10 mL
     assert water in container1.contents and Unit.convert_from_storage(container1.contents[water], 'mL') == 10
@@ -164,7 +164,7 @@ def test_transfer_from_slice(plate1, solution1):
     """
     # solution3, plate3 = plate1[:].transfer(solution1, '1 mL')
     solution3, plate3 = Plate.transfer(solution1, plate1[:], '1 mL')
-    destination_solution = Container('destination', 100)
+    destination_solution = Container('destination', '100 mL')
     # plate4, destination_solution = destination_solution.transfer_slice(plate3, '0.5 mL')
     plate4, destination_solution = Container.transfer(plate3, destination_solution, '0.5 mL')
     # Original plate should have 1 mL in each well

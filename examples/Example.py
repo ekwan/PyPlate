@@ -13,11 +13,11 @@ print()
 # create solvents
 print("solvents:")
 water_DI = Substance.liquid("DI water", 18.0153, 1)
-water_DI_stock = Container("DI water", max_volume=10, initial_contents=[(water_DI, "10 mL")])
+water_DI_stock = Container("DI water", max_volume='10 mL', initial_contents=[(water_DI, "10 mL")])
 water_tap = Substance.liquid("tap water", 18.0153, 1)
-water_tap_stock = Container("tap water", max_volume=20, initial_contents=[(water_tap, "20 mL")])
+water_tap_stock = Container("tap water", max_volume='20 mL', initial_contents=[(water_tap, "20 mL")])
 DMSO = Substance.liquid("DMSO", 78.13, 1.1004)
-DMSO_stock = Container("DMSO", max_volume=15, initial_contents=[(DMSO, "15 mL")])
+DMSO_stock = Container("DMSO", max_volume='15 mL', initial_contents=[(DMSO, "15 mL")])
 print(water_DI)
 print(water_tap)
 print(DMSO)
@@ -27,9 +27,9 @@ print()
 # concentrations in M
 # volumes in M
 print("stock solutions:")
-sodium_sulfate_halfM = Container.create_stock_solution(sodium_sulfate, 0.5, solvent=water_DI, volume=10.0)
-triethylamine_10mM = Container.create_stock_solution(triethylamine, 0.01, DMSO, volume=10.0)
-triethylamine_50mM = Container.create_stock_solution(triethylamine, 0.05, DMSO, volume=10.0)
+sodium_sulfate_halfM = Container.create_stock_solution(sodium_sulfate, 0.5, solvent=water_DI, volume='10.0 mL')
+triethylamine_10mM = Container.create_stock_solution(triethylamine, 0.01, DMSO, volume='10.0 mL')
+triethylamine_50mM = Container.create_stock_solution(triethylamine, 0.05, DMSO, volume='10.0 mL')
 print(sodium_sulfate_halfM)
 print(triethylamine_10mM)
 print(triethylamine_50mM)
@@ -37,7 +37,7 @@ print()
 
 # create plate
 print("plate:")
-plate = Plate("test plate", max_volume_per_well=500.0)
+plate = Plate("test plate", max_volume_per_well='500.0 uL')
 print(plate)
 
 # add stuff to the plate

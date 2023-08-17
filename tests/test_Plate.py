@@ -20,47 +20,47 @@ def dmso() -> Substance:
 
 @pytest.fixture
 def salt_water(water, salt) -> Container:
-    return Container('sol1', max_volume=1_000, initial_contents=[(water, '100 mL'), (salt, '50 mol')])
+    return Container('sol1', initial_contents=[(water, '100 mL'), (salt, '50 mol')])
 
 
 @pytest.fixture
 def empty_plate() -> Plate:
-    return Plate('plate', 100)  # 100 uL
+    return Plate('plate', '100 uL')  # 100 uL
 
 
 def test_make_Plate():
     with pytest.raises(ValueError, match='invalid plate name'):
-        Plate(1, 10)
+        Plate(1, '10 uL')
     with pytest.raises(ValueError, match='invalid plate name'):
-        Plate('', 10)
-    with pytest.raises(TypeError, match='Max volume must be a float'):
-        Plate('plate', '10')
+        Plate('', '10 uL')
+    with pytest.raises(TypeError, match='Maximum volume must be a str'):
+        Plate('plate', 10)
     with pytest.raises(ValueError, match='invalid plate make'):
-        Plate('plate', 10, make=1)
+        Plate('plate', '10 uL', make=1)
     with pytest.raises(ValueError, match='invalid plate make'):
-        Plate('plate', 10, make='')
+        Plate('plate', '10 uL', make='')
     with pytest.raises(ValueError, match='rows must be int or list'):
-        Plate('plate', 10, rows='8')
+        Plate('plate', '10 uL', rows='8')
     with pytest.raises(ValueError, match='illegal number of rows'):
-        Plate('plate', 10, rows=0)
+        Plate('plate', '10 uL', rows=0)
     with pytest.raises(ValueError, match='columns must be int or list'):
-        Plate('plate', 10, columns='8')
+        Plate('plate', '10 uL', columns='8')
     with pytest.raises(ValueError, match='illegal number of columns'):
-        Plate('plate', 10, columns=0)
+        Plate('plate', '10 uL', columns=0)
 
     with pytest.raises(ValueError, match='must have at least one row'):
-        Plate('plate', 10, rows=[])
+        Plate('plate', '10 uL', rows=[])
     with pytest.raises(ValueError, match='row names must be strings'):
-        Plate('plate', 10, rows=[1])
+        Plate('plate', '10 uL', rows=[1])
     with pytest.raises(ValueError, match='duplicate row names found'):
-        Plate('plate', 10, rows=['a', 'a'])
+        Plate('plate', '10 uL', rows=['a', 'a'])
 
     with pytest.raises(ValueError, match='must have at least one column'):
-        Plate('plate', 10, columns=[])
+        Plate('plate', '10 uL', columns=[])
     with pytest.raises(ValueError, match='column names must be strings'):
-        Plate('plate', 10, columns=[1])
+        Plate('plate', '10 uL', columns=[1])
     with pytest.raises(ValueError, match='duplicate column names found'):
-        Plate('plate', 10, columns=['a', 'a'])
+        Plate('plate', '10 uL', columns=['a', 'a'])
 
 
 def test_volume_and_volumes(salt, water, dmso, empty_plate):

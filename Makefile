@@ -1,6 +1,6 @@
 PYTHONPATH := $(shell pwd)
 
-docs:
+docs: pyplate/pyplate.py
 	pdoc pyplate/pyplate.py -d google -o docs/ --no-include-undocumented
 
 test:
