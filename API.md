@@ -14,6 +14,10 @@ The *PyPlate* Python API defines a set of objects and operations for implementin
 
 Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `Plate`, and `Recipe`.  *All classes are immutable.*  (An immutable object is one whose fields cannot be changed once it has been constructed.)
 
+Note: all quantity, volume, and max_volume parameters are given as strings. For example, '10 mL', '5 g', '1 mol', or '11 U'.
+
+Quantities are stored internally based on preferences read from `pyplate.yaml`.
+
 ---
 
 ### Substance
@@ -53,21 +57,26 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 #### Attributes:
 
 - name (str): Name of this Container
-- contents (dict): map from `Substances` to amounts. Amounts are stored as mL for liquids, moles for solids, and U for enzymes
-- max_volume (float): in microlitres.
+- contents (dict): map from `Substances` to amounts. Amounts are stored in liters for liquids, moles for solids, and activity units for enzymes
+- max_volume (float): in storage format (determined by volume_storage from `pyplate.yaml`).
 
+#### Methods
+
+- evaporate():
+  - Removes all liquids from this Container.
 
 #### Static Methods:
 
-- add(source, destination, volume):
+- add(source, destination, quantity):
   - Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* will be returned.
-- transfer(source, destination, how_much):
+- transfer(source, destination, volume):
   - Move *volume* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
   - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
   - *source* can be a container, a plate, or a slice of a plate.
-- create_stock_solution(what, concentration, solvent, volume)
-  - Create a new container with the desired volume and containing the desired concentration of `what`.
-  - If `what` is a liquid, volumes will be calculated appropriately.
+- create_stock_solution(solute, concentration, solvent, volume)
+  - Create a new container with the desired volume and containing the desired concentration of `solute`.
+  - If `solute` is a liquid, volumes will be calculated appropriately.
+  - Solids are assumed to have zero volume.
 
 ---
 
@@ -79,13 +88,14 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 
 #### Constructors/Factory Methods:
 
-- Plate(name, max_capacities, n_rows, n_columns, row_labels, column_labels)
-  - name (str): name of this Container
-  - max_capacities (float): assumed to be the same volume for all wells, in uL
-  - n_rows (int): how many rows there are (default, 8)
-  - n_cols (int): how many columns there are (default, 12)
-  - row_labels (list of str): by default, A, B, C, ..., AA, AB, ...
-  - column_labels (list of str): by default, "1", "2", ...
+- Plate(name, max_volume_per_well, make, rows, cols)
+  - name (str): name of this plate
+  - max_capacities (str): assumed to be the same volume for all wells
+  - make (str): name of this kind of plate
+  - rows (int or list of str): Either how many rows there are or labels for the rows
+  - cols (int or list of str): Either how many columns there are or labels for the columns
+  - Row names default to "A", "B", ..., "AA", "AB", etc.
+  - Column names default to "1", "2", etc.
 
 
 #### Methods:
@@ -93,21 +103,26 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 - Plate[slice]
   - Returns a slice of the plate.
 
-- volumes()
+- evaporate()
+  - Evaporates all liquid from the plate
+- volumes(substance, unit)
   - Returns a `numpy` array of used volumes
+  - If given, volumes will be restricted to volumes of substance
+  - If given, volumes will be given in unit, otherwise in uL
 - substances()
   - Returns a set of all substances used
-- moles(substance)
+- moles(substance, unit)
   - Returns a `numpy` array of moles of given substance
+  - If given, moles will be return in unit, otherwise, complete moles.
 - concentrations(substance)
 
-** Volumes, substances, moles, and concentrations can all be called on a slice of the plate
+** Evaporate, volumes, substances, moles, and concentrations can all be called on a slice of the plate
 
 
 #### Static Methods:
 
-- add(source, destination, volume): Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* will be returned.
-- transfer(source, destination, how_much): Move *volume* from *source* to *destination* plate or slice, returning copies of the objects with amounts adjusted accordingly.
+- add(source, destination, quantity): Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* will be returned.
+- transfer(source, destination, volume): Move *volume* from *source* to *destination* plate or slice, returning copies of the objects with amounts adjusted accordingly.
   - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
   - *source* can be a container, a plate, or a slice of a plate.
 
@@ -131,9 +146,9 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.  An exce
 
 - uses(*containers)
   - declare `*containers` (iterable of `Containers`) as being used in the recipe.
-- add(source, destination, volume):
+- add(source, destination, quantity):
   - Adds a step to the recipe which will move the given quantity of the *source* substance to the *destination*.
-- transfer(source, destination, how_much):
+- transfer(source, destination, volume):
   - Adds a step to the recipe which will move *volume* from *source* to *destination*.
   - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
 - create_container(name, max_volume, initial_contents)
@@ -144,6 +159,8 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.  An exce
   - Adds a step to the recipe with will create a new container with the desired volume and containing the desired concentration of `what`.
   - If `what` is a liquid, volumes will be calculated appropriately.
   - Returns new container so that it can be used later in the same recipe.
+- evaporate(destination)
+  - Adds a step to remove all liquids from destination
 - bake()
   - Checks the validity of each step and ensures all Containers are used.
   - Returns all new Containers and Plates in the order they were defined in `uses()`.
