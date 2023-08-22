@@ -100,4 +100,3 @@ def test_create_stock_solution(water, salt, salt_water):
     assert water in stock.contents and salt in stock.contents
     assert stock.contents[water] == salt_water.contents[water]
     assert stock.contents[salt] == salt_water.contents[salt]
-

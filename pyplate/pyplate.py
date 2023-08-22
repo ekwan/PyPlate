@@ -101,6 +101,84 @@ class Unit:
         raise ValueError("Invalid unit {base_unit}.")
 
     @staticmethod
+    def convert(substance: Substance, quantity: str, unit: str) -> float:
+        """
+            Convert quantity of substance to unit.
+
+            Arguments:
+                substance: Substance in question.
+                quantity: Quantity of substance ('10 mL').
+                unit: Unit to convert quantity to ('mol').
+
+            Returns: Converted value.
+
+        """
+
+        if not isinstance(substance, Substance):
+            raise TypeError(f"Invalid type for substance, {type(substance)}")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str.")
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+
+        value, quantity_unit = Unit.parse_quantity(quantity)
+        if quantity_unit == 'U' and not substance.is_enzyme():
+            raise ValueError("Only enzymes can be measured in activity units. 'U'")
+        if quantity_unit == 'L' and not substance.is_liquid():
+            raise ValueError("Only liquids can be measured by volume. 'L'")
+
+        result = None
+        if unit.endswith('U'):
+            prefix = unit[:-1]
+            if not substance.is_enzyme():
+                return 0
+            if not quantity_unit == 'U':
+                raise ValueError("Enzymes can only be measured in activity units. 'U'")
+            result = value
+        elif unit.endswith('L'):
+            prefix = unit[:-1]
+            if not substance.is_liquid():
+                return 0
+            if quantity_unit == 'L':
+                result = value
+            elif quantity_unit == 'mol':
+                # mol * g/mol / (g/mL)
+                result_in_mL = value * substance.mol_weight / substance.density
+                result = result_in_mL / 1000
+            elif quantity_unit == 'g':
+                # g / (g/mL)
+                result_in_mL = value / substance.density
+                result = result_in_mL / 1000
+        elif unit.endswith('mol'):
+            prefix = unit[:-3]
+            if quantity_unit == 'L':
+                value_in_mL = value * 1000
+                # mL * g/mL / (g/mol)
+                result = value_in_mL * substance.density / substance.mol_weight
+            elif quantity_unit == 'mol':
+                result = value
+            elif quantity_unit == 'g':
+                # g / (g/mol)
+                result = value / substance.mol_weight
+        elif unit.endswith('g'):
+            prefix = unit[:-1]
+            if quantity_unit == 'L':
+                value_in_mL = value * 1000
+                # mL * g/mL
+                result = value_in_mL * substance.density
+            elif quantity_unit == 'mol':
+                # mol * g/mol
+                result = value * substance.mol_weight
+            elif quantity_unit == 'g':
+                result = value
+        else:
+            raise ValueError("Only L, U, g, and mol are valid units.")
+
+        assert result is not None
+
+        return result / Unit.convert_prefix_to_multiplier(prefix)
+
+    @staticmethod
     def convert_to_unit_value(substance: Substance, quantity: str, volume: float = 0.0) -> float:
         """
 
@@ -221,7 +299,7 @@ class Unit:
         Returns: Converted value.
 
         """
-        if not isinstance(value, float):
+        if not isinstance(value, (int, float)):
             raise TypeError("Value must be a float.")
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
@@ -233,6 +311,38 @@ class Unit:
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
             result = value * config.moles_storage / prefix_value
         return round(result, config.internal_precision)
+
+    @staticmethod
+    def get_human_readable_unit(value: float, unit: str):
+        """
+        Returns a unit that makes the value more human-readable.
+
+        Args:
+            value: Value to work with.
+            unit:  Unit to determine type and default unit if value is zero.
+
+        Returns: New unit.
+
+        """
+        if value == 0:
+            return unit
+        if unit[-1] == 'L':
+            unit = 'L'
+        elif unit[-3:] == 'mol':
+            unit = 'mol'
+        elif unit[-1] == 'g':
+            unit = 'g'
+        elif unit[-1] == 'U':
+            unit = 'U'
+        multiplier = 1
+        while value < 1:
+            value *= 1e3
+            multiplier /= 1e3
+
+        if multiplier < 1e-6:
+            multiplier = 1e-6
+
+        return {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
 
 
 class Substance:
@@ -568,7 +678,7 @@ class Container:
         return destination
 
     @staticmethod
-    def transfer(source: Container or Plate or PlateSlicer, destination: Container, volume: str):
+    def transfer(source: Container | Plate | PlateSlicer, destination: Container, volume: str):
         """
         Move volume ('10 mL') from source to destination container,
         returning copies of the objects with amounts adjusted accordingly.
@@ -632,6 +742,64 @@ class Container:
             container = container.add(solvent, container, f"{volume * 1000 - volume_to_add} mL")
             container = container.add(solute, container, f"{volume_to_add} mL")
         return container
+
+    def evaporate(self):
+        """
+        Removes all liquids from `Container`
+
+        Returns: New Container with no liquids.
+
+        """
+        new_container = deepcopy(self)
+        new_container.volume = 0.
+        new_container.contents = {substance: value for substance, value in self.contents.items()
+                                  if not substance.is_liquid()}
+        return new_container
+
+    def dilute(self, solute: Substance, concentration: float, solvent: Substance):
+        """
+        Dilutes `solute` in solution to `concentration`.
+
+        Args:
+            solute: Substance which is subject to dilution.
+            concentration: Desired concentration in mol/L.
+            solvent: What to dilute with.
+
+        Returns: A new container containing a solution with the desired concentration of `solute`.
+
+        """
+        if not isinstance(solute, Substance):
+            raise TypeError("Solute must be a Substance.")
+        if not isinstance(concentration, (int, float)):
+            raise TypeError("Concentration must be a float.")
+        if concentration <= 0:
+            raise ValueError("Concentration must be positive.")
+        if not isinstance(solvent, Substance):
+            raise TypeError("Solvent must be a substance.")
+
+        if solute not in self.contents:
+            raise ValueError(f"Container does not contain {solute.name}.")
+
+        if solute.is_solid():
+            current_mmoles = Unit.convert_from_storage(self.contents[solute], 'mmol')
+        elif solute.is_liquid():
+            current_mmoles = 1000 * Unit.convert_from_storage(self.contents[solute],
+                                                              'mL') * solute.density / solute.mol_weight
+
+        current_volume = Unit.convert_from_storage(self.volume, 'mL')
+        current_concentration = float('inf') if self.volume == 0 else current_mmoles / current_volume
+
+        if concentration > current_concentration:
+            raise ValueError("Desired concentration is higher than current concentration.")
+        if concentration == current_concentration:
+            return deepcopy(self)
+        desired_volume = current_umoles / concentration
+        if desired_volume > Unit.convert_from_storage(self.max_volume, 'uL'):
+            raise ValueError("Dilute solution will not fit in container.")
+
+        current_solvent_volume = Unit.convert_from_storage(self.contents.get(solvent, 0), 'uL')
+        required_volume = desired_volume - current_solvent_volume
+        return Container.add(solvent, self, f"{required_volume} uL")
 
 
 class Plate:
@@ -789,7 +957,7 @@ class Plate:
         return PlateSlicer._add(source, destination, quantity)
 
     @staticmethod
-    def transfer(source, destination: Plate | PlateSlicer, volume: str):
+    def transfer(source: Container | Plate | PlateSlicer, destination: Plate | PlateSlicer, volume: str):
         """
         Move volume ('10 mL') from source to destination,
         returning copies of the objects with amounts adjusted accordingly.
@@ -806,6 +974,16 @@ class Plate:
             raise TypeError("You can only use Plate.transfer into a Plate")
         # noinspection PyProtectedMember
         return PlateSlicer._transfer(source, destination, volume)
+
+    def evaporate(self):
+        """
+        Removes all liquids from slice
+
+        Returns: New Container with no liquids.
+
+        """
+
+        return self[:].evaporate()
 
 
 class Recipe:
@@ -952,6 +1130,25 @@ class Recipe:
         self.steps.append(('stock', new_container, what, concentration, solvent, volume))
         return new_container
 
+    def evaporate(self, destination: Container | Plate | PlateSlicer):
+        """
+        Adds a step to remove all liquids from destination.
+
+        Arguments:
+            destination: What to evaporate liquids from.
+        """
+
+        if isinstance(destination, PlateSlicer):
+            if destination.plate not in self.indexes:
+                raise ValueError(f"Destination {destination.plate.name} has not been previously declared for use.")
+        elif isinstance(destination, (Container, Plate)):
+            if destination not in self.indexes:
+                raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
+        else:
+            raise TypeError(f"Invalid destination type: {type(destination)}")
+
+        self.steps.append(('evaporate', destination))
+
     def bake(self):
         """
         Completes steps stored in recipe.
@@ -1023,6 +1220,19 @@ class Recipe:
                 to_index = self.indexes[to]
                 self.used.add(to_index)
                 self.results[to_index] = Container.create_stock_solution(what, concentration, solvent, volume)
+            elif operation == 'evaporate':
+                to, = rest
+                to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
+                self.used.add(to_index)
+
+                if isinstance(to, PlateSlicer):
+                    new_to = deepcopy(to)
+                    new_to.plate = self.results[to_index]
+                    to = new_to
+                else:
+                    to = self.results[to_index]
+
+                self.results[to_index] = to.evaporate()
 
         if len(self.used) != len(self.indexes):
             raise ValueError("Something declared as used wasn't used.")
@@ -1187,3 +1397,27 @@ class PlateSlicer(Slicer):
                 return round(Unit.convert_from_storage(elem.contents[substance], unit), config.external_precision)
 
         return numpy.vectorize(helper, cache=True)(self.get())
+
+    def evaporate(self):
+        """
+        Removes all liquids from slice
+
+        Returns: New Container with no liquids.
+
+        """
+
+        def evaporate_helper(elem):
+            new_container = deepcopy(elem)
+            new_container.volume = 0.
+            new_container.contents = {substance: value for substance, value in elem.contents.items()
+                                      if not substance.is_liquid()}
+            return new_container
+
+        result = numpy.vectorize(evaporate_helper, cache=True)(self.get())
+        self.plate = deepcopy(self.plate)
+        if result.size == 1:
+            self.set(result.item())
+        else:
+            self.set(result)
+
+        return self.plate

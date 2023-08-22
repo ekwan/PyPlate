@@ -1,6 +1,6 @@
 import pytest
 import numpy
-from pyplate.pyplate import Unit, Substance, Container, Plate
+from pyplate.pyplate import Substance, Container, Plate
 
 
 @pytest.fixture
@@ -92,6 +92,7 @@ def test_volume_and_volumes(salt, water, dmso, empty_plate):
     assert numpy.array_equal(new_plate.volumes(water), 50 * uL)
     assert numpy.array_equal(new_plate.volumes(dmso), 25 * uL)
     assert numpy.array_equal(new_plate.volumes(salt), zeros)
+    assert numpy.array_equal(new_plate.volumes(water, unit='mL'), 0.05 * uL)
 
 
 def test_moles(salt, water, empty_plate):
