@@ -6,5 +6,8 @@ docs: pyplate/pyplate.py
 test:
 	pytest tests
 
+coverage:
+	pytest --cov=pyplate --cov-report html tests
+
 clean:
 	rm -rf docs
