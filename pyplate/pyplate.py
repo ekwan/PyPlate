@@ -279,10 +279,10 @@ class Unit:
 
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
-            result = value * prefix_value / config.volume_storage
+            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.volume_prefix[0])
         else:  # moles
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
-            result = value * prefix_value / config.moles_storage
+            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.moles_prefix[0])
         return round(result, config.internal_precision)
 
     @staticmethod
@@ -306,10 +306,10 @@ class Unit:
 
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
-            result = value * config.volume_storage / prefix_value
+            result = value * Unit.convert_prefix_to_multiplier(config.volume_prefix[0]) / prefix_value
         else:  # moles
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
-            result = value * config.moles_storage / prefix_value
+            result = value * Unit.convert_prefix_to_multiplier(config.moles_prefix[0]) / prefix_value
         return round(result, config.internal_precision)
 
     @staticmethod
@@ -566,17 +566,17 @@ class Container:
             raise TypeError("Source must be a Substance.")
         if not isinstance(quantity, str):
             raise TypeError("Quantity must be a str.")
-        if quantity.endswith('M') and not source.is_solid():
-            # TODO: molarity from liquids?
-            raise ValueError("Molarity solutions can only be made from solids.")
-        volume = Unit.convert_from_storage(self.volume, 'mL')
-        amount_to_transfer = round(Unit.convert_to_unit_value(source, quantity, volume), config.internal_precision)
-        # add source Substance to self.contents
-        self.contents[source] = round(self.contents.get(source, 0) + amount_to_transfer, config.internal_precision)
-        if source.is_liquid():
-            self.volume = round(self.volume + amount_to_transfer, config.internal_precision)
-        if self.volume > self.max_volume:
+
+        if source.is_enzyme():
+            volume_to_add = 0
+            amount_to_add = Unit.convert(source, quantity, 'U')
+        else:
+            volume_to_add = Unit.convert(source, quantity, config.volume_prefix)
+            amount_to_add = Unit.convert(source, quantity, config.moles_prefix)
+        if self.volume + volume_to_add > self.max_volume:
             raise ValueError("Exceeded maximum volume")
+        self.volume = round(self.volume + volume_to_add, config.internal_precision)
+        self.contents[source] = round(self.contents.get(source, 0) + amount_to_add, config.internal_precision)
 
     def _transfer(self, source_container: Container, volume: str):
         """
@@ -1359,8 +1359,8 @@ class PlateSlicer(Slicer):
         def helper(elem):
             """ Returns volume of elem. """
             if substance.is_liquid() and substance in elem.contents:
-                return round(Unit.convert_from_storage(elem.contents[substance], unit),
-                             config.external_precision)
+                quantity = f"{elem.contents[substance]} {config.moles_prefix}"
+                return round(Unit.convert(substance, quantity, unit), config.external_precision)
             return 0
 
         return numpy.vectorize(helper)(self.get())
@@ -1390,11 +1390,8 @@ class PlateSlicer(Slicer):
             """ Returns moles of substance in elem. """
             if substance not in elem.contents:
                 return 0
-            if substance.is_liquid():
-                return round(Unit.convert_from_storage(elem.contents[substance], 'mL') * substance.density /
-                             substance.mol_weight, config.external_precision)
-            if substance.is_solid():
-                return round(Unit.convert_from_storage(elem.contents[substance], unit), config.external_precision)
+            quantity = f"{elem.contents[substance]} {config.moles_prefix}"
+            return round(Unit.convert(substance, quantity, unit), config.external_precision)
 
         return numpy.vectorize(helper, cache=True)(self.get())
 

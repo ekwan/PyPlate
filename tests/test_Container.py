@@ -1,5 +1,6 @@
 import pytest
 from pyplate.pyplate import Substance, Container, Unit
+from pyplate import config
 
 
 @pytest.fixture
@@ -57,7 +58,7 @@ def test_Container_add(water):
     # 10 mL of water should have been added.
     assert isinstance(result, Container)
     assert result.volume == Unit.convert_to_storage(10, 'mL')
-    assert water in result.contents and result.contents[water] == Unit.convert_to_storage(10, 'mL')
+    assert water in result.contents and result.contents[water] == Unit.convert(water, '10 mL', config.moles_prefix)
     # Original should be unchanged
     assert container.volume == 0
     assert water not in container.contents
@@ -75,12 +76,12 @@ def test_Container_transfer(water, salt, water_stock, salt_water):
     # water_stock is 10 mL, salt_water is 100 mL and 50 mol
     container1, container2 = Container.transfer(salt_water, water_stock, '10 mL')
     # 10 mL of water and 5 mol of salt should have been transferred
-    assert container1.volume == Unit.convert_to_storage(90, 'mL')
-    assert container1.contents[water] == Unit.convert_to_storage(90, 'mL')
-    assert container1.contents[salt] == Unit.convert_to_storage(45, 'mmol')
-    assert container2.volume == Unit.convert_to_storage(20, 'mL')
-    assert salt in container2.contents and container2.contents[salt] == Unit.convert_to_storage(5, 'mmol')
-    assert container2.contents[water] == Unit.convert_to_storage(20, 'mL')
+    assert container1.volume == Unit.convert(water, '90 mL', config.volume_prefix)
+    assert container1.contents[water] == Unit.convert(water, '90 mL', config.moles_prefix)
+    assert container1.contents[salt] == Unit.convert(salt, '45 mmol', config.moles_prefix)
+    assert container2.volume == Unit.convert(water, '20 mL', config.volume_prefix)
+    assert salt in container2.contents and container2.contents[salt] == Unit.convert(salt, '5 mmol', config.moles_prefix)
+    assert container2.contents[water] == Unit.convert(water, '20 mL', config.moles_prefix)
 
     # Original containers should be unchanged.
     assert initial_hashes == (hash(water_stock), hash(salt_water))

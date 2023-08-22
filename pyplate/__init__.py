@@ -25,29 +25,10 @@ class Config:
 
         self.internal_precision = yaml_config['internal_precision']
         self.external_precision = yaml_config['external_precision']
-        self.volume_storage = Config.convert_prefix_to_multiplier(yaml_config['volume_storage'][:-1])
-        self.moles_storage = Config.convert_prefix_to_multiplier(yaml_config['moles_storage'][:-3])
-
-    @staticmethod
-    def convert_prefix_to_multiplier(prefix: str) -> float:
-        """
-
-        Converts an SI prefix into a multiplier.
-        Example: "m" -> 1e-3, "u" -> 1e-6
-
-        Arguments:
-            prefix:
-
-        Returns:
-             Multiplier (float)
-
-        """
-        if not isinstance(prefix, str):
-            raise TypeError("SI prefix must be a string.")
-        prefixes = {'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
-        if prefix in prefixes:
-            return prefixes[prefix]
-        raise ValueError(f"Invalid prefix: {prefix}")
+        self.moles_prefix = yaml_config['moles_storage']
+        assert self.moles_prefix[1:] == 'mol'
+        self.volume_prefix = yaml_config['volume_storage']
+        assert self.volume_prefix[1:] == 'L'
 
 
 config = Config()
