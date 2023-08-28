@@ -1075,9 +1075,15 @@ class Recipe:
         new_container = Container(name, max_volume)
         self.uses(new_container)
         if initial_contents:
+            if not isinstance(initial_contents, Iterable):
+                raise TypeError("Initial contents must be iterable.")
+            if not all(isinstance(elem, tuple) and len(elem) == 2 for elem in initial_contents):
+                raise TypeError("Elements of initial_contents must be of the form (Substance, quantity.)")
             for substance, quantity in initial_contents:
                 if not isinstance(substance, Substance):
-                    raise ValueError("Containers can only be created from substances.")
+                    raise TypeError("Containers can only be created from substances.")
+                if not isinstance(quantity, str):
+                    raise TypeError("Quantity must be a str. ('10 mL')")
                 self.steps.append(('add', substance, new_container, quantity))
         return new_container
 
