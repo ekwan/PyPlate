@@ -291,8 +291,7 @@ class Unit:
             value *= 1e3
             multiplier /= 1e3
 
-        if multiplier < 1e-6:
-            multiplier = 1e-6
+        multiplier = max(multiplier, 1e-6)
 
         return {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
 
@@ -309,6 +308,7 @@ class Substance:
         concentration: Calculated concentration if `Substance` is a liquid (mol/mL).
         molecule: `cctk.Molecule` if provided.
     """
+    # An attribute `classes` could be added to support classes of substances.
     SOLID = 1
     LIQUID = 2
     ENZYME = 3
@@ -477,7 +477,7 @@ class Container:
         if not isinstance(max_volume, str):
             raise TypeError("Maximum volume must be a str, ('10 mL').")
         max_volume, _ = Unit.parse_quantity(max_volume)
-        if not max_volume > 0:
+        if max_volume <= 0:
             raise ValueError("Maximum volume must be positive.")
         self.name = name
         self.contents: Dict[Substance, float] = {}
@@ -660,7 +660,7 @@ class Container:
         raise TypeError("Invalid source type.")
 
     @staticmethod
-    def create_stock_solution(solute: Substance, concentration: float, solvent: Substance, volume: str):
+    def create_stock_solution(solute: Substance, concentration: float, solvent: Substance, volume: str, name=None):
         """
         Create a stock solution.
 
@@ -671,6 +671,7 @@ class Container:
             concentration: Desired concentration in mol/L.
             solvent: What to dissolve with.
             volume: Desired total volume in mL.
+            name: Optional name for new container.
 
         Returns:
             New container with desired solution.
@@ -683,12 +684,16 @@ class Container:
             raise TypeError("Solvent must be a Substance.")
         if not isinstance(volume, str):
             raise TypeError("Volume must be a str.")
+        if name and not isinstance(name, str):
+            raise TypeError("Name must be a str.")
 
         volume, _ = Unit.parse_quantity(volume)
-        if not volume > 0:
+        if volume <= 0:
             raise ValueError("Volume must be positive.")
 
-        container = Container(f"{solute.name} {concentration:.2}M")
+        if not name:
+            name = f"{solute.name} {concentration:.2}M"
+        container = Container(name)
         moles_to_add = volume * concentration
         if solute.is_enzyme():
             raise TypeError("You can't add enzymes by molarity.")
@@ -715,13 +720,13 @@ class Container:
         """
         new_container = deepcopy(self)
         new_container.contents = {substance: value for substance, value in self.contents.items()
-                                  if substance._type != what and substance != what}
+                                  if what not in (substance._type, substance)}
         new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
                                    config.moles_prefix, config.volume_prefix) for substance, value in
                                    new_container.contents.items())
         return new_container
 
-    def dilute(self, solute: Substance, concentration: float, solvent: Substance):
+    def dilute(self, solute: Substance, concentration: float, solvent: Substance, new_name=None):
         """
         Dilutes `solute` in solution to `concentration`.
 
@@ -729,6 +734,7 @@ class Container:
             solute: Substance which is subject to dilution.
             concentration: Desired concentration in mol/L.
             solvent: What to dilute with.
+            new_name: Optional name for new container.
 
         Returns: A new container containing a solution with the desired concentration of `solute`.
 
@@ -741,7 +747,8 @@ class Container:
             raise ValueError("Concentration must be positive.")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a substance.")
-
+        if new_name and not isinstance(new_name, str):
+            raise TypeError("New name must be a str.")
         if solute not in self.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
 
@@ -765,7 +772,13 @@ class Container:
 
         required_volume = desired_volume_in_mL - current_volume_in_mL
 
-        return Container.add(solvent, self, f"{required_volume} mL")
+        if new_name:
+            # Note: this copies the container twice
+            destination = deepcopy(self)
+            destination.name = new_name
+        else:
+            destination = self
+        return Container.add(solvent, destination, f"{required_volume} mL")
 
 
 class Plate:
@@ -803,12 +816,12 @@ class Plate:
                 raise ValueError("illegal number of rows")
             self.n_rows = rows
             self.row_names = []
-            for n in range(1, rows + 1):
+            for row_num in range(1, rows + 1):
                 result = []
-                while n > 0:
-                    n -= 1
-                    result.append(chr(ord('A') + n % 26))
-                    n //= 26
+                while row_num > 0:
+                    row_num -= 1
+                    result.append(chr(ord('A') + row_num % 26))
+                    row_num //= 26
                 self.row_names.append(''.join(reversed(result)))
         elif isinstance(rows, list):
             if len(rows) == 0:
@@ -1068,16 +1081,18 @@ class Recipe:
                 self.steps.append(('add', substance, new_container, quantity))
         return new_container
 
-    def create_stock_solution(self, what: Substance, concentration: float, solvent: Substance, volume: str):
+    def create_stock_solution(self, solute: Substance, concentration: float,
+                              solvent: Substance, volume: str, name=None):
         """
 
         Adds a step to the recipe which creates a stock solution.
 
         Arguments:
-            what: What to dissolve.
+            solute: What to dissolve.
             concentration: Desired concentration in mol/L
             solvent: What to dissolve with.
             volume: Desired total volume. ('10 mL')
+            name: Optional name for new container.
 
         Returns:
             A new Container so that it may be used in later recipe steps.
@@ -1085,7 +1100,7 @@ class Recipe:
         """
         if self.locked:
             raise RuntimeError("This recipe is locked.")
-        if not isinstance(what, Substance):
+        if not isinstance(solute, Substance):
             raise TypeError("What must be a Substance.")
         if not isinstance(concentration, float):
             raise TypeError("Concentration must be a float.")
@@ -1093,9 +1108,14 @@ class Recipe:
             raise TypeError("Solvent must be a Substance.")
         if not isinstance(volume, str):
             raise TypeError("Volume must be a str.")
-        new_container = Container("{what.name} {concentration:.2}M")
+        if name and not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+
+        if not name:
+            name = f"{solute.name} {concentration:.2}M"
+        new_container = Container(name)
         self.uses(new_container)
-        self.steps.append(('stock', new_container, what, concentration, solvent, volume))
+        self.steps.append(('stock', new_container, solute, concentration, solvent, volume))
         return new_container
 
     def remove(self, destination: Container | Plate | PlateSlicer, what=Substance.LIQUID):
@@ -1118,6 +1138,40 @@ class Recipe:
 
         self.steps.append(('remove', what, destination))
 
+    def dilute(self, destination: Container, solute: Substance,
+               concentration: float, solvent: Substance, new_name=None):
+        """
+        Adds a step to dilute `solute` in `destination` to `concentration`.
+
+        Args:
+            destination: Container to dilute.
+            solute: Substance which is subject to dilution.
+            concentration: Desired concentration in mol/L.
+            solvent: What to dilute with.
+            new_name: Optional name for new container.
+        """
+
+        if not isinstance(solute, Substance):
+            raise TypeError("Solute must be a Substance.")
+        if not isinstance(concentration, (int, float)):
+            raise TypeError("Concentration must be a float.")
+        if concentration <= 0:
+            raise ValueError("Concentration must be positive.")
+        if not isinstance(solvent, Substance):
+            raise TypeError("Solvent must be a substance.")
+        if new_name and not isinstance(new_name, str):
+            raise TypeError("New name must be a str.")
+        if destination not in self.indexes:
+            raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
+        if solute not in destination.contents:
+            raise ValueError(f"Container does not contain {solute.name}.")
+
+        if solute.is_enzyme():
+            # TODO: Support this.
+            raise ValueError("Not currently supported.")
+
+        self.steps.append(('dilute', destination, solute, concentration, solvent, new_name))
+
     def bake(self):
         """
         Completes steps stored in recipe.
@@ -1130,29 +1184,29 @@ class Recipe:
         """
         for operation, *rest in self.steps:
             if operation == 'add':
-                frm, to, quantity = rest
-                to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
+                frm, dest, quantity = rest
+                to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
 
                 # containers and such can change while building the recipe
-                if isinstance(to, PlateSlicer):
-                    new_to = deepcopy(to)
+                if isinstance(dest, PlateSlicer):
+                    new_to = deepcopy(dest)
                     new_to.plate = self.results[to_index]
-                    to = new_to
+                    dest = new_to
                 else:
-                    to = self.results[to_index]
+                    dest = self.results[to_index]
 
-                if isinstance(to, Container):
-                    to = Container.add(frm, to, quantity)
-                elif isinstance(to, PlateSlicer):
-                    to = Plate.add(frm, to, quantity)
+                if isinstance(dest, Container):
+                    dest = Container.add(frm, dest, quantity)
+                elif isinstance(dest, PlateSlicer):
+                    dest = Plate.add(frm, dest, quantity)
 
-                self.results[to_index] = to
+                self.results[to_index] = dest
                 self.used.add(to_index)
             elif operation == 'transfer':
-                frm, to, quantity = rest
+                frm, dest, quantity = rest
                 # used items can change in a recipe
                 frm_index = self.indexes[frm] if not isinstance(frm, PlateSlicer) else self.indexes[frm.plate]
-                to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
+                to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
 
                 self.used.add(frm_index)
                 self.used.add(to_index)
@@ -1165,43 +1219,47 @@ class Recipe:
                 else:
                     frm = self.results[frm_index]
 
-                if isinstance(to, PlateSlicer):
-                    new_to = deepcopy(to)
+                if isinstance(dest, PlateSlicer):
+                    new_to = deepcopy(dest)
                     new_to.plate = self.results[to_index]
-                    to = new_to
+                    dest = new_to
                 else:
-                    to = self.results[to_index]
+                    dest = self.results[to_index]
 
                 if isinstance(frm, Substance):  # Adding a substance is handled differently
-                    if isinstance(to, Container):
-                        to = Container.add(frm, to, quantity)
-                    elif isinstance(to, PlateSlicer):
-                        to = Plate.add(frm, to, quantity)
-                elif isinstance(to, Container):
-                    frm, to = Container.transfer(frm, to, quantity)
-                elif isinstance(to, PlateSlicer):
-                    frm, to = Plate.transfer(frm, to, quantity)
+                    if isinstance(dest, Container):
+                        dest = Container.add(frm, dest, quantity)
+                    elif isinstance(dest, PlateSlicer):
+                        dest = Plate.add(frm, dest, quantity)
+                elif isinstance(dest, Container):
+                    frm, dest = Container.transfer(frm, dest, quantity)
+                elif isinstance(dest, PlateSlicer):
+                    frm, dest = Plate.transfer(frm, dest, quantity)
 
                 self.results[frm_index] = frm
-                self.results[to_index] = to
+                self.results[to_index] = dest
             elif operation == 'stock':
-                to, what, concentration, solvent, volume = rest
-                to_index = self.indexes[to]
+                dest, what, concentration, solvent, volume = rest
+                to_index = self.indexes[dest]
                 self.used.add(to_index)
                 self.results[to_index] = Container.create_stock_solution(what, concentration, solvent, volume)
             elif operation == 'remove':
-                what, to = rest
-                to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
+                what, dest = rest
+                to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
                 self.used.add(to_index)
 
-                if isinstance(to, PlateSlicer):
-                    new_to = deepcopy(to)
+                if isinstance(dest, PlateSlicer):
+                    new_to = deepcopy(dest)
                     new_to.plate = self.results[to_index]
-                    to = new_to
+                    dest = new_to
                 else:
-                    to = self.results[to_index]
+                    dest = self.results[to_index]
 
-                self.results[to_index] = to.remove(what)
+                self.results[to_index] = dest.remove(what)
+            elif operation == 'dilute':
+                dest, solute, concentration, solvent, new_name = rest
+                to_index = self.indexes[dest]
+                self.results[to_index] = dest.dilute(solute, concentration, solvent, new_name)
 
         if len(self.used) != len(self.indexes):
             raise ValueError("Something declared as used wasn't used.")
