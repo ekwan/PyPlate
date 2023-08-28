@@ -80,7 +80,8 @@ def test_Container_transfer(water, salt, water_stock, salt_water):
     assert container1.contents[water] == Unit.convert(water, '90 mL', config.moles_prefix)
     assert container1.contents[salt] == Unit.convert(salt, '45 mmol', config.moles_prefix)
     assert container2.volume == Unit.convert(water, '20 mL', config.volume_prefix)
-    assert salt in container2.contents and container2.contents[salt] == Unit.convert(salt, '5 mmol', config.moles_prefix)
+    assert salt in container2.contents and container2.contents[salt] == \
+           Unit.convert(salt, '5 mmol', config.moles_prefix)
     assert container2.contents[water] == Unit.convert(water, '20 mL', config.moles_prefix)
 
     # Original containers should be unchanged.

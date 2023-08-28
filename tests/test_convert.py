@@ -78,7 +78,7 @@ def test_convert(salt, water, lipase, dmso):
     assert Unit.convert(dmso, '1 L', 'g') == 1000 * dmso.density
     assert Unit.convert(dmso, '1 L', 'mol') == 1000 * dmso.density / dmso.mol_weight
     assert Unit.convert(dmso, '1 L', 'L') == 1
-    
+
     # Repeat for a solid
     # from grams
     assert Unit.convert(salt, '1 g', 'g') == 1
@@ -89,4 +89,3 @@ def test_convert(salt, water, lipase, dmso):
     assert Unit.convert(salt, '1 mol', 'g') == salt.mol_weight
     assert Unit.convert(salt, '1 mol', 'mol') == 1
     assert Unit.convert(salt, '1 mol', 'mL') == 0
-    

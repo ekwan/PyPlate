@@ -211,86 +211,6 @@ class Unit:
         return Unit.convert_from(substance, value, quantity_unit, unit)
 
     @staticmethod
-    def convert_to_unit_value(substance: Substance, quantity: str, volume: float = 0.0) -> float:
-        """
-
-        Converts amount to standard unit.
-
-
-        Arguments:
-            substance: Substance in question.
-            quantity: Quantity of substance.
-            volume: Volume of containing Mixture in mL
-
-        Returns: Value in standard unit, converted to storage format.
-
-        ---
-
-        Standard units:
-
-        - SOLID: moles
-
-        - LIQUID: liter
-
-        - ENZYME: activity unit
-
-        """
-
-        #          +--------+--------+--------+--------+--------+----------+
-        #          |              Valid Input                   | Standard |
-        #          |    g   |    L   |   mol  |    M   |    U   |   Unit   |
-        # +--------+--------+--------+--------+--------+--------+----------+
-        # |SOLID   |   Yes  |   No   |   Yes  |   Yes  |   No   |    mol   |
-        # +--------+--------+--------+--------+--------+--------+----------+
-        # |LIQUID  |   Yes  |   Yes  |   Yes  |   No   |   No   |    mL    |
-        # +--------+--------+--------+--------+--------+--------+----------+
-        # |ENZYME  |   No   |   No   |   No   |   No   |   Yes  |    U     |
-        # +--------+--------+--------+--------+--------+--------+----------+
-
-        # TODO: Explain why moles and mL were chosen as units.
-        # TODO: Enzyme could be in solution.
-
-        if not isinstance(substance, Substance):
-            raise TypeError(f"Invalid type for substance, {type(substance)}")
-        if not isinstance(quantity, str):
-            raise TypeError("Quantity must be a str.")
-        if not isinstance(volume, float):
-            raise TypeError("Volume, if provided, must be a float.")
-
-        value, unit = Unit.parse_quantity(quantity)
-        if substance.is_solid():  # Convert to moles
-            if unit == 'g':  # mass
-                result = value / substance.mol_weight
-            elif unit == 'mol':  # moles
-                result = value
-            elif unit == 'M':  # molar
-                # A molar concentration with zero volume would be undefined.
-                if volume <= 0.0:
-                    raise ValueError('Must have a liquid in which to dissolve the solid ' +
-                                     'in order to create a molar concentration')
-                # value = molar concentration in mol/L, volume = volume in mL
-                result = value * volume / 1000
-            else:
-                raise ValueError("We only measure solids in grams and moles.")
-            return Unit.convert_to_storage(result, 'mol')
-        if substance.is_liquid():
-            if unit == 'g':  # mass
-                # g -> mL
-                result = value / substance.density
-            elif unit == 'L':  # volume
-                result = value * 1000
-            elif unit == 'mol':  # moles
-                # mol -> mL
-                result = value / substance.concentration
-            else:
-                raise ValueError
-            return Unit.convert_to_storage(result, 'mL')
-        if substance.is_enzyme():
-            if unit == 'U':
-                return value
-            raise ValueError
-
-    @staticmethod
     def convert_to_storage(value: float, unit: str) -> float:
         """
 
@@ -549,7 +469,6 @@ class Container:
             max_volume: Maximum volume that can be stored in the container in mL
             initial_contents: (optional) Iterable of tuples of the form (Substance, quantity)
         """
-        # TODO: make max_volume a str
         if not isinstance(name, str):
             raise TypeError("Name must be a str.")
         if len(name) == 0:
