@@ -1,26 +1,7 @@
 import pytest
 import numpy
-from pyplate.pyplate import Substance, Container, Plate
-
-
-@pytest.fixture
-def salt() -> Substance:
-    return Substance.solid('NaCl', 58.4428)
-
-
-@pytest.fixture
-def water() -> Substance:
-    return Substance.liquid('H2O', mol_weight=18.0153, density=1)
-
-
-@pytest.fixture
-def dmso() -> Substance:
-    return Substance.liquid('DMSO', 78.13, 1.1004)
-
-
-@pytest.fixture
-def salt_water(water, salt) -> Container:
-    return Container('sol1', initial_contents=[(water, '100 mL'), (salt, '50 mol')])
+from pyplate.pyplate import Plate
+from .fixtures import salt, water, dmso
 
 
 @pytest.fixture

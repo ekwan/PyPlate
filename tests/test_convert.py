@@ -1,25 +1,6 @@
 from pyplate.pyplate import Unit, Substance
 import pytest
-
-
-@pytest.fixture
-def water() -> Substance:
-    return Substance.liquid('H2O', mol_weight=18.0153, density=1)
-
-
-@pytest.fixture
-def salt() -> Substance:
-    return Substance.solid('NaCl', 58.4428)
-
-
-@pytest.fixture
-def lipase() -> Substance:
-    return Substance.enzyme('lipase')
-
-
-@pytest.fixture
-def dmso() -> Substance:
-    return Substance.liquid('DMSO', 78.13, 1.1004)
+from .fixtures import salt, water, lipase, dmso
 
 
 def test_convert(salt, water, lipase, dmso):

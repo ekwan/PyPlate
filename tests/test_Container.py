@@ -1,16 +1,7 @@
 import pytest
-from pyplate.pyplate import Substance, Container, Unit
+from pyplate.pyplate import Container, Unit
 from pyplate import config
-
-
-@pytest.fixture
-def water() -> Substance:
-    return Substance.liquid('H2O', mol_weight=18.0153, density=1)
-
-
-@pytest.fixture
-def salt() -> Substance:
-    return Substance.solid('NaCl', 58.4428)
+from .fixtures import water, salt
 
 
 @pytest.fixture
