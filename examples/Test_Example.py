@@ -42,6 +42,6 @@ recipe6 = Recipe()
 recipe6.create_stock_solution(salt, 0.5, water, '10 mL')
 salt_water2, = recipe6.bake()
 
-salt_water3 = salt_water2.evaporate()
+salt_water3 = salt_water2.remove()
 print(salt_water2)
 print(salt_water3)

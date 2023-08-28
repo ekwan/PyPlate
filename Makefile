@@ -9,5 +9,7 @@ test:
 coverage:
 	pytest --cov=pyplate --cov-report html tests
 
+all: docs coverage
+
 clean:
-	rm -rf docs
+	rm -rf docs htmlcov

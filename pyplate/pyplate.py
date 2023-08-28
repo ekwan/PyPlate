@@ -30,6 +30,7 @@ All values returned to the user are rounded to config.external_precision for eas
 
 # Allow typing reference while still building classes
 from __future__ import annotations
+
 from typing import Tuple, Dict, Iterable
 from copy import deepcopy, copy
 import numpy
@@ -101,6 +102,91 @@ class Unit:
         raise ValueError("Invalid unit {base_unit}.")
 
     @staticmethod
+    def convert_from(substance: Substance, quantity: float, from_unit: str, to_unit: str) -> float:
+        """
+                    Convert quantity of substance between units.
+
+                    Arguments:
+                        substance: Substance in question.
+                        quantity: Quantity of substance.
+                        from_unit: Unit to convert quantity from ('mL').
+                        to_unit: Unit to convert quantity to ('mol').
+
+                    Returns: Converted value.
+
+                """
+
+        if not isinstance(substance, Substance):
+            raise TypeError(f"Invalid type for substance, {type(substance)}")
+        if not isinstance(quantity, (int, float)):
+            raise TypeError("Quantity must be a float.")
+        if not isinstance(from_unit, str) or not isinstance(to_unit, str):
+            raise TypeError("Unit must be a str.")
+
+        if from_unit == 'U' and not substance.is_enzyme():
+            raise ValueError("Only enzymes can be measured in activity units. 'U'")
+        if from_unit == 'L' and not substance.is_liquid():
+            raise ValueError("Only liquids can be measured by volume. 'L'")
+
+        for suffix in ['U', 'L', 'g', 'mol']:
+            if from_unit.endswith(suffix):
+                prefix = from_unit[:-len(suffix)]
+                quantity *= Unit.convert_prefix_to_multiplier(prefix)
+                from_unit = suffix
+                break
+
+        result = None
+        if to_unit.endswith('U'):
+            prefix = to_unit[:-1]
+            if not substance.is_enzyme():
+                return 0
+            if not from_unit == 'U':
+                raise ValueError("Enzymes can only be measured in activity units. 'U'")
+            result = quantity
+        elif to_unit.endswith('L'):
+            prefix = to_unit[:-1]
+            if not substance.is_liquid():
+                return 0
+            if from_unit == 'L':
+                result = quantity
+            elif from_unit == 'mol':
+                # mol * g/mol / (g/mL)
+                result_in_mL = quantity * substance.mol_weight / substance.density
+                result = result_in_mL / 1000
+            elif from_unit == 'g':
+                # g / (g/mL)
+                result_in_mL = quantity / substance.density
+                result = result_in_mL / 1000
+        elif to_unit.endswith('mol'):
+            prefix = to_unit[:-3]
+            if from_unit == 'L':
+                value_in_mL = quantity * 1000
+                # mL * g/mL / (g/mol)
+                result = value_in_mL * substance.density / substance.mol_weight
+            elif from_unit == 'mol':
+                result = quantity
+            elif from_unit == 'g':
+                # g / (g/mol)
+                result = quantity / substance.mol_weight
+        elif to_unit.endswith('g'):
+            prefix = to_unit[:-1]
+            if from_unit == 'L':
+                value_in_mL = quantity * 1000
+                # mL * g/mL
+                result = value_in_mL * substance.density
+            elif from_unit == 'mol':
+                # mol * g/mol
+                result = quantity * substance.mol_weight
+            elif from_unit == 'g':
+                result = quantity
+        else:
+            raise ValueError("Only L, U, g, and mol are valid units.")
+
+        assert result is not None, f"{substance} {quantity} {from_unit} {to_unit}"
+
+        return result / Unit.convert_prefix_to_multiplier(prefix)
+
+    @staticmethod
     def convert(substance: Substance, quantity: str, unit: str) -> float:
         """
             Convert quantity of substance to unit.
@@ -122,61 +208,7 @@ class Unit:
             raise TypeError("Unit must be a str.")
 
         value, quantity_unit = Unit.parse_quantity(quantity)
-        if quantity_unit == 'U' and not substance.is_enzyme():
-            raise ValueError("Only enzymes can be measured in activity units. 'U'")
-        if quantity_unit == 'L' and not substance.is_liquid():
-            raise ValueError("Only liquids can be measured by volume. 'L'")
-
-        result = None
-        if unit.endswith('U'):
-            prefix = unit[:-1]
-            if not substance.is_enzyme():
-                return 0
-            if not quantity_unit == 'U':
-                raise ValueError("Enzymes can only be measured in activity units. 'U'")
-            result = value
-        elif unit.endswith('L'):
-            prefix = unit[:-1]
-            if not substance.is_liquid():
-                return 0
-            if quantity_unit == 'L':
-                result = value
-            elif quantity_unit == 'mol':
-                # mol * g/mol / (g/mL)
-                result_in_mL = value * substance.mol_weight / substance.density
-                result = result_in_mL / 1000
-            elif quantity_unit == 'g':
-                # g / (g/mL)
-                result_in_mL = value / substance.density
-                result = result_in_mL / 1000
-        elif unit.endswith('mol'):
-            prefix = unit[:-3]
-            if quantity_unit == 'L':
-                value_in_mL = value * 1000
-                # mL * g/mL / (g/mol)
-                result = value_in_mL * substance.density / substance.mol_weight
-            elif quantity_unit == 'mol':
-                result = value
-            elif quantity_unit == 'g':
-                # g / (g/mol)
-                result = value / substance.mol_weight
-        elif unit.endswith('g'):
-            prefix = unit[:-1]
-            if quantity_unit == 'L':
-                value_in_mL = value * 1000
-                # mL * g/mL
-                result = value_in_mL * substance.density
-            elif quantity_unit == 'mol':
-                # mol * g/mol
-                result = value * substance.mol_weight
-            elif quantity_unit == 'g':
-                result = value
-        else:
-            raise ValueError("Only L, U, g, and mol are valid units.")
-
-        assert result is not None
-
-        return result / Unit.convert_prefix_to_multiplier(prefix)
+        return Unit.convert_from(substance, value, quantity_unit, unit)
 
     @staticmethod
     def convert_to_unit_value(substance: Substance, quantity: str, volume: float = 0.0) -> float:
@@ -387,11 +419,12 @@ class Substance:
         self.molecule = molecule
 
     def __repr__(self):
-        if self.is_solid():
-            return f"SOLID ({self.name}: {self.mol_weight})"
-        if self.is_liquid():
-            return f"LIQUID ({self.name}: {self.mol_weight}, {self.density})"
-        return f"ENZYME ({self.name})"
+        # if self.is_solid():
+        #     return f"SOLID ({self.name}: {self.mol_weight})"
+        # if self.is_liquid():
+        #     return f"LIQUID ({self.name}: {self.mol_weight}, {self.density})"
+        # return f"ENZYME ({self.name})"
+        return f"{self.name} ({'SOLID' if self.is_solid() else 'LIQUID' if self.is_liquid() else 'ENZYME'})"
 
     def __eq__(self, other):
         if not isinstance(other, Substance):
@@ -597,10 +630,9 @@ class Container:
         if unit != 'L':
             raise ValueError("We can only transfer volumes from other containers.")
         if volume_to_transfer > source_container.volume:
-            raise ValueError("Not enough mixture left in source container." +
-                             f" {Unit.convert_from_storage(volume_to_transfer, 'mL')} mL "
-                             f" needed of {source_container.name}" +
-                             f" out of {Unit.convert_from_storage(source_container.volume, 'mL')} mL.")
+            raise ValueError(f"Not enough mixture left in source container ({source_container.name}). " +
+                             f"Only {Unit.convert_from_storage(source_container.volume, 'mL')} mL available, " +
+                             f"{Unit.convert_from_storage(volume_to_transfer, 'mL')} mL needed.")
         # source_container, to = source_container.copy(), self.copy()
         source_container, to = deepcopy(source_container), deepcopy(self)
         ratio = volume_to_transfer / source_container.volume
@@ -653,10 +685,19 @@ class Container:
         return source_slice.plate, to_array[0]
 
     def __repr__(self):
+        contents = []
+        for substance, value in sorted(self.contents.items(), key=lambda elem: (elem[0]._type, -elem[1])):
+            if substance.is_enzyme():
+                contents.append(f"{substance}: {value}")
+            else:
+                unit = Unit.get_human_readable_unit(Unit.convert_from_storage(value, 'mol'), 'mmol')
+                contents.append(
+                    f"{substance}: {round(Unit.convert_from_storage(value, unit), config.external_precision)} {unit}")
+
         max_volume = ('/' + str(Unit.convert_from_storage(self.max_volume, 'mL'))) \
             if self.max_volume != float('inf') else ''
         return f"Container ({self.name}) ({Unit.convert_from_storage(self.volume, 'mL')}" + \
-            f"{max_volume} mL of ({self.contents})"
+            f"{max_volume} mL of ({contents})"
 
     @staticmethod
     def add(source: Substance, destination: Container, quantity: str) -> Container:
@@ -736,24 +777,29 @@ class Container:
             container = container.add(solvent, container, f"{volume} L")
             container = container.add(solute, container, f"{round(moles_to_add, config.internal_precision)} mol")
         else:  # Liquid
-            volume_to_add = round(moles_to_add * solute.mol_weight / solute.density, config.external_precision)
+            volume_to_add = round(moles_to_add * solute.mol_weight / solute.density, config.internal_precision)
             if volume_to_add >= volume * 1000:
                 raise ValueError("Solution could not be made. No room for the solvent and/or some of the solute.")
             container = container.add(solvent, container, f"{volume * 1000 - volume_to_add} mL")
-            container = container.add(solute, container, f"{volume_to_add} mL")
+            container = container.add(solute, container, f"{moles_to_add} mol")
         return container
 
-    def evaporate(self):
+    def remove(self, what=Substance.LIQUID):
         """
-        Removes all liquids from `Container`
+        Removes substances from `Container`
 
-        Returns: New Container with no liquids.
+        Arguments:
+            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
+
+        Returns: New Container with requested substances removed.
 
         """
         new_container = deepcopy(self)
-        new_container.volume = 0.
         new_container.contents = {substance: value for substance, value in self.contents.items()
-                                  if not substance.is_liquid()}
+                                  if substance._type != what and substance != what}
+        new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
+                                   config.moles_prefix, config.volume_prefix) for substance, value in
+                                   new_container.contents.items())
         return new_container
 
     def dilute(self, solute: Substance, concentration: float, solvent: Substance):
@@ -780,26 +826,27 @@ class Container:
         if solute not in self.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
 
-        if solute.is_solid():
-            current_mmoles = Unit.convert_from_storage(self.contents[solute], 'mmol')
-        elif solute.is_liquid():
-            current_mmoles = 1000 * Unit.convert_from_storage(self.contents[solute],
-                                                              'mL') * solute.density / solute.mol_weight
+        if solute.is_enzyme():
+            # TODO: Support this.
+            raise ValueError("Not currently supported.")
 
-        current_volume = Unit.convert_from_storage(self.volume, 'mL')
-        current_concentration = float('inf') if self.volume == 0 else current_mmoles / current_volume
+        current_mmoles = Unit.convert_from_storage(self.contents[solute], 'mmol')
+        current_volume_in_mL = Unit.convert_from_storage(self.volume, 'mL')
+        current_concentration = float('inf') if self.volume == 0 else current_mmoles / current_volume_in_mL
+
+        if abs(concentration - current_concentration) <= 1e-6:
+            return deepcopy(self)
 
         if concentration > current_concentration:
             raise ValueError("Desired concentration is higher than current concentration.")
-        if concentration == current_concentration:
-            return deepcopy(self)
-        desired_volume = current_umoles / concentration
-        if desired_volume > Unit.convert_from_storage(self.max_volume, 'uL'):
+
+        desired_volume_in_mL = current_mmoles / concentration
+        if Unit.convert_to_storage(desired_volume_in_mL, 'mL') > self.max_volume:
             raise ValueError("Dilute solution will not fit in container.")
 
-        current_solvent_volume = Unit.convert_from_storage(self.contents.get(solvent, 0), 'uL')
-        required_volume = desired_volume - current_solvent_volume
-        return Container.add(solvent, self, f"{required_volume} uL")
+        required_volume = desired_volume_in_mL - current_volume_in_mL
+
+        return Container.add(solvent, self, f"{required_volume} mL")
 
 
 class Plate:
@@ -975,15 +1022,17 @@ class Plate:
         # noinspection PyProtectedMember
         return PlateSlicer._transfer(source, destination, volume)
 
-    def evaporate(self):
+    def remove(self, what=Substance.LIQUID):
         """
-        Removes all liquids from slice
+        Removes substances from `Plate`
 
-        Returns: New Container with no liquids.
+        Arguments:
+            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
+
+        Returns: New Plate with requested substances removed.
 
         """
-
-        return self[:].evaporate()
+        return self[:].remove(what)
 
 
 class Recipe:
@@ -1130,12 +1179,13 @@ class Recipe:
         self.steps.append(('stock', new_container, what, concentration, solvent, volume))
         return new_container
 
-    def evaporate(self, destination: Container | Plate | PlateSlicer):
+    def remove(self, destination: Container | Plate | PlateSlicer, what=Substance.LIQUID):
         """
-        Adds a step to remove all liquids from destination.
+        Adds a step to removes substances from destination.
 
         Arguments:
-            destination: What to evaporate liquids from.
+            destination: What to remove from.
+            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
         """
 
         if isinstance(destination, PlateSlicer):
@@ -1147,7 +1197,7 @@ class Recipe:
         else:
             raise TypeError(f"Invalid destination type: {type(destination)}")
 
-        self.steps.append(('evaporate', destination))
+        self.steps.append(('remove', what, destination))
 
     def bake(self):
         """
@@ -1220,8 +1270,8 @@ class Recipe:
                 to_index = self.indexes[to]
                 self.used.add(to_index)
                 self.results[to_index] = Container.create_stock_solution(what, concentration, solvent, volume)
-            elif operation == 'evaporate':
-                to, = rest
+            elif operation == 'remove':
+                what, to = rest
                 to_index = self.indexes[to] if not isinstance(to, PlateSlicer) else self.indexes[to.plate]
                 self.used.add(to_index)
 
@@ -1232,7 +1282,7 @@ class Recipe:
                 else:
                     to = self.results[to_index]
 
-                self.results[to_index] = to.evaporate()
+                self.results[to_index] = to.remove(what)
 
         if len(self.used) != len(self.indexes):
             raise ValueError("Something declared as used wasn't used.")
@@ -1395,22 +1445,17 @@ class PlateSlicer(Slicer):
 
         return numpy.vectorize(helper, cache=True)(self.get())
 
-    def evaporate(self):
+    def remove(self, what=Substance.LIQUID):
         """
-        Removes all liquids from slice
+        Removes substances from slice
 
-        Returns: New Container with no liquids.
+        Arguments:
+            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
+
+        Returns: New Plate with requested substances removed.
 
         """
-
-        def evaporate_helper(elem):
-            new_container = deepcopy(elem)
-            new_container.volume = 0.
-            new_container.contents = {substance: value for substance, value in elem.contents.items()
-                                      if not substance.is_liquid()}
-            return new_container
-
-        result = numpy.vectorize(evaporate_helper, cache=True)(self.get())
+        result = numpy.vectorize(lambda elem: elem.remove(what), cache=True)(self.get())
         self.plate = deepcopy(self.plate)
         if result.size == 1:
             self.set(result.item())

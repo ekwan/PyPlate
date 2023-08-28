@@ -6,26 +6,28 @@ from pyplate.pyplate import Substance, Container, Plate, Recipe
 print("reagents:")
 sodium_sulfate = Substance.solid("sodium sulfate", mol_weight=142.04)
 triethylamine = Substance.liquid("triethylamine", mol_weight=101.19, density=0.726)
+water_tap = Substance.liquid("tap water", 18.0153, 1)
+water_DI = Substance.liquid("DI water", 18.0153, 1)
+DMSO = Substance.liquid("DMSO", 78.13, 1.1004)
 print(sodium_sulfate)
 print(triethylamine)
+print(water_tap)
+print(water_DI)
+print(DMSO)
 print()
 
 # create solvents
 print("solvents:")
-water_DI = Substance.liquid("DI water", 18.0153, 1)
-water_DI_stock = Container("DI water", max_volume='10 mL', initial_contents=[(water_DI, "10 mL")])
-water_tap = Substance.liquid("tap water", 18.0153, 1)
-water_tap_stock = Container("tap water", max_volume='20 mL', initial_contents=[(water_tap, "20 mL")])
-DMSO = Substance.liquid("DMSO", 78.13, 1.1004)
-DMSO_stock = Container("DMSO", max_volume='15 mL', initial_contents=[(DMSO, "15 mL")])
-print(water_DI)
-print(water_tap)
-print(DMSO)
+water_DI_container = Container("DI water", max_volume='10 mL', initial_contents=[(water_DI, "10 mL")])
+water_tap_container = Container("tap water", max_volume='20 mL', initial_contents=[(water_tap, "20 mL")])
+DMSO_container = Container("DMSO", max_volume='15 mL', initial_contents=[(DMSO, "15 mL")])
+print(water_DI_container)
+print(water_tap_container)
+print(DMSO_container)
 print()
 
 # create stocks
 # concentrations in M
-# volumes in M
 print("stock solutions:")
 sodium_sulfate_halfM = Container.create_stock_solution(sodium_sulfate, 0.5, solvent=water_DI, volume='10.0 mL')
 triethylamine_10mM = Container.create_stock_solution(triethylamine, 0.01, DMSO, volume='10.0 mL')
@@ -47,15 +49,17 @@ for k, v in {(1, 1): 1.0, ("A", 2): 2.0, (1, 3): 3.0, (3, 3): 7.0, ("D", 3): 10.
     recipe.transfer(sodium_sulfate_halfM, plate[k], f"{v} uL")
 for k, v in {"D:10": 1.0, (5, 10): 2.0, (5, "11"): 3.0}.items():
     recipe.transfer(triethylamine_10mM, plate[k], f"{v} uL")
-# recipe.transfer(triethylamine_10mM, plate["D:10"], "20_000 uL")
+# recipe.transfer(triethylamine_10mM, plate["D:10"], "20 mL")
 
 plate, sodium_sulfate_halfM, triethylamine_10mM = recipe.bake()
 
-print(plate.volumes())
+print('first recipe:')
+print('volumes in uL:')
+print(plate.volumes(unit='uL'))
 print(sodium_sulfate_halfM)
-# exit()
+print()
 
-recipe2 = Recipe().uses(plate, triethylamine_10mM, water_DI_stock, DMSO_stock)
+recipe2 = Recipe().uses(plate, triethylamine_10mM, water_DI_container, DMSO_container)
 for i in range(1, plate.n_columns+1):
     recipe2.transfer(triethylamine_10mM, plate[1, i], f"{30 * i} uL")
 recipe2.transfer(triethylamine_10mM, plate[6], "2 uL")
@@ -63,10 +67,14 @@ recipe2.transfer(triethylamine_10mM, plate[7:"H"], "7 uL")
 recipe2.transfer(triethylamine_10mM, plate[:, "10"], "8 uL")
 recipe2.transfer(triethylamine_10mM, plate[:, 11:12], "9 uL")
 
-recipe2.transfer(water_DI_stock, plate[1:8], "20 uL")
-recipe2.transfer(DMSO_stock, plate[:, 1:12], "1 uL")
+recipe2.transfer(water_DI_container, plate[1:8], "20 uL")
+recipe2.transfer(DMSO_container, plate[:, 1:12], "1 uL")
 
-plate, triethylamine_10mM, water_DI_stock, DMSO_stock = recipe2.bake()
+plate, triethylamine_10mM, water_DI_container, DMSO_container = recipe2.bake()
+print('second recipe:')
+print('volumes in uL:')
+print(plate.volumes(unit='uL'))
+print(DMSO_container)
 print()
 
 # print total volumes
@@ -81,15 +89,34 @@ for substance in plate.substances():
         print(f"{substance.name} : {plate.volumes(substance).sum():.1f} uL")
 print()
 
-exit()
 
 # print moles
 print("micromoles:\n")
-for i in range(len(plate.moles)):
-    print(plate.reagents[i])
-    print(plate.moles[i, :, :])
+for substance in plate.substances():
+    print(f"{substance.name}:")
+    print(plate.moles(substance, 'umol'))
     print()
 print()
+
+
+plate = plate.remove()
+print(plate.substances())
+print(plate.volumes(unit='mL'))
+
+triethylamine_10mM = Container.create_stock_solution(triethylamine, 0.01, DMSO, volume='10.0 mL')
+print(triethylamine_10mM)
+print("Diluting to 0.005 M")
+result = triethylamine_10mM.dilute(triethylamine, 0.005, DMSO)
+print(result)
+print("New concentration:", result.contents[triethylamine]/result.volume)
+
+sodium_sulfate_halfM = Container.create_stock_solution(sodium_sulfate, 0.5, solvent=water_DI, volume='10.0 mL')
+print(sodium_sulfate_halfM)
+result = sodium_sulfate_halfM.dilute(sodium_sulfate, 0.25, water_DI)
+print(result)
+print(result.contents[sodium_sulfate]/result.volume)
+
+exit()
 
 # dump plate to excel
 filename = "plate.xlsx"
