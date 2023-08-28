@@ -1,8 +1,7 @@
-from pyplate import config
-from pyplate.pyplate import Plate, Substance, Container, Unit
 import pytest
 import numpy
-from .fixtures import water, salt, dmso, sodium_sulfate
+from pyplate import config
+from pyplate.pyplate import Plate, Container, Unit
 
 
 @pytest.fixture

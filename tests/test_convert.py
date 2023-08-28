@@ -1,6 +1,5 @@
-from pyplate.pyplate import Unit, Substance
 import pytest
-from .fixtures import salt, water, lipase, dmso
+from pyplate.pyplate import Unit
 
 
 def test_convert(salt, water, lipase, dmso):

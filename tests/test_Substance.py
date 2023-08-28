@@ -1,6 +1,5 @@
 import pytest
 from pyplate.pyplate import Substance
-from .fixtures import salt, water, lipase
 
 
 def test_make_solid():

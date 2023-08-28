@@ -1,6 +1,6 @@
 import pytest
-from pyplate.slicer import Slicer
 import numpy as np
+from pyplate.slicer import Slicer
 
 
 @pytest.fixture

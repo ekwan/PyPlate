@@ -1,12 +1,6 @@
 import pytest
 import numpy
 from pyplate.pyplate import Plate
-from .fixtures import salt, water, dmso
-
-
-@pytest.fixture
-def empty_plate() -> Plate:
-    return Plate('plate', '100 uL')  # 100 uL
 
 
 def test_make_Plate():

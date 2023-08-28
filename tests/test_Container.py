@@ -1,17 +1,6 @@
 import pytest
 from pyplate.pyplate import Container, Unit
 from pyplate import config
-from .fixtures import water, salt
-
-
-@pytest.fixture
-def water_stock(water) -> Container:
-    return Container('water', initial_contents=((water, '10 mL'),))
-
-
-@pytest.fixture
-def salt_water(water, salt) -> Container:
-    return Container('salt water', initial_contents=((water, '100 mL'), (salt, '50 mmol')))
 
 
 def test_make_Container(water, salt):
