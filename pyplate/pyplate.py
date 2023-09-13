@@ -316,6 +316,7 @@ class Unit:
         """
         if value == 0:
             return unit
+        value = abs(value)
         if unit[-1] == 'L':
             unit = 'L'
         elif unit[-3:] == 'mol':
@@ -332,6 +333,42 @@ class Unit:
         multiplier = max(multiplier, 1e-6)
 
         return {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
+
+    @staticmethod
+    def calculate_concentration_ratio(solute: Substance, concentration: str, solvent: Substance):
+        c, numerator, denominator = Unit.parse_concentration(concentration)
+        if numerator not in ('g', 'L', 'mol'):
+            raise ValueError("Invalid unit in numerator.")
+        if denominator not in ('g', 'L', 'mol'):
+            raise ValueError("Invalid unit in denominator.")
+
+        ratio = None  # ration of solute to solvent in moles
+        if numerator == 'g':
+            if denominator == 'g':
+                ratio = c * solvent.mol_weight / (1 - c) / solute.mol_weight
+            elif denominator == 'mol':
+                ratio = c / (solute.mol_weight - c)
+            elif denominator == 'L':
+                c /= 1000  # g/mL
+                ratio = c * solvent.mol_weight / (solute.mol_weight * solvent.density * (1 - c / solute.density))
+        elif numerator == 'L':
+            if denominator == 'g':
+                c *= 1000  # mL/g
+                ratio = c * solvent.mol_weight / (solute.mol_weight * (1 / solute.density - c))
+            elif denominator == 'mol':
+                c *= 1000  # mL/mol
+                ratio = c / (solute.mol_weight / solute.density - c)
+            elif denominator == 'L':
+                ratio = c * solvent.mol_weight / solvent.density / (solute.mol_weight / solute.density) / (1 - c)
+        elif numerator == 'mol':
+            if denominator == 'g':
+                ratio = c * solvent.mol_weight / (1 - c * solute.mol_weight)
+            elif denominator == 'mol':
+                ratio = c / (1 - c)
+            elif denominator == 'L':
+                c /= 1000  # mol/mL
+                ratio = c * solvent.mol_weight / solvent.density / (1 - c * solute.mol_weight / solute.density)
+        return ratio
 
 
 class Substance:
@@ -738,38 +775,10 @@ class Container:
         if not name:
             name = f"{solute.name} {concentration:.2}M"
 
-        c, numerator, denominator = Unit.parse_concentration(concentration)
-        if numerator not in ('g', 'L', 'mol'):
-            raise ValueError("Invalid unit in numerator.")
-        if denominator not in ('g', 'L', 'mol'):
-            raise ValueError("Invalid unit in denominator.")
+        ratio = Unit.calculate_concentration_ratio(solute, concentration, solvent)
 
-        ratio = None    # ration of solute to solvent in moles
-        if numerator == 'g':
-            if denominator == 'g':
-                ratio = c * solvent.mol_weight / (1 - c) / solute.mol_weight
-            elif denominator == 'mol':
-                ratio = c / (solute.mol_weight - c)
-            elif denominator == 'L':
-                c /= 1000   # g/mL
-                ratio = c * solvent.mol_weight / (solute.mol_weight * solvent.density * (1 - c/solute.density))
-        elif numerator == 'L':
-            if denominator == 'g':
-                c *= 1000   # mL/g
-                ratio = c * solvent.mol_weight / (solute.mol_weight * (1/solute.density - c))
-            elif denominator == 'mol':
-                c *= 1000   # mL/mol
-                ratio = c / (solute.mol_weight/solute.density - c)
-            elif denominator == 'L':
-                ratio = c * solvent.mol_weight / solvent.density / (solute.mol_weight / solute.density) / (1 - c)
-        elif numerator == 'mol':
-            if denominator == 'g':
-                ratio = c * solvent.mol_weight / (1 - c * solute.mol_weight)
-            elif denominator == 'mol':
-                ratio = c / (1 - c)
-            elif denominator == 'L':
-                c /= 1000   # mol/mL
-                ratio = c * solvent.mol_weight / solvent.density / (1 - c * solute.mol_weight / solute.density)
+        if ratio <= 0:
+            raise ValueError("Solution is impossible to create.")
 
         if quantity_unit == 'g':
             ratio *= solute.mol_weight / solvent.mol_weight
@@ -779,60 +788,12 @@ class Container:
             ratio *= (solute.mol_weight / solute.density) / (solvent.mol_weight / solvent.density)
         else:
             raise ValueError("Invalid quantity unit.")
+
         y = quantity / (1 + ratio)
         x = quantity - y
+
+        assert x >= 0 and y >= 0
         return Container(name, initial_contents=((solute, f"{x} {quantity_unit}"), (solvent, f"{y} {quantity_unit}")))
-
-
-
-    @staticmethod
-    def create_stock_solution(solute: Substance, concentration: float, solvent: Substance, volume: str, name=None):
-        """
-        Create a stock solution.
-
-        Note: solids are assumed to have zero volume.
-
-        Arguments:
-            solute: What to dissolve.
-            concentration: Desired concentration in mol/L.
-            solvent: What to dissolve with.
-            volume: Desired total volume in mL.
-            name: Optional name for new container.
-
-        Returns:
-            New container with desired solution.
-        """
-        if not isinstance(solute, Substance):
-            raise TypeError("Solute must be a Substance.")
-        if not isinstance(concentration, (int, float)):
-            raise TypeError("Concentration must be a float.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a Substance.")
-        if not isinstance(volume, str):
-            raise TypeError("Volume must be a str.")
-        if name and not isinstance(name, str):
-            raise TypeError("Name must be a str.")
-
-        volume, _ = Unit.parse_quantity(volume)
-        if volume <= 0:
-            raise ValueError("Volume must be positive.")
-
-        if not name:
-            name = f"{solute.name} {concentration:.2}M"
-        container = Container(name)
-        moles_to_add = volume * concentration
-        if solute.is_enzyme():
-            raise TypeError("You can't add enzymes by molarity.")
-        if solute.is_solid():
-            container = container.add(solvent, container, f"{volume} L")
-            container = container.add(solute, container, f"{round(moles_to_add, config.internal_precision)} mol")
-        else:  # Liquid
-            volume_to_add = round(moles_to_add * solute.mol_weight / solute.density, config.internal_precision)
-            if volume_to_add >= volume * 1000:
-                raise ValueError("Solution could not be made. No room for the solvent and/or some of the solute.")
-            container = container.add(solvent, container, f"{volume * 1000 - volume_to_add} mL")
-            container = container.add(solute, container, f"{moles_to_add} mol")
-        return container
 
     def remove(self, what=Substance.LIQUID):
         """
@@ -852,13 +813,13 @@ class Container:
                                    new_container.contents.items())
         return new_container
 
-    def dilute(self, solute: Substance, concentration: float, solvent: Substance, new_name=None):
+    def dilute(self, solute: Substance, concentration: str, solvent: Substance, new_name=None):
         """
         Dilutes `solute` in solution to `concentration`.
 
         Args:
             solute: Substance which is subject to dilution.
-            concentration: Desired concentration in mol/L.
+            concentration: Desired concentration.
             solvent: What to dilute with.
             new_name: Optional name for new container.
 
@@ -867,10 +828,8 @@ class Container:
         """
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
-        if not isinstance(concentration, (int, float)):
-            raise TypeError("Concentration must be a float.")
-        if concentration <= 0:
-            raise ValueError("Concentration must be positive.")
+        if not isinstance(concentration, str):
+            raise TypeError("Concentration must be a str.")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a substance.")
         if new_name and not isinstance(new_name, str):
@@ -882,21 +841,23 @@ class Container:
             # TODO: Support this.
             raise ValueError("Not currently supported.")
 
-        current_mmoles = Unit.convert_from_storage(self.contents[solute], 'mmol')
-        current_volume_in_mL = Unit.convert_from_storage(self.volume, 'mL')
-        current_concentration = float('inf') if self.volume == 0 else current_mmoles / current_volume_in_mL
+        current_ratio = self.contents[solute] / sum(self.contents[substance] for substance in self.contents)
+        new_ratio = Unit.calculate_concentration_ratio(solute, concentration, solvent)
 
-        if abs(concentration - current_concentration) <= 1e-6:
+        if new_ratio <= 0:
+            raise ValueError("Solution is impossible to create.")
+
+        if abs(new_ratio - current_ratio) <= 1e-6:
             return deepcopy(self)
 
-        if concentration > current_concentration:
+        if new_ratio > current_ratio:
             raise ValueError("Desired concentration is higher than current concentration.")
 
-        desired_volume_in_mL = current_mmoles / concentration
-        if Unit.convert_to_storage(desired_volume_in_mL, 'mL') > self.max_volume:
+        current_umoles = Unit.convert_from_storage(self.contents[solvent], 'umol')
+        required_umoles = Unit.convert_from_storage(self.contents[solute], 'umol') / new_ratio - current_umoles
+        new_volume = self.volume + Unit.convert(solvent, f"{required_umoles} umol", config.volume_prefix)
+        if new_volume > self.max_volume:
             raise ValueError("Dilute solution will not fit in container.")
-
-        required_volume = desired_volume_in_mL - current_volume_in_mL
 
         if new_name:
             # Note: this copies the container twice
@@ -904,7 +865,7 @@ class Container:
             destination.name = new_name
         else:
             destination = self
-        return Container.add(solvent, destination, f"{required_volume} mL")
+        return Container.add(solvent, destination, f"{required_umoles} umol")
 
 
 class Plate:
@@ -1212,17 +1173,17 @@ class Recipe:
                 self.steps.append(('add', substance, new_container, quantity))
         return new_container
 
-    def create_stock_solution(self, solute: Substance, concentration: float,
-                              solvent: Substance, volume: str, name=None):
+    def create_solution(self, solute: Substance, concentration: str,
+                        solvent: Substance, quantity: str, name=None):
         """
 
         Adds a step to the recipe which creates a stock solution.
 
         Arguments:
             solute: What to dissolve.
-            concentration: Desired concentration in mol/L
+            concentration: Desired concentration.
             solvent: What to dissolve with.
-            volume: Desired total volume. ('10 mL')
+            quantity: Desired total quantity. ('10 mL')
             name: Optional name for new container.
 
         Returns:
@@ -1233,20 +1194,24 @@ class Recipe:
             raise RuntimeError("This recipe is locked.")
         if not isinstance(solute, Substance):
             raise TypeError("What must be a Substance.")
-        if not isinstance(concentration, float):
-            raise TypeError("Concentration must be a float.")
+        if not isinstance(concentration, str):
+            raise TypeError("Concentration must be a str.")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a Substance.")
-        if not isinstance(volume, str):
-            raise TypeError("Volume must be a str.")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str.")
         if name and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
         if not name:
-            name = f"{solute.name} {concentration:.2}M"
+            name = f"{solute.name} {concentration}"
+        ratio = Unit.calculate_concentration_ratio(solute, concentration, solvent)
+        if ratio <= 0:
+            raise ValueError("Solution is impossible to create.")
+
         new_container = Container(name)
         self.uses(new_container)
-        self.steps.append(('stock', new_container, solute, concentration, solvent, volume))
+        self.steps.append(('solution', new_container, solute, concentration, solvent, quantity))
         return new_container
 
     def remove(self, destination: Container | Plate | PlateSlicer, what=Substance.LIQUID):
@@ -1270,7 +1235,7 @@ class Recipe:
         self.steps.append(('remove', what, destination))
 
     def dilute(self, destination: Container, solute: Substance,
-               concentration: float, solvent: Substance, new_name=None):
+               concentration: str, solvent: Substance, new_name=None):
         """
         Adds a step to dilute `solute` in `destination` to `concentration`.
 
@@ -1284,10 +1249,8 @@ class Recipe:
 
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
-        if not isinstance(concentration, (int, float)):
+        if not isinstance(concentration, str):
             raise TypeError("Concentration must be a float.")
-        if concentration <= 0:
-            raise ValueError("Concentration must be positive.")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a substance.")
         if new_name and not isinstance(new_name, str):
@@ -1296,6 +1259,10 @@ class Recipe:
             raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
         if solute not in destination.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
+
+        ratio = Unit.calculate_concentration_ratio(solute, concentration, solvent)
+        if ratio <= 0:
+            raise ValueError("Concentration is impossible to create.")
 
         if solute.is_enzyme():
             # TODO: Support this.
@@ -1372,11 +1339,11 @@ class Recipe:
 
                 self.results[frm_index] = frm
                 self.results[to_index] = dest
-            elif operation == 'stock':
-                dest, what, concentration, solvent, volume = rest
+            elif operation == 'solution':
+                dest, solute, concentration, solvent, volume = rest
                 to_index = self.indexes[dest]
                 self.used.add(to_index)
-                self.results[to_index] = Container.create_stock_solution(what, concentration, solvent, volume)
+                self.results[to_index] = Container.create_solution(solute, concentration, solvent, volume)
             elif operation == 'remove':
                 what, dest = rest
                 to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
@@ -1519,7 +1486,7 @@ class PlateSlicer(Slicer):
 
         def helper(elem):
             """ Returns volume of elem. """
-            if substance.is_liquid() and substance in elem.contents:
+            if substance in elem.contents:
                 quantity = f"{elem.contents[substance]} {config.moles_prefix}"
                 return round(Unit.convert(substance, quantity, unit), config.external_precision)
             return 0

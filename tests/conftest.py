@@ -43,4 +43,4 @@ def lipase() -> Substance:
 
 @pytest.fixture
 def empty_plate() -> Plate:
-    return Plate('plate', '100 uL')  # 100 uL
+    return Plate('plate', '200 uL')  # 100 uL

@@ -7,5 +7,5 @@ external_precision: 3
 volume_storage: uL
 # 1e-6 means we will store moles as micromoles
 moles_storage: umol
-# density in g/mL or inf
+# density in g/mL
 solid_density: 1

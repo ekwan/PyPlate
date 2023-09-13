@@ -16,12 +16,13 @@ def plate2() -> Plate:
 
 @pytest.fixture
 def solution1(water, salt) -> Container:
-    return Container('sol1', initial_contents=[(water, '100 mL'), (salt, '50 mol')])
+    return Container('sol1', initial_contents=[(water, '100 mL'), (salt, '50 mmol')])
 
 
 @pytest.fixture
 def solution2(dmso, sodium_sulfate) -> Container:
-    return Container('sol2', initial_contents=[(dmso, '100 mL'), (sodium_sulfate, '50 mol')])
+    return Container('sol2', initial_contents=[(dmso, '100 mL'), (sodium_sulfate, '50 mmol')])
+
 
 
 def test_add_to_container(salt, water):
@@ -29,10 +30,10 @@ def test_add_to_container(salt, water):
     Tests adding a substance to a container.
     """
     container = Container('container', max_volume='10 mL')
-    container = Container.add(salt, container, '10 mol')
+    container = Container.add(salt, container, '10 umol')
 
     # container should contain 10 moles of salt
-    assert salt in container.contents and container.contents[salt] == Unit.convert(salt, '10 mol', config.moles_prefix)
+    assert salt in container.contents and container.contents[salt] == Unit.convert(salt, '10 umol', config.moles_prefix)
 
     container1 = Container('container', max_volume='20 mL')
     container1 = Container.add(water, container1, '10 mL')
@@ -41,69 +42,75 @@ def test_add_to_container(salt, water):
     assert container1.contents[water] == Unit.convert(water, '10 mL', config.moles_prefix)
     assert container1.volume == Unit.convert_to_storage(10, 'mL')
 
-    container2 = Container.add(salt, container1, '5 mol')
-    # container2's volume shouldn't be changed by adding salt
-    assert container2.volume == Unit.convert_to_storage(10, 'mL')
+    container2 = Container.add(salt, container1, '5 umol')
+    assert container2.volume == Unit.convert_to_storage(10, 'mL') + Unit.convert(salt, '5 umol', config.volume_prefix)
 
     container3 = Container.add(water, container2, '5 mL')
     # water should stack in the contents and the volume should be updated
     assert container3.contents[water] == Unit.convert(water, '15 mL', config.moles_prefix)
-    assert container3.volume == Unit.convert_to_storage(15, 'mL')
+    assert container3.volume == Unit.convert_to_storage(15, 'mL') + Unit.convert(salt, '5 umol', config.volume_prefix)
 
     # the original container should be unchanged
-    assert container.volume == 0
-    assert container.contents[salt] == Unit.convert(salt, '10 mol', config.moles_prefix)
+    assert container.volume == pytest.approx(Unit.convert(salt, '10 umol', config.volume_prefix))
+    assert container.contents[salt] == Unit.convert(salt, '10 umol', config.moles_prefix)
 
 
-def test_transfer_between_containers(solution1, solution2, water, salt):
+def test_transfer_between_containers(solution1, solution2, water, salt, dmso, sodium_sulfate):
     """
     Tests transferring from one container to another.
     """
-    solution3, solution4 = Container.transfer(solution1, solution2, '10 mL')  # solution2.transfer(solution1, '10 mL')
+    # solution1 has 100mL of water and 50 nmol of solt
+    # solution2 has 100mL of dmso and 50 nmol of sodium sulfate
+    solution1_volume = 100 + Unit.convert(salt, '50 mmol', 'mL')
+    solution2_volume = 100 + Unit.convert(sodium_sulfate, '50 mmol', 'mL')
+    solution3, solution4 = Container.transfer(solution1, solution2, f"{solution1_volume*0.1} mL")
     # original solutions should be unchanged
-    assert solution1.volume == Unit.convert_to_storage(100, 'mL')
-    assert solution2.volume == Unit.convert_to_storage(100, 'mL')
+    assert solution1.volume == Unit.convert_to_storage(solution1_volume, 'mL')
+    assert solution2.volume == Unit.convert_to_storage(solution2_volume, 'mL')
     # 10 mL of water and 5 moles of salt should have been transferred
-    assert solution3.volume == Unit.convert_to_storage(90, 'mL')
-    assert solution4.volume == Unit.convert_to_storage(110, 'mL')
+    assert solution3.volume == Unit.convert_to_storage(solution1_volume*0.9, 'mL')
+    assert solution4.volume == Unit.convert_to_storage(solution2_volume + solution1_volume*0.1, 'mL')
     assert solution3.contents[water] == Unit.convert(water, '90 mL', config.moles_prefix)
-    assert solution3.contents[salt] == Unit.convert(salt, '45 mol', config.moles_prefix)
-    assert solution4.contents[water] == Unit.convert(water, '10 mL', config.moles_prefix)
-    assert solution4.contents[salt] == Unit.convert(salt, '5 mol', config.moles_prefix)
+    assert solution3.contents[salt] == Unit.convert(salt, '45 mmol', config.moles_prefix)
+    assert solution4.contents[water] == pytest.approx(Unit.convert(water, '10 mL', config.moles_prefix))
+    assert solution4.contents[salt] == Unit.convert(salt, '5 mmol', config.moles_prefix)
 
 
 def test_add_to_slice(plate1, salt):
     """
     Tests adding a substance to each well in a slice.
     """
-    plate3 = Plate.add(salt, plate1[:], '10 mol')
+    plate3 = Plate.add(salt, plate1[:], '10 umol')
     # 10 moles of salt should be in each well
-    assert numpy.array_equal(plate3.moles(salt), numpy.full(plate3.wells.shape, 10))
+    assert numpy.array_equal(plate3.moles(salt, 'umol'), numpy.full(plate3.wells.shape, 10))
     # Original plate should be unchanged
     assert numpy.array_equal(plate1.moles(salt), numpy.zeros(plate1.wells.shape))
 
-    plate3 = Plate.add(salt, plate1[1, 1], '10 mol')
+    plate3 = Plate.add(salt, plate1[1, 1], '10 umol')
     expected_moles = numpy.zeros(plate3.wells.shape)
     expected_moles[0, 0] = 10
-    assert numpy.array_equal(plate3.moles(salt), expected_moles)
+    assert numpy.array_equal(plate3.moles(salt, 'umol'), expected_moles)
     assert numpy.array_equal(plate1.moles(salt), numpy.zeros(plate1.wells.shape))
 
 
-def test_transfer_to_slice(plate1, solution1):
+def test_transfer_to_slice(plate1, solution1, salt):
     """
     Tests transferring from a container to each well in a slice.
     """
-    solution3, plate3 = Plate.transfer(solution1, plate1[:], '1 mL')  # plate1[:].transfer(solution1, '1 mL')
-    # 1 mL should have been transferred to each well in the plate
-    assert plate3.volume() == plate3[:].size * 1000  # volume() is in uL
-    assert numpy.all(numpy.vectorize(lambda elem: elem.volume == Unit.convert_to_storage(1, 'mL'))(plate3.wells))
+    solution1_volume = 100 + Unit.convert(salt, '50 mmol', 'mL')
+    to_transfer = solution1_volume / 100
+    solution3, plate3 = Plate.transfer(solution1, plate1[:], f"{to_transfer} mL")
+    # 1 mL of water should have been transferred to each well in the plate
+    assert plate3.volume() == pytest.approx(plate3[:].size * 1000 * to_transfer)  # volume() is in uL
+    assert numpy.allclose(plate3.volumes(unit='mL'), numpy.ones(plate3.wells.shape) * to_transfer)
+    # assert numpy.all(numpy.vectorize(lambda elem: abs(elem.volume - to_transfer) < epsilon)(plate3.wells))
     # Original solution and plate should be unchanged
-    assert solution1.volume == Unit.convert_to_storage(100, 'mL')
+    assert solution1.volume == Unit.convert_to_storage(solution1_volume, 'mL')
     assert plate1.volume() == 0
 
-    solution4, plate4 = Plate.transfer(solution1, plate1[1, 1], '1 mL')
-    assert plate4.volume() == 1000
-    assert solution1.volume - solution4.volume == Unit.convert_to_storage(1, 'mL')
+    solution4, plate4 = Plate.transfer(solution1, plate1[1, 1], f"{to_transfer} mL")
+    assert plate4.volume() == pytest.approx(1000 * to_transfer)
+    assert solution1.volume - solution4.volume == pytest.approx(Unit.convert_to_storage(to_transfer, 'mL'))
 
 
 def test_transfer_between_slices(plate1, plate2, solution1, solution2):

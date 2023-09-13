@@ -15,9 +15,6 @@ def test_convert(salt, water, lipase, dmso):
     with pytest.raises(ValueError, match='Enzymes can only be measured in activity units'):
         Unit.convert(lipase, '1 g', 'U')
 
-    with pytest.raises(ValueError, match='Only liquids can be measured by volume'):
-        Unit.convert(salt, '1 L', 'mol')
-
     # Only enzymes have activity units
     assert Unit.convert(water, '1 mL', 'U') == 0
     assert Unit.convert(lipase, '1 U', 'U') == 1
@@ -62,10 +59,10 @@ def test_convert(salt, water, lipase, dmso):
     # Repeat for a solid
     # from grams
     assert Unit.convert(salt, '1 g', 'g') == 1
-    assert Unit.convert(salt, '1 g', 'mL') == 0
+    assert Unit.convert(salt, '1 g', 'mL') == 1 / salt.density
     assert Unit.convert(salt, '1 g', 'mol') == 1 / salt.mol_weight
 
     # from moles
     assert Unit.convert(salt, '1 mol', 'g') == salt.mol_weight
     assert Unit.convert(salt, '1 mol', 'mol') == 1
-    assert Unit.convert(salt, '1 mol', 'mL') == 0
+    assert Unit.convert(salt, '1 mol', 'mL') == pytest.approx(salt.mol_weight / salt.density)

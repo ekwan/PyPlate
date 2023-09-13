@@ -1,6 +1,6 @@
 import pytest
 import numpy
-from pyplate.pyplate import Plate
+from pyplate.pyplate import Plate, Unit, config
 
 
 def test_make_Plate():
@@ -39,34 +39,36 @@ def test_make_Plate():
 
 
 def test_volume_and_volumes(salt, water, dmso, empty_plate):
+    epsilon = 1e-3
     with pytest.raises(TypeError, match="Substance is not a valid type"):
         empty_plate.volumes('1')
 
     zeros = numpy.zeros(empty_plate.wells.shape)
     uL = numpy.ones(empty_plate.wells.shape)
 
+    salt_volume = round(Unit.convert(salt, '5 umol', 'uL'), 20)
     assert empty_plate.volume() == 0
     assert numpy.array_equal(empty_plate.volumes(), zeros)
     assert numpy.array_equal(empty_plate.volumes(water), zeros)
 
-    new_plate = Plate.add(salt, empty_plate, '5 mol')
-    assert new_plate.volume() == 0
-    assert numpy.array_equal(new_plate.volumes(), zeros)
+    new_plate = Plate.add(salt, empty_plate, '5 umol')
+    assert new_plate.volume() == pytest.approx((salt_volume * uL).sum(), epsilon)
+    assert numpy.allclose(new_plate.volumes(), salt_volume * uL)
     assert numpy.array_equal(new_plate.volumes(water), zeros)
-    assert numpy.array_equal(new_plate.volumes(salt), zeros)
+    assert numpy.allclose(new_plate.volumes(salt), salt_volume * uL, atol=epsilon)
 
     new_plate = Plate.add(water, new_plate, '50 uL')
-    assert new_plate.volume() == (50 * uL).sum()
-    assert numpy.array_equal(new_plate.volumes(), 50 * uL)
+    assert new_plate.volume() == pytest.approx((salt_volume * uL).sum() + (50 * uL).sum(), epsilon)
+    assert numpy.array_equal(new_plate.volumes(), (salt_volume + 50) * uL)
     assert numpy.array_equal(new_plate.volumes(water), 50 * uL)
-    assert numpy.array_equal(new_plate.volumes(salt), zeros)
+    assert numpy.allclose(new_plate.volumes(salt), salt_volume * uL, atol=1e-3)
 
     new_plate = Plate.add(dmso, new_plate, '25 uL')
-    assert new_plate.volume() == (75 * uL).sum()
-    assert numpy.array_equal(new_plate.volumes(), 75 * uL)
+    assert new_plate.volume() == pytest.approx((salt_volume * uL).sum() + (75 * uL).sum(), epsilon)
+    assert numpy.array_equal(new_plate.volumes(), (salt_volume + 75) * uL)
     assert numpy.array_equal(new_plate.volumes(water), 50 * uL)
     assert numpy.array_equal(new_plate.volumes(dmso), 25 * uL)
-    assert numpy.array_equal(new_plate.volumes(salt), zeros)
+    assert numpy.allclose(new_plate.volumes(salt), salt_volume * uL, atol=epsilon)
     assert numpy.array_equal(new_plate.volumes(water, unit='mL'), 0.05 * uL)
 
 
@@ -78,12 +80,12 @@ def test_moles(salt, water, empty_plate):
     ones = numpy.ones(empty_plate.wells.shape)
     assert numpy.array_equal(empty_plate.moles(salt), zeros)
 
-    new_plate = Plate.add(salt, empty_plate, '5 mol')
-    assert numpy.array_equal(new_plate.moles(salt), 5 * ones)
+    new_plate = Plate.add(salt, empty_plate, '5 umol')
+    assert numpy.array_equal(new_plate.moles(salt, 'umol'), 5 * ones)
     assert numpy.array_equal(new_plate.moles(water), zeros)
 
     new_plate = Plate.add(water, new_plate, '1 mmol')
-    assert numpy.array_equal(new_plate.moles(salt), 5 * ones)
+    assert numpy.array_equal(new_plate.moles(salt, 'umol'), 5 * ones)
     assert numpy.array_equal(new_plate.moles(water), 0.001 * ones)
 
     new_plate = Plate.add(water, empty_plate, '5 uL')

@@ -1,8 +1,8 @@
 x = solute in moles, y = solvent in moles
 
-$MW_x$ = molecular weight of solute, $d_x$ is density of solute
+$MW_x$ = molecular weight of solute, $d_x$ = density of solute
 
-$MW_y$ = molecular weight of solvent, $d_y$ is density of solvent
+$MW_y$ = molecular weight of solvent, $d_y$ = density of solvent
 
 ---
 c = $\frac{g}{g}$ = $\frac{x\cdot MW_x}{x\cdot MW_x + y\cdot MW_y}$
