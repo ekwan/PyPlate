@@ -16,7 +16,11 @@ Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `
 
 Note: all quantity, volume, and max_volume parameters are given as strings. For example, '10 mL', '5 g', '1 mol', or '11 U'.
 
-Quantities are stored internally based on preferences read from `pyplate.yaml`.
+The following are set based on preferences read `pyplate.yaml`:
+
+  - Units in which moles and volumes are stored internally. `moles_storage` and `volume_storage`
+  - Density of solids in g/mL. `solid_density`
+  - Units for '%w/v' concentrations ('g/mL'). `default_weight_volume_units:`
 
 ---
 
@@ -64,6 +68,10 @@ Quantities are stored internally based on preferences read from `pyplate.yaml`.
 
 - evaporate():
   - Removes all liquids from this Container.
+- dilute(solute, concentration, solvent, new_name)
+  - Creates a new diluted solution with respect to `solute`
+  - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
+  - Name of new container is optionally set to `new_name`
 
 #### Static Methods:
 
@@ -73,10 +81,10 @@ Quantities are stored internally based on preferences read from `pyplate.yaml`.
   - Move *volume* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
   - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
   - *source* can be a container, a plate, or a slice of a plate.
-- create_stock_solution(solute, concentration, solvent, volume)
-  - Create a new container with the desired volume and containing the desired concentration of `solute`.
+- create_solution(solute, concentration, solvent, quantity)
+  - Create a new container with the desired quantity and containing the desired concentration of `solute`.
+  - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
   - If `solute` is a liquid, volumes will be calculated appropriately.
-  - Solids are assumed to have zero volume.
 
 ---
 
@@ -155,10 +163,15 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.  An exce
   - Keep track of steps to create container in recipe
   - Adds a step that creates a container as above and adds it to the used list.
   - Returns new container so that it can be used later in the same recipe.
-- create_stock_solution(what, concentration, solvent, volume)
-  - Adds a step to the recipe with will create a new container with the desired volume and containing the desired concentration of `what`.
-  - If `what` is a liquid, volumes will be calculated appropriately.
+- create_solution(solute, concentration, solvent, quantity, name)
+  - Adds a step to the recipe with will create a new container with the desired quantity and containing the desired concentration of `saolute`.
+  - If `solute` is a liquid, volumes will be calculated appropriately.
+  - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
   - Returns new container so that it can be used later in the same recipe.
+- dilute(destination, solute, concentration, solvent, new_name)
+  - Adds a step to create a new container diluted to a certain `concentration` of `solute` from `destination`
+  - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
+  - Name of new container is optionally set to `new_name`
 - evaporate(destination)
   - Adds a step to remove all liquids from destination
 - bake()

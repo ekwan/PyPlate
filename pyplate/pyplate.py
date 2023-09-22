@@ -31,6 +31,7 @@ All values returned to the user are rounded to config.external_precision for eas
 # Allow typing reference while still building classes
 from __future__ import annotations
 
+from functools import cache
 from typing import Tuple, Dict, Iterable
 from copy import deepcopy, copy
 import numpy
@@ -61,7 +62,7 @@ class Unit:
         """
         if not isinstance(prefix, str):
             raise TypeError("SI prefix must be a string.")
-        prefixes = {'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'k': 1e3, 'M': 1e6}
+        prefixes = {'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'da': 1e1, 'k': 1e3, 'M': 1e6}
         if prefix in prefixes:
             return prefixes[prefix]
         raise ValueError(f"Invalid prefix: {prefix}")
@@ -118,7 +119,13 @@ class Unit:
                 concentration = concentration[:-1] + 'mol/L'
             else:
                 raise ValueError("Only m and M are allowed as concentration units.")
-        numerator, denominator = map(str.split, concentration.split('/'))
+        replacements = {'%v/v': 'L/L', '%w/w': 'g/g', '%w/v': config.default_weight_volume_units}
+        if concentration[-4:] in replacements:
+            concentration = concentration[:-4] + replacements[concentration[-4:]]
+            numerator, denominator = map(str.split, concentration.split('/'))
+            numerator[0] = float(numerator[0]) / 100 # percent
+        else:
+            numerator, denominator = map(str.split, concentration.split('/'))
         if len(numerator) < 2 or len(denominator) < 1:
             raise ValueError("Concentration must be of the form '1 umol/mL'.")
         try:
@@ -136,7 +143,7 @@ class Unit:
                 numerator[0] /= Unit.convert_prefix_to_multiplier(denominator[0][:-len(unit)])
                 denominator[0] = unit
         if numerator[1] not in ('U', 'mol', 'L', 'g') or denominator[0] not in ('U', 'mol', 'L', 'g'):
-            raise ValueError("Concentration must be of the form '1 umol/mL'.")
+            raise ValueError("Concentration must be of the form '1 umol/mL'." + f"({numerator}, {denominator})")
         return round(numerator[0], config.internal_precision), numerator[1], denominator[0]
 
     @staticmethod
@@ -305,17 +312,17 @@ class Unit:
     @staticmethod
     def get_human_readable_unit(value: float, unit: str):
         """
-        Returns a unit that makes the value more human-readable.
+        Returns a more human-readable value and unit.
 
         Args:
             value: Value to work with.
             unit:  Unit to determine type and default unit if value is zero.
 
-        Returns: New unit.
+        Returns: Tuple of new value and unit
 
         """
         if value == 0:
-            return unit
+            return value, unit
         value = abs(value)
         if unit[-1] == 'L':
             unit = 'L'
@@ -325,14 +332,14 @@ class Unit:
             unit = 'g'
         elif unit[-1] == 'U':
             unit = 'U'
-        multiplier = 1
+        multiplier = 1.0
         while value < 1:
             value *= 1e3
             multiplier /= 1e3
 
         multiplier = max(multiplier, 1e-6)
 
-        return {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
+        return value, {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
 
     @staticmethod
     def calculate_concentration_ratio(solute: Substance, concentration: str, solvent: Substance):
@@ -691,14 +698,18 @@ class Container:
             if substance.is_enzyme():
                 contents.append(f"{substance}: {value}")
             else:
-                unit = Unit.get_human_readable_unit(Unit.convert_from_storage(value, 'mol'), 'mmol')
+                value, unit = Unit.get_human_readable_unit(Unit.convert_from_storage(value, 'mol'), 'mmol')
                 contents.append(
-                    f"{substance}: {round(Unit.convert_from_storage(value, unit), config.external_precision)} {unit}")
+                    f"{substance}: {round(value, config.external_precision)} {unit}")
 
         max_volume = ('/' + str(Unit.convert_from_storage(self.max_volume, 'mL'))) \
             if self.max_volume != float('inf') else ''
         return f"Container ({self.name}) ({Unit.convert_from_storage(self.volume, 'mL')}" + \
             f"{max_volume} mL of ({contents})"
+
+    @cache
+    def has_liquid(self):
+        return any(substance.is_liquid() for substance in self.contents)
 
     @staticmethod
     def add(source: Substance, destination: Container, quantity: str) -> Container:
@@ -793,7 +804,20 @@ class Container:
         x = quantity - y
 
         assert x >= 0 and y >= 0
-        return Container(name, initial_contents=((solute, f"{x} {quantity_unit}"), (solvent, f"{y} {quantity_unit}")))
+        solution = Container(name, initial_contents=((solute, f"{x} {quantity_unit}"), (solvent, f"{y} {quantity_unit}")))
+        substances = []
+        for substance in (solute, solvent):
+            if substance.is_liquid():
+                unit = 'L'
+            elif substance.is_solid():
+                unit = 'g'
+            elif substance.is_enzyme():
+                unit = 'U'
+            amount = Unit.convert_from_storage(solution.contents[substance], 'mol')
+            value, unit = Unit.get_human_readable_unit(Unit.convert(substance, f"{amount} mol", unit), unit)
+            substances.append(f"{round(value, config.external_precision)} {unit} of {substance.name}")
+        solution.instructions = f"Add {' to '.join(substances)}."
+        return solution
 
     def remove(self, what=Substance.LIQUID):
         """

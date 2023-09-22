@@ -9,3 +9,5 @@ volume_storage: uL
 moles_storage: umol
 # density in g/mL
 solid_density: 1
+# units for %w/v
+default_weight_volume_units: g/mL

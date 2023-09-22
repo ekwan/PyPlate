@@ -30,6 +30,7 @@ class Config:
         self.volume_prefix = yaml_config['volume_storage']
         assert self.volume_prefix[1:] == 'L'
         self.solid_density = float(yaml_config['solid_density'])
+        self.default_weight_volume_units = yaml_config['default_weight_volume_units']
 
 
 config = Config()
