@@ -25,25 +25,6 @@ def test_make_Container(water, salt):
         Container('container', '1 L', [water, salt])
 
 
-def test_Container_add(water):
-    container = Container('container')
-    with pytest.raises(TypeError, match='Source must be a Substance'):
-        Container.add(1, container, '10 mL')
-    with pytest.raises(TypeError, match='You can only use Container.add to add to a Container'):
-        Container.add(water, 1, '10 mL')
-    with pytest.raises(TypeError, match='Quantity must be a str'):
-        Container.add(water, container, 1)
-
-    result = Container.add(water, container, '10 mL')
-    # 10 mL of water should have been added.
-    assert isinstance(result, Container)
-    assert result.volume == Unit.convert_to_storage(10, 'mL')
-    assert water in result.contents and result.contents[water] == Unit.convert(water, '10 mL', config.moles_prefix)
-    # Original should be unchanged
-    assert container.volume == 0
-    assert water not in container.contents
-
-
 def test_Container_transfer(water, salt, water_stock, salt_water):
     with pytest.raises(TypeError, match='into a Container'):
         Container.transfer(1, 1, '10 mL')

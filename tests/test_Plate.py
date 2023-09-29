@@ -1,6 +1,6 @@
 import pytest
 import numpy
-from pyplate.pyplate import Plate, Unit, config
+from pyplate.pyplate import Plate, Unit, config, Container
 
 
 def test_make_Plate():
@@ -51,19 +51,22 @@ def test_volume_and_volumes(salt, water, dmso, empty_plate):
     assert numpy.array_equal(empty_plate.volumes(), zeros)
     assert numpy.array_equal(empty_plate.volumes(water), zeros)
 
-    new_plate = Plate.add(salt, empty_plate, '5 umol')
+    salt_container = Container('salt', initial_contents=((salt, '1 mol'),))
+    salt_container, new_plate = Plate.transfer(salt_container, empty_plate, '5 umol')
     assert new_plate.volume() == pytest.approx((salt_volume * uL).sum(), epsilon)
     assert numpy.allclose(new_plate.volumes(), salt_volume * uL)
     assert numpy.array_equal(new_plate.volumes(water), zeros)
     assert numpy.allclose(new_plate.volumes(salt), salt_volume * uL, atol=epsilon)
 
-    new_plate = Plate.add(water, new_plate, '50 uL')
+    water_container = Container('water', initial_contents=((water, '1 L'),))
+    water_container, new_plate = Plate.transfer(water_container, new_plate, '50 uL')
     assert new_plate.volume() == pytest.approx((salt_volume * uL).sum() + (50 * uL).sum(), epsilon)
     assert numpy.array_equal(new_plate.volumes(), (salt_volume + 50) * uL)
     assert numpy.array_equal(new_plate.volumes(water), 50 * uL)
     assert numpy.allclose(new_plate.volumes(salt), salt_volume * uL, atol=1e-3)
 
-    new_plate = Plate.add(dmso, new_plate, '25 uL')
+    dmso_container = Container('dmso', initial_contents=((dmso, '1 L'), ))
+    dmso_container, new_plate = Plate.transfer(dmso_container, new_plate, '25 uL')
     assert new_plate.volume() == pytest.approx((salt_volume * uL).sum() + (75 * uL).sum(), epsilon)
     assert numpy.array_equal(new_plate.volumes(), (salt_volume + 75) * uL)
     assert numpy.array_equal(new_plate.volumes(water), 50 * uL)
@@ -80,13 +83,16 @@ def test_moles(salt, water, empty_plate):
     ones = numpy.ones(empty_plate.wells.shape)
     assert numpy.array_equal(empty_plate.moles(salt), zeros)
 
-    new_plate = Plate.add(salt, empty_plate, '5 umol')
+    salt_container = Container('salt', initial_contents=((salt, '1 mol'),))
+    salt_container, new_plate = Plate.transfer(salt_container, empty_plate, '5 umol')
     assert numpy.array_equal(new_plate.moles(salt, 'umol'), 5 * ones)
     assert numpy.array_equal(new_plate.moles(water), zeros)
 
-    new_plate = Plate.add(water, new_plate, '1 mmol')
+    water_container = Container('water', initial_contents=((water, '1 L'),))
+    water_container, new_plate = Plate.transfer(water_container, new_plate, '1 mmol')
     assert numpy.array_equal(new_plate.moles(salt, 'umol'), 5 * ones)
     assert numpy.array_equal(new_plate.moles(water), 0.001 * ones)
 
-    new_plate = Plate.add(water, empty_plate, '5 uL')
+    water_container = Container('water', initial_contents=((water, '1 L'),))
+    water_container, new_plate = Plate.transfer(water_container, new_plate, '5 uL')
     new_plate.moles(water)

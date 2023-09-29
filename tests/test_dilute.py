@@ -17,4 +17,3 @@ def test_dilute(salt, sodium_sulfate, triethylamine, water, dmso):
                                     sum(Unit.convert(substance, f"{value} {config.moles_prefix}", denominator)
                                         for substance, value in con2.contents.items())
                 assert new_concentration == pytest.approx(0.0005)
-    pass

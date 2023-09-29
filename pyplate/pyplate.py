@@ -182,6 +182,8 @@ class Unit:
                 break
 
         result = None
+        if substance.is_enzyme() and not to_unit.endswith('U'):
+            return 0
         if to_unit.endswith('U'):
             prefix = to_unit[:-1]
             if not substance.is_enzyme():
@@ -634,6 +636,7 @@ class Container:
         if not isinstance(source_container, Container):
             raise TypeError("Invalid source type.")
         quantity_to_transfer, unit = Unit.parse_quantity(quantity)
+
         if unit == 'L':
             volume_to_transfer = Unit.convert_to_storage(quantity_to_transfer, 'L')
             volume_to_transfer = round(volume_to_transfer, config.internal_precision)
@@ -642,17 +645,22 @@ class Container:
                 raise ValueError(f"Not enough mixture left in source container ({source_container.name}). " +
                                  f"Only {Unit.convert_from_storage(source_container.volume, 'mL')} mL available, " +
                                  f"{Unit.convert_from_storage(volume_to_transfer, 'mL')} mL needed.")
-            source_container, to = deepcopy(source_container), deepcopy(self)
             ratio = volume_to_transfer / source_container.volume
 
         elif unit == 'g':
             mass_to_transfer = round(quantity_to_transfer, config.internal_precision)
             total_mass = sum(Unit.convert(substance, f"{amount} {config.moles_prefix}", "g") for
                              substance, amount in source_container.contents.items())
-            source_container, to = deepcopy(source_container), deepcopy(self)
             ratio = mass_to_transfer / total_mass
+        elif unit == 'mol':
+            moles_to_transfer = Unit.convert_to_storage(quantity_to_transfer, 'mol')
+            total_moles = sum(amount for substance, amount in source_container.contents.items()
+                              if not substance.is_enzyme())
+            ratio = moles_to_transfer / total_moles
         else:
             raise ValueError("Invalid quantity unit.")
+
+        source_container, to = deepcopy(source_container), deepcopy(self)
         for substance, amount in source_container.contents.items():
             to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio,
                                            config.internal_precision)
@@ -724,22 +732,18 @@ class Container:
     def has_liquid(self):
         return any(substance.is_liquid() for substance in self.contents)
 
-    @staticmethod
-    def add(source: Substance, destination: Container, quantity: str) -> Container:
+    def _add(self, source: Substance, quantity: str) -> Container:
         """
-        Add the given quantity ('10 mol') of the source substance to the destination container.
+        Add the given quantity ('10 mol') of the source substance to the container.
 
         Arguments:
             source: Substance to add to `destination`.
-            destination: Container to add to.
             quantity: How much `Substance` to add.
 
         Returns:
-            A new copy of `destination` container.
+            A new container with added substance.
         """
-        if not isinstance(destination, Container):
-            raise TypeError("You can only use Container.add to add to a Container")
-        destination = deepcopy(destination)
+        destination = deepcopy(self)
         destination._self_add(source, quantity)
         return destination
 
@@ -855,7 +859,7 @@ class Container:
         new_container.contents = {substance: value for substance, value in self.contents.items()
                                   if what not in (substance._type, substance)}
         new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
-                                   config.moles_prefix, config.volume_prefix) for substance, value in
+        config.moles_prefix, config.volume_prefix) for substance, value in
                                    new_container.contents.items())
         return new_container
 
@@ -914,7 +918,25 @@ class Container:
             destination.name = new_name
         else:
             destination = self
-        return Container.add(solvent, destination, f"{required_umoles} umol")
+        return destination._add(solvent, f"{required_umoles} umol")
+
+    def fill_to(self, solvent: Substance, quantity: str):
+        if not isinstance(solvent, Substance):
+            raise TypeError("Solvent must be a Substance.")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str.")
+
+        quantity, quantity_unit = Unit.parse_quantity(quantity)
+        if quantity <= 0:
+            raise ValueError("Quantity must be positive.")
+        if quantity_unit not in 'Lg':
+            raise ValueError("We can only fill to mass or volume.")
+
+        current_quantity = sum(Unit.convert(substance, f"{value} {config.moles_prefix}", quantity_unit)
+                               for substance, value in self.contents.items() if not substance.is_enzyme())
+
+        required_quantity = quantity - current_quantity
+        return self._add(solvent, f"{required_quantity} {quantity_unit}")
 
 
 class Plate:
@@ -1053,25 +1075,6 @@ class Plate:
         return self.volumes(unit=unit).sum()
 
     @staticmethod
-    def add(source: Substance, destination: Plate | PlateSlicer, quantity: str):
-        """
-        Add the given quantity ('10 mol') of the source substance to the destination.
-
-        Arguments:
-            source: `Substance` to add.
-            destination: Plate or slice of a plate to add to.
-            quantity: How much to add.
-        Returns:
-            A new copy of `destination` plate.
-        """
-        if not isinstance(destination, (Plate, PlateSlicer)):
-            raise TypeError("You can only use Plate.add to add to a Plate")
-        if isinstance(destination, Plate):
-            destination = destination[:]
-        # noinspection PyProtectedMember
-        return PlateSlicer._add(source, destination, quantity)
-
-    @staticmethod
     def transfer(source: Container | Plate | PlateSlicer, destination: Plate | PlateSlicer, quantity: str):
         """
         Move quantity ('10 mL', '5 mg') from source to destination,
@@ -1087,6 +1090,8 @@ class Plate:
         """
         if not isinstance(destination, (Plate, PlateSlicer)):
             raise TypeError("You can only use Plate.transfer into a Plate")
+        if isinstance(destination, Plate):
+            destination = destination[:]
         # noinspection PyProtectedMember
         return PlateSlicer._transfer(source, destination, quantity)
 
@@ -1140,29 +1145,7 @@ class Recipe:
                     self.results.append(deepcopy(arg))
         return self
 
-    def add(self, source: Substance, destination: Container | Plate | PlateSlicer, quantity: str):
-        """
-        Adds a step to the recipe which will move the given quantity ('10 mol')
-        of the source substance to the destination.
-
-        """
-        if self.locked:
-            raise RuntimeError("This recipe is locked.")
-        if not isinstance(source, Substance):
-            raise TypeError("Invalid source type.")
-        if not isinstance(destination, (Container, Plate, PlateSlicer)):
-            raise TypeError("Invalid destination type.")
-        if (destination.plate if isinstance(destination, PlateSlicer) else destination) not in self.indexes:
-            name = destination.plate.name if isinstance(destination, PlateSlicer) else destination.name
-            raise ValueError(f"Destination {name} has not been previously declared for use.")
-        if not isinstance(quantity, str):
-            raise TypeError("Quantity must be a str. ('5 mol', '5 g')")
-        if isinstance(destination, Plate):
-            destination = destination[:]
-        self.steps.append(('add', source, destination, quantity))
-        return self
-
-    def transfer(self, source: Container, destination: Container | Plate, volume: str):
+    def transfer(self, source: Container, destination: Container | Plate, quantity: str):
         """
         Adds a step to the recipe which will move volume from source to destination.
         Note that all Substances in the source will be transferred in proportion to their volumetric ratios.
@@ -1179,13 +1162,13 @@ class Recipe:
         if (destination.plate if isinstance(destination, PlateSlicer) else destination) not in self.indexes:
             name = destination.plate.name if isinstance(destination, PlateSlicer) else destination.name
             raise ValueError(f"Destination {name} has not been previously declared for use.")
-        if not isinstance(volume, str):
+        if not isinstance(quantity, str):
             raise TypeError("Volume must be a str. ('5 mL')")
         if isinstance(source, Plate):
             source = source[:]
         if isinstance(destination, Plate):
             destination = destination[:]
-        self.steps.append(('transfer', source, destination, volume))
+        self.steps.append(('transfer', source, destination, quantity))
         return self
 
     def create_container(self, name: str, max_volume: str = 'inf L', initial_contents=None):
@@ -1304,12 +1287,14 @@ class Recipe:
             raise TypeError("Solvent must be a substance.")
         if new_name and not isinstance(new_name, str):
             raise TypeError("New name must be a str.")
+        if not isinstance(destination, Container):
+            raise TypeError("Destination must be a container.")
         if destination not in self.indexes:
             raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
         if solute not in destination.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
 
-        ratio = Unit.calculate_concentration_ratio(solute, concentration, solvent)
+        ratio, *_ = Unit.calculate_concentration_ratio(solute, concentration, solvent)
         if ratio <= 0:
             raise ValueError("Concentration is impossible to create.")
 
@@ -1318,6 +1303,18 @@ class Recipe:
             raise ValueError("Not currently supported.")
 
         self.steps.append(('dilute', destination, solute, concentration, solvent, new_name))
+
+    def fill_to(self, destination: Container, solvent: Substance, quantity: str):
+        if not isinstance(destination, Container):
+            raise TypeError("Destination must be a container.")
+        if destination not in self.indexes:
+            raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
+        if not isinstance(solvent, Substance):
+            raise TypeError("Solvent must be a substance.")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str.")
+
+        self.steps.append(('fill_to', destination, solvent, quantity))
 
     def bake(self):
         """
@@ -1335,20 +1332,12 @@ class Recipe:
         for operation, *rest in self.steps:
             if operation == 'add':
                 frm, dest, quantity = rest
-                to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
+                assert isinstance(dest, Container)
+                to_index = self.indexes[dest]
 
                 # containers and such can change while building the recipe
-                if isinstance(dest, PlateSlicer):
-                    new_to = deepcopy(dest)
-                    new_to.plate = self.results[to_index]
-                    dest = new_to
-                else:
-                    dest = self.results[to_index]
-
-                if isinstance(dest, Container):
-                    dest = Container.add(frm, dest, quantity)
-                elif isinstance(dest, PlateSlicer):
-                    dest = Plate.add(frm, dest, quantity)
+                dest = self.results[to_index]
+                dest = dest._add(frm, quantity)
 
                 self.results[to_index] = dest
                 self.used.add(to_index)
@@ -1376,12 +1365,7 @@ class Recipe:
                 else:
                     dest = self.results[to_index]
 
-                if isinstance(frm, Substance):  # Adding a substance is handled differently
-                    if isinstance(dest, Container):
-                        dest = Container.add(frm, dest, quantity)
-                    elif isinstance(dest, PlateSlicer):
-                        dest = Plate.add(frm, dest, quantity)
-                elif isinstance(dest, Container):
+                if isinstance(dest, Container):
                     frm, dest = Container.transfer(frm, dest, quantity)
                 elif isinstance(dest, PlateSlicer):
                     frm, dest = Plate.transfer(frm, dest, quantity)
@@ -1409,7 +1393,13 @@ class Recipe:
             elif operation == 'dilute':
                 dest, solute, concentration, solvent, new_name = rest
                 to_index = self.indexes[dest]
+                self.used.add(to_index)
                 self.results[to_index] = dest.dilute(solute, concentration, solvent, new_name)
+            elif operation == 'fill_to':
+                dest, solvent, quantity = rest
+                to_index = self.indexes[dest]
+                self.used.add(to_index)
+                self.results[to_index] = dest.fill_to(solvent, quantity)
 
         if len(self.used) != len(self.indexes):
             raise ValueError("Something declared as used wasn't used.")
@@ -1437,7 +1427,7 @@ class PlateSlicer(Slicer):
     def _add(frm, to, quantity):
         to = copy(to)
         to.plate = deepcopy(to.plate)
-        result = numpy.vectorize(lambda elem: Container.add(frm, elem, quantity), cache=True)(to.get())
+        result = numpy.vectorize(lambda elem: elem._add(frm, quantity), cache=True)(to.get())
         if to.size == 1:
             to.set(result.item())
         else:
