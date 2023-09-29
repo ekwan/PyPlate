@@ -52,7 +52,7 @@ def test_transfer(salt_water):
     recipe.transfer(salt_water, plate, '5 uL')
     recipe.transfer(salt_water, plate[1,1], '1 uL')
     new_salt_water, new_plate = recipe.bake()
-    assert salt_water.volume - new_salt_water.volume == Unit.convert_to_storage(5*96+1, 'uL')
+    assert salt_water.volume - new_salt_water.volume == pytest.approx(Unit.convert_to_storage(5*96+1, 'uL'))
     volumes = new_plate.volumes(unit='uL')
     assert volumes[0, 0] == 6
     assert volumes[0, 1] == 5
