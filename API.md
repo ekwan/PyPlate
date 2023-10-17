@@ -1,0 +1,154 @@
+# PyPlate
+
+Welcome to the design document for *PyPlate*.  Here, we lay out the intended purpose, conceptual basis, and expected behavior of the program.
+
+## Introduction
+
+The *PyPlate* Python API defines a set of objects and operations for implementing a high-throughput screen of chemical or biological conditions.  *PyPlate* assists with the enumeration of solid or liquid handling steps, ensures that those steps are physically reasonable, and provides plate visualization capabilities.
+
+## Scope
+
+*PyPlate* specifically focuses on the implementation of high-throughput experimentation (HTE).  The upstream process of designing the screens themselves will be handled elsewhere.  Similarly, the downstream process of analyzing the outcomes of screens will also be handled elsewhere.
+
+## External Classes
+
+Four simple HTE classes will be exposed to the user: `Substance`, `Container`, `Plate`, and `Recipe`.  *All classes are immutable.*  (An immutable object is one whose fields cannot be changed once it has been constructed.)
+
+---
+
+### Substance
+
+#### Definition: 
+- An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  Immutable.  Solids and enzymes are assumed to require zero volume.
+
+#### Constructors/Factory Methods
+
+- Substance.solid(name, molecular_weight, molecule)
+- Substance.liquid(name, molecular_weight, density, molecule)
+- Substance.enzyme(name, molecule)
+
+#### Attributes
+
+- name (str): name of the `Substance`
+- molecular_weight (float, optional): in g/mol
+- density (float, optional): in g/mL
+- molecule (cctk.Molecule, optional): the 3D structure
+
+#### Methods
+- is_liquid(): Return True if the `Substance` is a liquid.
+- is_solid(): Return True if the `Substance` is a solid.
+- is_enzyme(): Return True if the `Substance` is an enzyme.
+---
+
+### Container
+
+#### Definition:
+
+- Stores specified quantities of `Substances` in a vessel with a given maximum volume.  Immutable.
+
+#### Constructors/Factory Methods:
+
+- Container(name, max_volume, initial_contents) where initial_contents is an iterable of tuples of the form (substance,amount), with types `Substance` and `str`, respectively.
+
+#### Attributes:
+
+- name (str): Name of this Container
+- contents (dict): map from `Substances` to amounts. Amounts are stored as mL for liquids, moles for solids, and U for enzymes
+- max_volume (float): in microlitres.
+
+
+#### Static Methods:
+
+- add(source, destination, volume):
+  - Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* will be returned.
+- transfer(source, destination, how_much):
+  - Move *volume* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
+  - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
+  - *source* can be a container, a plate, or a slice of a plate.
+- create_stock_solution(what, concentration, solvent, volume)
+  - Create a new container with the desired volume and containing the desired concentration of `what`.
+  - If `what` is a liquid, volumes will be calculated appropriately.
+
+---
+
+### Plate
+
+#### Definition:
+
+- A spatially ordered collection of `Containers`, like a 96 well plate.  The spatial arrangement must be rectangular.  Immutable.
+
+#### Constructors/Factory Methods:
+
+- Plate(name, max_capacities, n_rows, n_columns, row_labels, column_labels)
+  - name (str): name of this Container
+  - max_capacities (float): assumed to be the same volume for all wells, in uL
+  - n_rows (int): how many rows there are (default, 8)
+  - n_cols (int): how many columns there are (default, 12)
+  - row_labels (list of str): by default, A, B, C, ..., AA, AB, ...
+  - column_labels (list of str): by default, "1", "2", ...
+
+
+#### Methods:
+
+- Plate[slice]
+  - Returns a slice of the plate.
+
+- volumes()
+  - Returns a `numpy` array of used volumes
+- substances()
+  - Returns a set of all substances used
+- moles(substance)
+  - Returns a `numpy` array of moles of given substance
+- concentrations(substance)
+
+** Volumes, substances, moles, and concentrations can all be called on a slice of the plate
+
+
+#### Static Methods:
+
+- add(source, destination, volume): Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* will be returned.
+- transfer(source, destination, how_much): Move *volume* from *source* to *destination* plate or slice, returning copies of the objects with amounts adjusted accordingly.
+  - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
+  - *source* can be a container, a plate, or a slice of a plate.
+
+---
+
+### Recipe
+
+#### Definition:
+- A list of instructions for transforming one set of containers into another.  The intended workflow is to declare the source containers, enumerate the desired transformations, and call recipe.bake().  This method will ensure that all solid and liquid handling instructions are valid.  If they are indeed valid, then the updated containers will be generated.  Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
+
+#### Constructors/Factory Methods:
+
+Recipe(name, uses): creates a blank Recipe with the specified source `Containers`.
+
+#### Attributes:
+
+name (str): a short description
+uses (list): a list of *Containers* that will be used in this `Recipe`.  An exception will be thrown if an attempt is made to use an undeclared Container.  A warning will be given if a declared Container is not used at "baking time."
+
+#### Methods:
+
+- uses(*containers)
+  - declare `*containers` (iterable of `Containers`) as being used in the recipe.
+- add(source, destination, volume):
+  - Adds a step to the recipe which will move the given quantity of the *source* substance to the *destination*.
+- transfer(source, destination, how_much):
+  - Adds a step to the recipe which will move *volume* from *source* to *destination*.
+  - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
+- create_container(name, max_volume, initial_contents)
+  - Keep track of steps to create container in recipe
+  - Adds a step that creates a container as above and adds it to the used list.
+  - Returns new container so that it can be used later in the same recipe.
+- create_stock_solution(what, concentration, solvent, volume)
+  - Adds a step to the recipe with will create a new container with the desired volume and containing the desired concentration of `what`.
+  - If `what` is a liquid, volumes will be calculated appropriately.
+  - Returns new container so that it can be used later in the same recipe.
+- bake()
+  - Checks the validity of each step and ensures all Containers are used.
+  - Returns all new Containers and Plates in the order they were defined in `uses()`.
+  - Locks recipe from future changes
+
+*Need to add some visualization and instruction printing methods.
+
+## [Example Workflow](examples/Example.py)

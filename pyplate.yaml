@@ -1,0 +1,9 @@
+# How many digits of precision to maintain in internal calculations
+internal_precision: 10
+# How many digits of precision to return to the user
+external_precision: 3
+# How to store volumes internally
+# 1e-6 means we will store volumes as microliters
+volume_storage: uL
+# 1e-6 means we will store moles as micromoles
+moles_storage: umol
