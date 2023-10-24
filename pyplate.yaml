@@ -11,3 +11,6 @@ moles_storage: umol
 solid_density: 1
 # units for %w/v
 default_weight_volume_units: g/mL
+default_moles_unit: mol
+default_volume_unit: uL
+default_colormap: Purples

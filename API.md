@@ -66,25 +66,28 @@ The following are set based on preferences read `pyplate.yaml`:
 
 #### Methods
 
-- evaporate():
-  - Removes all liquids from this Container.
+- has_liquid():
+  - Returns true if any substance in the container is a liquid.
+- remove(what):
+  - Removes substances from this Container. Defaults to removing all liquids.
 - dilute(solute, concentration, solvent, new_name)
   - Creates a new diluted solution with respect to `solute`
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
   - Name of new container is optionally set to `new_name`
+- fill_to(solvent, quantity)
+  - Returns new container filled with `solvent` up to `quantity`.
 
 #### Static Methods:
 
-- add(source, destination, quantity):
-  - Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* will be returned.
-- transfer(source, destination, volume):
-  - Move *volume* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
-  - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
+- transfer(source, destination, quantity):
+  - Move *quantity* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
+  - Note that all `Substances` in the source will be transferred in proportion to their appropriate ratios.
   - *source* can be a container, a plate, or a slice of a plate.
-- create_solution(solute, concentration, solvent, quantity)
+- create_solution(solute, concentration, solvent, quantity, name)
   - Create a new container with the desired quantity and containing the desired concentration of `solute`.
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
   - If `solute` is a liquid, volumes will be calculated appropriately.
+  - name is optional. If none is given, an appropriate name will be applied.
 
 ---
 
@@ -111,25 +114,31 @@ The following are set based on preferences read `pyplate.yaml`:
 - Plate[slice]
   - Returns a slice of the plate.
 
-- evaporate()
-  - Evaporates all liquid from the plate
-- volumes(substance, unit)
-  - Returns a `numpy` array of used volumes
-  - If given, volumes will be restricted to volumes of substance
-  - If given, volumes will be given in unit, otherwise in uL
+- remove(what):
+  - Removes substances from all wells in this plate. Defaults to removing all liquids.
 - substances()
   - Returns a set of all substances used
+- volumes(substance, unit)
+  - Returns a `numpy` array of used volumes
+  - If substance is given, volumes will be restricted to volumes of substance
+  - If unit is given, volumes will be given in unit, otherwise in `default_volume_unit` defined in `pyplate.yaml`
+- volumes_dataframe(substance, unit, cmap)
+  - Returns a shaded dataframe of volumes in each well
+  - Unit defaults to `default_volume_unit` defined in `pyplate.yaml`
+  - cmap defaults to `default_colormap` defined in `pyplate.yaml`
 - moles(substance, unit)
   - Returns a `numpy` array of moles of given substance
-  - If given, moles will be return in unit, otherwise, complete moles.
-- concentrations(substance)
-
-** Evaporate, volumes, substances, moles, and concentrations can all be called on a slice of the plate
+  - If unit is given, moles will be return in unit, otherwise in `default_moles_unit` defined in `pyplate.yaml`
+- moles_dataframe(substance, unit, cmap)
+  - Returns a shaded dataframe of moles in each well
+  - Unit defaults to `default_moles_unit` defined in `pyplate.yaml`
+  - cmap defaults to `default_colormap` defined in `pyplate.yaml`
+  - 
+** Remove, substances, volumes, and moles can all be called on a slice of the plate
 
 
 #### Static Methods:
 
-- add(source, destination, quantity): Move the given quantity of the *source* substance to the *destination* container. A new copy of *destination* will be returned.
 - transfer(source, destination, volume): Move *volume* from *source* to *destination* plate or slice, returning copies of the objects with amounts adjusted accordingly.
   - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
   - *source* can be a container, a plate, or a slice of a plate.
@@ -154,11 +163,9 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.  An exce
 
 - uses(*containers)
   - declare `*containers` (iterable of `Containers`) as being used in the recipe.
-- add(source, destination, quantity):
-  - Adds a step to the recipe which will move the given quantity of the *source* substance to the *destination*.
-- transfer(source, destination, volume):
-  - Adds a step to the recipe which will move *volume* from *source* to *destination*.
-  - Note that all `Substances` in the source will be transferred in proportion to their volumetric ratios.
+- transfer(source, destination, quantity):
+  - Adds a step to the recipe which will move *quantity* from *source* to *destination*.
+  - Note that all `Substances` in the source will be transferred in proportion to their respective ratios.
 - create_container(name, max_volume, initial_contents)
   - Keep track of steps to create container in recipe
   - Adds a step that creates a container as above and adds it to the used list.
@@ -172,8 +179,10 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.  An exce
   - Adds a step to create a new container diluted to a certain `concentration` of `solute` from `destination`
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
   - Name of new container is optionally set to `new_name`
-- evaporate(destination)
-  - Adds a step to remove all liquids from destination
+- fill_to(destination, solvent, quantity)
+  - Adds a step to fill `destination` container with `solvent` up to `quantity`.
+- remove(destination, what)
+  - Adds a step to removes substances from destination. Defaults to removing all liquids.
 - bake()
   - Checks the validity of each step and ensures all Containers are used.
   - Returns all new Containers and Plates in the order they were defined in `uses()`.

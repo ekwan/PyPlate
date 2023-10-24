@@ -31,6 +31,9 @@ class Config:
         assert self.volume_prefix[1:] == 'L'
         self.solid_density = float(yaml_config['solid_density'])
         self.default_weight_volume_units = yaml_config['default_weight_volume_units']
+        self.default_moles_unit = yaml_config['default_moles_unit']
+        self.default_volume_unit = yaml_config['default_volume_unit']
+        self.default_colormap = yaml_config['default_colormap']
 
 
 config = Config()
