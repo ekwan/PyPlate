@@ -1173,6 +1173,19 @@ class Plate:
         """
         return self[:].remove(what)
 
+    def fill_to(self, solvent, quantity):
+        """
+        Fills all wells in plate with `solvent` up to `quantity`.
+
+        Args:
+            solvent: Substance to use to fill.
+            quantity: Desired final quantity in each well.
+
+        Returns: New Plate with desired final `quantity` in each well.
+
+        """
+        return self[:].fill_to(solvent, quantity)
+
 
 class Recipe:
     """
@@ -1372,18 +1385,22 @@ class Recipe:
 
     def fill_to(self, destination: Container, solvent: Substance, quantity: str):
         """
-        Adds a step to fill `destination` container with `solvent` up to `quantity`.
+        Adds a step to fill `destination` container/plate/slice with `solvent` up to `quantity`.
 
         Args:
-            destination: Container to fill.
+            destination: Container/Plate/Slice to fill.
             solvent: Substance to use to fill.
             quantity: Desired final quantity in container.
 
         """
-        if not isinstance(destination, Container):
-            raise TypeError("Destination must be a container.")
-        if destination not in self.indexes:
-            raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
+        if isinstance(destination, PlateSlicer):
+            if destination.plate not in self.indexes:
+                raise ValueError(f"Destination {destination.plate.name} has not been previously declared for use.")
+        elif isinstance(destination, (Container, Plate)):
+            if destination not in self.indexes:
+                raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
+        else:
+            raise TypeError(f"Invalid destination type: {type(destination)}")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a substance.")
         if not isinstance(quantity, str):
@@ -1467,8 +1484,16 @@ class Recipe:
                 self.results[to_index] = dest.dilute(solute, concentration, solvent, new_name)
             elif operation == 'fill_to':
                 dest, solvent, quantity = rest
-                to_index = self.indexes[dest]
+                to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
                 self.used.add(to_index)
+
+                if isinstance(dest, PlateSlicer):
+                    new_to = deepcopy(dest)
+                    new_to.plate = self.results[to_index]
+                    dest = new_to
+                else:
+                    dest = self.results[to_index]
+
                 self.results[to_index] = dest.fill_to(solvent, quantity)
 
         if len(self.used) != len(self.indexes):
@@ -1643,6 +1668,26 @@ class PlateSlicer(Slicer):
 
         """
         result = numpy.vectorize(lambda elem: elem.remove(what), cache=True)(self.get())
+        self.plate = deepcopy(self.plate)
+        if result.size == 1:
+            self.set(result.item())
+        else:
+            self.set(result)
+
+        return self.plate
+
+    def fill_to(self, solvent, quantity):
+        """
+        Fills all wells in slice with `solvent` up to `quantity`.
+
+        Args:
+            solvent: Substance to use to fill.
+            quantity: Desired final quantity in each well.
+
+        Returns: New Plate with desired final `quantity` in each well.
+
+        """
+        result = numpy.vectorize(lambda elem: elem.fill_to(solvent, quantity), cache=True)(self.get())
         self.plate = deepcopy(self.plate)
         if result.size == 1:
             self.set(result.item())
