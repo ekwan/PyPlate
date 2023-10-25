@@ -858,6 +858,60 @@ class Container:
         solution.instructions = f"Add {' to '.join(substances)}."
         return solution
 
+    @staticmethod
+    def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance, quantity: str, name=None):
+        """
+        Create a diluted solution from an existing solution.
+
+
+        Arguments:
+            source: Solution to dilute.
+            solute: What to dissolve.
+            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
+            solvent: What to dissolve with.
+            quantity: Desired total quantity. ('3 mL', '10 g')
+            name: Optional name for new container.
+
+        Returns:
+            Residual from the source container and a new container with desired solution.
+        """
+
+        if not isinstance(solute, Substance):
+            raise TypeError("Solute must be a Substance.")
+        if not isinstance(concentration, str):
+            raise TypeError("Concentration must be a str.")
+        if not isinstance(solvent, Substance):
+            raise TypeError("Solvent must be a Substance.")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str.")
+        if name and not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+
+        quantity_value, quantity_unit = Unit.parse_quantity(quantity)
+        if quantity_value <= 0:
+            raise ValueError("Quantity must be positive.")
+
+        if not name:
+            name = f"{solute.name} {concentration} {solvent.name}"
+
+        new_ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
+        current_ratio = source.contents[solute] / sum(source.contents[substance] for
+                                                      substance in source.contents if not substance.is_enzyme())
+        if new_ratio <= 0:
+            raise ValueError("Solution is impossible to create.")
+
+        if abs(new_ratio - current_ratio) <= 1e-6:
+            return deepcopy(source)
+
+        if new_ratio > current_ratio:
+            raise ValueError("Desired concentration is higher than current concentration.")
+
+        potential_solution = Container.create_solution(solute, concentration, solvent, quantity)
+        ratio = potential_solution.contents[solute] / source.contents[solute]
+        solution = Container(name, max_volume=f"{source.max_volume} {config.volume_prefix}")
+        residual, solution = Container.transfer(source, solution, f"{source.volume * ratio} {config.volume_prefix}")
+        return residual, solution.fill_to(solvent, quantity)
+
     def remove(self, what=Substance.LIQUID):
         """
         Removes substances from `Container`
@@ -872,7 +926,7 @@ class Container:
         new_container.contents = {substance: value for substance, value in self.contents.items()
                                   if what not in (substance._type, substance)}
         new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
-                                   config.moles_prefix, config.volume_prefix) for substance, value in
+        config.moles_prefix, config.volume_prefix) for substance, value in
                                    new_container.contents.items())
         return new_container
 
