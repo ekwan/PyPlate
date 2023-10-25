@@ -402,7 +402,7 @@ class Unit:
 class Substance:
     """
     An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.). Immutable.
-    Solids and enzymes are assumed to require zero volume.
+    Enzymes are assumed to require zero volume.
 
     Attributes:
         name: Name of substance.
@@ -936,7 +936,7 @@ class Container:
                                    new_container.contents.items())
         return new_container
 
-    def dilute(self, solute: Substance, concentration: str, solvent: Substance, new_name=None):
+    def dilute(self, solute: Substance, concentration: str, solvent: Substance, name=None):
         """
         Dilutes `solute` in solution to `concentration`.
 
@@ -944,7 +944,7 @@ class Container:
             solute: Substance which is subject to dilution.
             concentration: Desired concentration.
             solvent: What to dilute with.
-            new_name: Optional name for new container.
+            name: Optional name for new container.
 
         Returns: A new container containing a solution with the desired concentration of `solute`.
 
@@ -955,7 +955,7 @@ class Container:
             raise TypeError("Concentration must be a str.")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a substance.")
-        if new_name and not isinstance(new_name, str):
+        if name and not isinstance(name, str):
             raise TypeError("New name must be a str.")
         if solute not in self.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
@@ -985,10 +985,10 @@ class Container:
         if new_volume > self.max_volume:
             raise ValueError("Dilute solution will not fit in container.")
 
-        if new_name:
+        if name:
             # Note: this copies the container twice
             destination = deepcopy(self)
-            destination.name = new_name
+            destination.name = name
         else:
             destination = self
         return destination._add(solvent, f"{required_umoles} umol")
