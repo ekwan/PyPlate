@@ -876,6 +876,8 @@ class Container:
             Residual from the source container and a new container with desired solution.
         """
 
+        if not isinstance(source, Container):
+            raise TypeError("Source must be a Container.")
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
         if not isinstance(concentration, str):
@@ -890,6 +892,9 @@ class Container:
         quantity_value, quantity_unit = Unit.parse_quantity(quantity)
         if quantity_value <= 0:
             raise ValueError("Quantity must be positive.")
+
+        if solute not in source.contents:
+            raise ValueError(f"Container does not contain {solute.name}.")
 
         if not name:
             name = f"{solute.name} {concentration} {solvent.name}"
@@ -1370,7 +1375,7 @@ class Recipe:
 
         if not name:
             name = f"{solute.name} {concentration}"
-        ratio = Unit.calculate_concentration_ratio(solute, concentration, solvent)
+        ratio, *_ = Unit.calculate_concentration_ratio(solute, concentration, solvent)
         if ratio <= 0:
             raise ValueError("Solution is impossible to create.")
 
@@ -1378,6 +1383,51 @@ class Recipe:
         self.uses(new_container)
         self.steps.append(('solution', new_container, solute, concentration, solvent, quantity))
         return new_container
+
+    def create_solution_from(self, source: Container, solute: Substance, concentration: str, solvent: Substance, quantity: str, name=None):
+        """
+        Adds a step to create a diluted solution from an existing solution.
+
+
+        Arguments:
+            source: Solution to dilute.
+            solute: What to dissolve.
+            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
+            solvent: What to dissolve with.
+            quantity: Desired total quantity. ('3 mL', '10 g')
+            name: Optional name for new container.
+
+        Returns:
+            A new Container so that it may be used in later recipe steps.
+        """
+
+        if not isinstance(source, Container):
+            raise TypeError("Source must be a Container.")
+        if not isinstance(solute, Substance):
+            raise TypeError("Solute must be a Substance.")
+        if not isinstance(concentration, str):
+            raise TypeError("Concentration must be a str.")
+        if not isinstance(solvent, Substance):
+            raise TypeError("Solvent must be a Substance.")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str.")
+        if name and not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+
+        quantity_value, quantity_unit = Unit.parse_quantity(quantity)
+        if quantity_value <= 0:
+            raise ValueError("Quantity must be positive.")
+
+        if not name:
+            name = f"{solute.name} {concentration} {solvent.name}"
+
+        new_ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
+        if new_ratio <= 0:
+            raise ValueError("Solution is impossible to create.")
+
+        new_container = Container(name, max_volume=f"{source.max_volume} {config.volume_prefix}")
+        self.uses(new_container, source)
+        self.steps.append(('solution_from', source, new_container, solute, concentration, solvent, quantity))
 
     def remove(self, destination: Container | Plate | PlateSlicer, what=Substance.LIQUID):
         """
@@ -1513,11 +1563,22 @@ class Recipe:
                 self.results[frm_index] = frm
                 self.results[to_index] = dest
             elif operation == 'solution':
-                dest, solute, concentration, solvent, volume = rest
+                dest, solute, concentration, solvent, quantity = rest
                 to_index = self.indexes[dest]
                 self.used.add(to_index)
                 self.results[to_index] = Container.create_solution(solute,
-                                                                   concentration, solvent, volume, name=dest.name)
+                                                                   concentration, solvent, quantity, name=dest.name)
+            elif operation == 'solution_from':
+                source, dest, solute, concentration, solvent, quantity = rest
+                frm_index = self.indexes[source]
+                to_index = self.indexes[dest]
+
+                self.used.add(frm_index)
+                self.used.add(to_index)
+                source = self.results[frm_index]
+                self.results[frm_index], self.results[to_index] = Container.create_solution_from(source, solute,
+                                                                        concentration, solvent, quantity, dest.name)
+
             elif operation == 'remove':
                 what, dest = rest
                 to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
