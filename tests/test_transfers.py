@@ -1,7 +1,7 @@
 import pytest
 import numpy
-from pyplate import config
-from pyplate.pyplate import Plate, Container, Unit
+from pyplate import Plate, Container
+from pyplate.pyplate import Unit, config
 
 
 @pytest.fixture

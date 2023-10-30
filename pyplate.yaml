@@ -14,3 +14,4 @@ default_weight_volume_units: g/mL
 default_moles_unit: mol
 default_volume_unit: uL
 default_colormap: Purples
+default_diverging_colormap: PuOr

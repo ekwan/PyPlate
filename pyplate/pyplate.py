@@ -38,7 +38,9 @@ import numpy
 import pandas
 
 from pyplate.slicer import Slicer
-from pyplate import config
+from . import Config
+
+config = Config()
 
 
 class Unit:
@@ -670,14 +672,25 @@ class Container:
 
         source_container, to = deepcopy(source_container), deepcopy(self)
         for substance, amount in source_container.contents.items():
-            to.contents[substance] = round(to.contents.get(substance, 0) + amount * ratio,
+            to_transfer = amount * ratio
+            to.contents[substance] = round(to.contents.get(substance, 0) + to_transfer,
                                            config.internal_precision)
-            source_container.contents[substance] = round(source_container.contents[substance] - amount * ratio,
+            source_container.contents[substance] = round(source_container.contents[substance] - to_transfer,
                                                          config.internal_precision)
             # if quantity to remove is the same as the current amount plus a very small delta,
             # we will get a negative 0 answer.
             if source_container.contents[substance] == -0.0:
                 source_container.contents[substance] = 0.0
+        if source_container.has_liquid():
+            transfer = Unit.convert_from_storage(ratio * source_container.volume, 'L')
+            transfer, unit = Unit.get_human_readable_unit(transfer, 'L')
+        else:
+            # total mass in source container times ratio
+            mass = sum(Unit.convert(substance, f"{amount} {config.moles_prefix if not substance.is_enzyme() else 'U'}",
+                                    "mg") for substance, amount in source_container.contents.items())
+            transfer, unit = Unit.get_human_readable_unit(mass * ratio, 'mg')
+
+        to.instructions = f"Transfer {transfer} {unit} from {source_container.name} to {to.name}"
         to.volume = round(sum(Unit.convert(substance, f"{amount} {config.moles_prefix}", config.volume_prefix) for
                               substance, amount in to.contents.items()), config.internal_precision)
         if to.volume > to.max_volume:
@@ -1254,6 +1267,56 @@ class RecipeStep:
         self.to = [to]
         self.operands = operands
 
+    def visualize(self, what, mode, unit, cmap=None):
+        """
+
+        Provide visualization of what happened during the step.
+
+        Args:
+            what: 'source', 'destination', or 'both'
+            mode: 'delta', or 'final'
+            unit: Unit we are interested in. ('mmol', 'uL', 'mg')
+
+        Returns: A dictionary of changes, either a dataframe or an absolute difference in unit,
+                 or a list of two dictionaries, one for source and one for destination.
+        """
+
+        def helper(elem):
+            """ Returns volume of elem. """
+            if substance in elem.contents:
+                quantity = f"{elem.contents[substance]} {config.moles_prefix if not substance.is_enzyme() else 'U'}"
+
+                return Unit.convert(substance, quantity, unit)
+            return 0
+
+        if what == 'both':
+            return [self.visualize('source', mode, unit), self.visualize('destination', mode, unit)]
+        if what == 'source':
+            what = self.frm
+        elif what == 'destination':
+            what = self.to
+        else:
+            raise ValueError("What must be source, destination, or both.")
+
+        assert mode == 'delta' or mode == 'final'
+
+        if not isinstance(what[0], Plate):
+            return None
+        result = []
+        for substance in what[0].substances().union(what[1].substances()):
+            data = numpy.vectorize(helper, cache=True, otypes='d')(what[1].wells)
+            if mode == 'delta':
+                data -= numpy.vectorize(helper, cache=True, otypes='d')(what[0].wells)
+                if cmap is None:
+                    cmap = config.default_diverging_colormap
+            if cmap is None:
+                cmap = config.default_colormap
+            if numpy.sum(numpy.abs(data)) != 0:
+                dataframe = pandas.DataFrame(data, columns=what[0].column_names, index=what[0].row_names)
+                extreme = max(abs(numpy.min(data)), abs(numpy.max(data)))
+                result.append(dataframe.style.format('{:.3f}').background_gradient(cmap,
+                                                        vmin=-extreme, vmax=extreme).set_caption(substance.name))
+        return result
 
 class Recipe:
     """
@@ -1778,7 +1841,8 @@ class PlateSlicer(Slicer):
 
         """
         if substance is None:
-            return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, unit))(self.get())
+            return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, unit), cache=True,
+                                   otypes='d')(self.get())
 
         if not isinstance(substance, Substance):
             raise TypeError(f"Substance is not a valid type, {type(substance)}.")
@@ -1790,7 +1854,7 @@ class PlateSlicer(Slicer):
                 return Unit.convert(substance, quantity, unit)
             return 0
 
-        return numpy.vectorize(helper)(self.get())
+        return numpy.vectorize(helper, cache=True, otypes='d')(self.get())
 
     def substances(self):
         """
@@ -1798,7 +1862,7 @@ class PlateSlicer(Slicer):
         Returns: A set of substances present in the plate.
 
         """
-        substances_arr = numpy.vectorize(lambda elem: elem.contents.keys())(self.get())
+        substances_arr = numpy.vectorize(lambda elem: elem.contents.keys(), cache=True)(self.get())
         return set.union(*map(set, substances_arr.flatten()))
 
     def moles(self, substance: Substance, unit: str = 'mol') -> numpy.ndarray:
@@ -1820,7 +1884,7 @@ class PlateSlicer(Slicer):
             quantity = f"{elem.contents[substance]} {config.moles_prefix}"
             return Unit.convert(substance, quantity, unit)
 
-        return numpy.vectorize(helper, cache=True)(self.get())
+        return numpy.vectorize(helper, cache=True, otypes='d')(self.get())
 
     def remove(self, what=Substance.LIQUID):
         """

@@ -1,6 +1,6 @@
 import pytest
-from pyplate.pyplate import Recipe, Unit, Container, Plate
-from pyplate import config
+from pyplate import Plate, Container, Recipe
+from pyplate.pyplate import Unit, config
 from tests.conftest import salt_water
 
 
