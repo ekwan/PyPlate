@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import yaml
 
+# import pyplate
 
 class Config:
     def __init__(self):
@@ -34,6 +35,7 @@ class Config:
         self.default_moles_unit = yaml_config['default_moles_unit']
         self.default_volume_unit = yaml_config['default_volume_unit']
         self.default_colormap = yaml_config['default_colormap']
+        self.default_diverging_colormap = yaml_config['default_diverging_colormap']
 
 
-config = Config()
+from .pyplate import Substance, Container, Plate, Recipe
