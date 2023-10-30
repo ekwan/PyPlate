@@ -3,8 +3,8 @@ requires      = ["setuptools>=63.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyplate-api"
-version = "0.1"
+name = "pyplate-hte"
+version = "0.2"
 description = "A Python tool for designing chemistry experiments in plate format"
 readme = "README.md"
 license = {file = "LICENSE.txt"}
