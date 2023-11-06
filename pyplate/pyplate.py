@@ -400,6 +400,17 @@ class Unit:
             ratio *= Unit.convert_from_storage(1, 'mol')
         return ratio, numerator, denominator
 
+    @staticmethod
+    def calculate_concentration_ratio_moles(solute: Substance, quantity: str, solvent: Substance):
+        q, q_unit = Unit.parse_quantity(quantity)
+        if q_unit not in ('g', 'L', 'mol'):
+            raise ValueError("Invalid unit in quantity.")
+        if q_unit == 'g':
+            q /= solute.mol_weight
+        elif q_unit == 'L':
+            q *= solute.density
+        return Unit.calculate_concentration_ratio(solute, f"{q} mol", solvent)
+
 
 class Substance:
     """
@@ -997,6 +1008,64 @@ class Container:
 
         if new_volume > self.max_volume:
             raise ValueError("Dilute solution will not fit in container.")
+
+        if name:
+            # Note: this copies the container twice
+            destination = deepcopy(self)
+            destination.name = name
+        else:
+            destination = self
+        return destination._add(solvent, f"{required_umoles} umol")
+
+    def dilute_mols(self, solute: Substance, quantity_in_moles: float, solvent: Substance, volume: float, name=None):
+        """
+        Dilutes `solute` to achieve the desired quantity in moles and volume.
+
+        Args:
+            solute: Substance to be diluted.
+            quantity_in_moles: Desired quantity of the solute in moles.
+            solvent: Substance to dilute with.
+            volume: Desired volume of the solution in liters.
+            name: Optional name for the new container.
+
+        Returns: A new container containing a solution with the desired quantity of `solute` and volume.
+        """
+        if not isinstance(solute, Substance):
+            raise TypeError("Solute must be a Substance.")
+        if not isinstance(quantity_in_moles, (int, float)):
+            raise TypeError("Quantity in moles must be a number.")
+        if not isinstance(solvent, Substance):
+            raise TypeError("Solvent must be a substance.")
+        if not isinstance(volume, (int, float)):
+            raise TypeError("Volume must be a number.")
+        if name and not isinstance(name, str):
+            raise TypeError("New name must be a str.")
+        if solute not in self.contents:
+            raise ValueError(f"Container does not contain {solute.name}.")
+
+        new_ratio, numerator, denominator = Unit.calculate_concentration_ratio_moles(solute, quantity_in_moles)
+        if numerator == 'U':
+            if not solute.is_enzyme():
+                raise TypeError("Solute must be an enzyme.")
+
+        current_ratio = self.contents[solute] / sum(
+            self.contents[substance] for substance in self.contents if not substance.is_enzyme())
+
+        if new_ratio <= 0:
+            raise ValueError("Solution is impossible to create.")
+
+        if abs(new_ratio - current_ratio) <= 1e-6:
+            return deepcopy(self)
+
+        if new_ratio > current_ratio:
+            raise ValueError("Desired concentration is higher than current concentration.")
+
+        current_umoles = Unit.convert_from_storage(self.contents[solvent], 'umol')
+        required_umoles = Unit.convert_from_storage(self.contents[solute], 'umol') / new_ratio - current_umoles
+        new_volume = self.volume + Unit.convert(solvent, f"{required_umoles} umol", config.volume_prefix)
+
+        if new_volume > self.max_volume:
+            raise ValueError("Dilute solution will not fit in the container.")
 
         if name:
             # Note: this copies the container twice
