@@ -83,8 +83,9 @@ The following are set based on preferences read `pyplate.yaml`:
   - Move *quantity* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
   - Note that all `Substances` in the source will be transferred in proportion to their appropriate ratios.
   - *source* can be a container, a plate, or a slice of a plate.
-- create_solution(solute, concentration, solvent, quantity, name)
-  - Create a new container with the desired quantity and containing the desired concentration of `solute`.
+- create_solution(solute, solvent, name, concentration?, quantity?, total_quantity?)
+  - Create a new container with the desired solution based on given arguments.
+  - Two of concentration, quantity, total_quantity must be specified
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
   - If `solute` is a liquid, volumes will be calculated appropriately.
   - name is optional. If none is given, an appropriate name will be applied.
@@ -170,10 +171,12 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.  An exce
   - Keep track of steps to create container in recipe
   - Adds a step that creates a container as above and adds it to the used list.
   - Returns new container so that it can be used later in the same recipe.
-- create_solution(solute, concentration, solvent, quantity, name)
-  - Adds a step to the recipe with will create a new container with the desired quantity and containing the desired concentration of `saolute`.
-  - If `solute` is a liquid, volumes will be calculated appropriately.
+- create_solution(solute, solvent, name, concentration?, quantity?, total_quantity?)
+  - Adds a step to the recipe with will create a new container with the desired solution based on given arguments.
+  - Two of concentration, quantity, total_quantity must be specified
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
+  - If `solute` is a liquid, volumes will be calculated appropriately.
+  - name is optional. If none is given, an appropriate name will be applied.
   - Returns new container so that it can be used later in the same recipe.
 - dilute(destination, solute, concentration, solvent, new_name)
   - Adds a step to create a new container diluted to a certain `concentration` of `solute` from `destination`

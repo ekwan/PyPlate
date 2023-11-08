@@ -840,15 +840,15 @@ class Container:
         if ('concentration' in kwargs) + ('total_quantity' in kwargs) + ('quantity' in kwargs) != 2:
             raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
 
+        if not name:
+            name = f"solution of {solute.name} in {solvent.name}"
+
         if 'concentration' in kwargs and 'total_quantity' in kwargs:
             concentration = kwargs['concentration']
             total_quantity = kwargs['total_quantity']
             quantity, quantity_unit = Unit.parse_quantity(total_quantity)
             if quantity <= 0:
                 raise ValueError("Quantity must be positive.")
-
-            if not name:
-                name = f"{solute.name} {concentration} {solvent.name}"
 
             ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
 
@@ -880,26 +880,14 @@ class Container:
             assert x >= 0 and y >= 0
             solution = Container(name,
                                  initial_contents=((solute, f"{x} {quantity_unit}"), (solvent, f"{y} {quantity_unit}")))
-            substances = []
-            for substance in (solute, solvent):
-                if substance.is_liquid():
-                    unit = 'L'
-                elif substance.is_solid():
-                    unit = 'g'
-                elif substance.is_enzyme():
-                    unit = 'U'
-                amount = Unit.convert_from_storage(solution.contents[substance], 'mol')
-                value, unit = Unit.get_human_readable_unit(Unit.convert(substance, f"{amount} mol", unit), unit)
-                substances.append(f"{round(value, config.external_precision)} {unit} of {substance.name}")
-            solution.instructions = f"Add {' to '.join(substances)}."
             return solution
         if 'quantity' in kwargs and 'total_quantity' in kwargs:
-            result = Container("solution", initial_contents=[(solute, kwargs['quantity'])])
+            result = Container(name, initial_contents=[(solute, kwargs['quantity'])])
             return result.fill_to(solvent, kwargs['total_quantity'])
         else:  # 'quantity' and 'concentration'
             concentration = Unit.calculate_concentration_ratio(solute, kwargs['concentration'], solvent)
             quantity = Unit.convert(solute, kwargs['quantity'], concentration[1])
-            result = Container("solution", initial_contents=[(solute, kwargs['quantity'])])
+            result = Container(name, initial_contents=[(solute, kwargs['quantity'])])
             result._self_add(solvent, f"{quantity / concentration[0]} {concentration[1]}")
             return result
 
@@ -943,7 +931,7 @@ class Container:
             raise ValueError(f"Container does not contain {solute.name}.")
 
         if not name:
-            name = f"{solute.name} {concentration} {solvent.name}"
+            name = f"solution of {solute.name} in {solvent.name}"
 
         new_ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
         current_ratio = source.contents[solute] / sum(source.contents[substance] for
@@ -978,7 +966,7 @@ class Container:
         new_container.contents = {substance: value for substance, value in self.contents.items()
                                   if what not in (substance._type, substance)}
         new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
-                                   config.moles_prefix, config.volume_prefix) for substance, value in
+        config.moles_prefix, config.volume_prefix) for substance, value in
                                    new_container.contents.items())
         return new_container
 
@@ -1590,7 +1578,7 @@ class Recipe:
             raise ValueError("Quantity must be positive.")
 
         if not name:
-            name = f"{solute.name} {concentration} {solvent.name}"
+            name = f"solution of {solute.name} in {solvent.name}"
 
         new_ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
         if new_ratio <= 0:
@@ -1757,8 +1745,6 @@ class Recipe:
                 step.to[0] = self.results[to_index]
                 self.used.add(to_index)
                 self.results[to_index] = Container.create_solution(solute, solvent, dest.name, **kwargs)
-                # self.results[to_index] = Container.create_solution(solute,
-                #                                                    concentration, solvent, quantity, name=dest.name)
                 step.to.append(self.results[to_index])
             elif operator == 'solution_from':
                 source = step.frm[0]
