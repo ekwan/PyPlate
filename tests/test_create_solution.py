@@ -14,8 +14,8 @@ def test_create_solution(salt, water, triethylamine, dmso, sodium_sulfate, lipas
             for solvent in solvents:
                 if numerator == 'mL' and solute.is_solid() and config.solid_density == float('inf'):
                     continue
-                con = Container.create_solution(solute, f"0.001 {numerator}/{denominator}",
-                                                solvent, f"10 {quantity_unit}")
+                con = Container.create_solution(solute, solvent, concentration=f"0.001 {numerator}/{denominator}",
+                                                total_quantity=f"10 {quantity_unit}")
                 assert all(value > 0 for value in con.contents.values())
                 total = sum(Unit.convert(substance, f"{value} {config.moles_prefix}", quantity_unit) for
                             substance, value in con.contents.items())
@@ -26,8 +26,8 @@ def test_create_solution(salt, water, triethylamine, dmso, sodium_sulfate, lipas
                         for substance, value in con.contents.items())
                 assert abs(conc - 0.001) < epsilon
 
-                con = Container.create_solution(solute, f"0.01 {numerator}/10 {denominator}",
-                                                solvent, f"10 {quantity_unit}")
+                con = Container.create_solution(solute, solvent, concentration=f"0.01 {numerator}/10 {denominator}",
+                                                total_quantity=f"10 {quantity_unit}")
                 total = sum(Unit.convert(substance, f"{value} {config.moles_prefix}", quantity_unit) for
                             substance, value in con.contents.items())
                 assert abs(total - 10) < epsilon
@@ -40,8 +40,8 @@ def test_create_solution(salt, water, triethylamine, dmso, sodium_sulfate, lipas
     solute = lipase
     for denominator, quantity_unit in product(units, repeat=2):
         for solvent in solvents:
-            con = Container.create_solution(solute, f"1.1 U/{denominator}",
-                                            solvent, f"10 {quantity_unit}")
+            con = Container.create_solution(solute, solvent, concentration=f"1.1 U/{denominator}",
+                                            total_quantity=f"10 {quantity_unit}")
             assert all(value > 0 for value in con.contents.values())
             total = sum(Unit.convert(substance, f"{value} {config.moles_prefix}", quantity_unit) for
                         substance, value in con.contents.items())

@@ -805,17 +805,20 @@ class Container:
         raise TypeError("Invalid source type.")
 
     @staticmethod
-    def create_solution(solute: Substance, concentration: str, solvent: Substance, quantity: str, name=None):
+    def create_solution(solute, solvent, name=None, **kwargs):
         """
         Create a solution.
 
+        Two out of concentration, quantity, and total_quantity must be specified.
 
         Arguments:
             solute: What to dissolve.
-            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
             solvent: What to dissolve with.
-            quantity: Desired total quantity. ('3 mL', '10 g')
             name: Optional name for new container.
+            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
+            quantity: Desired quantity of solute. ('3 mL', '10 g')
+            total_quantity: Desired total quantity. ('3 mL', '10 g')
+
 
         Returns:
             New container with desired solution.
@@ -823,64 +826,82 @@ class Container:
 
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
-        if not isinstance(concentration, str):
-            raise TypeError("Concentration must be a str.")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a Substance.")
-        if not isinstance(quantity, str):
-            raise TypeError("Quantity must be a str.")
         if name and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
-        quantity, quantity_unit = Unit.parse_quantity(quantity)
-        if quantity <= 0:
-            raise ValueError("Quantity must be positive.")
+        if 'concentration' in kwargs and not isinstance(kwargs['concentration'], str):
+            raise TypeError("Concentration must be a str.")
+        if 'quantity' in kwargs and not isinstance(kwargs['quantity'], str):
+            raise TypeError("Quantity must be a str.")
+        if 'total_quantity' in kwargs and not isinstance(kwargs['total_quantity'], str):
+            raise TypeError("Total quantity must be a str.")
+        if ('concentration' in kwargs) + ('total_quantity' in kwargs) + ('quantity' in kwargs) != 2:
+            raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
 
-        if not name:
-            name = f"{solute.name} {concentration} {solvent.name}"
+        if 'concentration' in kwargs and 'total_quantity' in kwargs:
+            concentration = kwargs['concentration']
+            total_quantity = kwargs['total_quantity']
+            quantity, quantity_unit = Unit.parse_quantity(total_quantity)
+            if quantity <= 0:
+                raise ValueError("Quantity must be positive.")
 
-        ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
+            if not name:
+                name = f"{solute.name} {concentration} {solvent.name}"
 
-        if ratio <= 0:
-            raise ValueError("Solution is impossible to create.")
+            ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
 
-        if numerator == 'U':
-            if not solute.is_enzyme():
-                raise TypeError("Solute must be an enzyme.")
-            solvent_quantity = Unit.convert(solvent, f"{quantity} {quantity_unit}", config.moles_prefix)
-            units = ratio * solvent_quantity
-            return Container(name, initial_contents=((solute, f"{units} U"), (solvent, f"{quantity} {quantity_unit}")))
+            if ratio <= 0:
+                raise ValueError("Solution is impossible to create.")
 
-        if quantity_unit == 'g':
-            ratio *= solute.mol_weight / solvent.mol_weight
-        elif quantity_unit == 'mol':
-            pass
-        elif quantity_unit == 'L':
-            ratio *= (solute.mol_weight / solute.density) / (solvent.mol_weight / solvent.density)
-        else:
-            raise ValueError("Invalid quantity unit.")
+            if numerator == 'U':
+                if not solute.is_enzyme():
+                    raise TypeError("Solute must be an enzyme.")
+                solvent_quantity = Unit.convert(solvent, f"{quantity} {quantity_unit}", config.moles_prefix)
+                units = ratio * solvent_quantity
+                return Container(name,
+                                 initial_contents=((solute, f"{units} U"), (solvent, f"{quantity} {quantity_unit}")))
 
-        # x is quantity of solute in moles, y is quantity of solvent in moles
+            if quantity_unit == 'g':
+                ratio *= solute.mol_weight / solvent.mol_weight
+            elif quantity_unit == 'mol':
+                pass
+            elif quantity_unit == 'L':
+                ratio *= (solute.mol_weight / solute.density) / (solvent.mol_weight / solvent.density)
+            else:
+                raise ValueError("Invalid quantity unit.")
 
-        y = quantity / (1 + ratio)
-        x = quantity - y
+            # x is quantity of solute in moles, y is quantity of solvent in moles
 
-        assert x >= 0 and y >= 0
-        solution = Container(name,
-                             initial_contents=((solute, f"{x} {quantity_unit}"), (solvent, f"{y} {quantity_unit}")))
-        substances = []
-        for substance in (solute, solvent):
-            if substance.is_liquid():
-                unit = 'L'
-            elif substance.is_solid():
-                unit = 'g'
-            elif substance.is_enzyme():
-                unit = 'U'
-            amount = Unit.convert_from_storage(solution.contents[substance], 'mol')
-            value, unit = Unit.get_human_readable_unit(Unit.convert(substance, f"{amount} mol", unit), unit)
-            substances.append(f"{round(value, config.external_precision)} {unit} of {substance.name}")
-        solution.instructions = f"Add {' to '.join(substances)}."
-        return solution
+            y = quantity / (1 + ratio)
+            x = quantity - y
+
+            assert x >= 0 and y >= 0
+            solution = Container(name,
+                                 initial_contents=((solute, f"{x} {quantity_unit}"), (solvent, f"{y} {quantity_unit}")))
+            substances = []
+            for substance in (solute, solvent):
+                if substance.is_liquid():
+                    unit = 'L'
+                elif substance.is_solid():
+                    unit = 'g'
+                elif substance.is_enzyme():
+                    unit = 'U'
+                amount = Unit.convert_from_storage(solution.contents[substance], 'mol')
+                value, unit = Unit.get_human_readable_unit(Unit.convert(substance, f"{amount} mol", unit), unit)
+                substances.append(f"{round(value, config.external_precision)} {unit} of {substance.name}")
+            solution.instructions = f"Add {' to '.join(substances)}."
+            return solution
+        if 'quantity' in kwargs and 'total_quantity' in kwargs:
+            result = Container("solution", initial_contents=[(solute, kwargs['quantity'])])
+            return result.fill_to(solvent, kwargs['total_quantity'])
+        else:  # 'quantity' and 'concentration'
+            concentration = Unit.calculate_concentration_ratio(solute, kwargs['concentration'], solvent)
+            quantity = Unit.convert(solute, kwargs['quantity'], concentration[1])
+            result = Container("solution", initial_contents=[(solute, kwargs['quantity'])])
+            result._self_add(solvent, f"{quantity / concentration[0]} {concentration[1]}")
+            return result
 
     @staticmethod
     def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance,
@@ -936,7 +957,8 @@ class Container:
         if new_ratio > current_ratio:
             raise ValueError("Desired concentration is higher than current concentration.")
 
-        potential_solution = Container.create_solution(solute, concentration, solvent, quantity)
+        potential_solution = Container.create_solution(solute, solvent, concentration=concentration,
+                                                       total_quantity=quantity)
         ratio = potential_solution.contents[solute] / source.contents[solute]
         solution = Container(name, max_volume=f"{source.max_volume} {config.volume_prefix}")
         residual, solution = Container.transfer(source, solution, f"{source.volume * ratio} {config.volume_prefix}")
@@ -956,7 +978,7 @@ class Container:
         new_container.contents = {substance: value for substance, value in self.contents.items()
                                   if what not in (substance._type, substance)}
         new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
-        config.moles_prefix, config.volume_prefix) for substance, value in
+                                   config.moles_prefix, config.volume_prefix) for substance, value in
                                    new_container.contents.items())
         return new_container
 
@@ -1002,7 +1024,7 @@ class Container:
         if new_ratio > current_ratio:
             raise ValueError("Desired concentration is higher than current concentration.")
 
-        current_umoles = Unit.convert_from_storage(self.contents[solvent], 'umol')
+        current_umoles = Unit.convert_from_storage(self.contents.get(solvent, 0), 'umol')
         required_umoles = Unit.convert_from_storage(self.contents[solute], 'umol') / new_ratio - current_umoles
         new_volume = self.volume + Unit.convert(solvent, f"{required_umoles} umol", config.volume_prefix)
 
@@ -1094,7 +1116,7 @@ class Container:
         quantity, quantity_unit = Unit.parse_quantity(quantity)
         if quantity <= 0:
             raise ValueError("Quantity must be positive.")
-        if quantity_unit not in 'Lg':
+        if quantity_unit not in ('L', 'g', 'mol'):
             raise ValueError("We can only fill to mass or volume.")
 
         current_quantity = sum(Unit.convert(substance, f"{value} {config.moles_prefix}", quantity_unit)
@@ -1384,8 +1406,11 @@ class RecipeStep:
                 dataframe = pandas.DataFrame(data, columns=what[0].column_names, index=what[0].row_names)
                 extreme = max(abs(numpy.min(data)), abs(numpy.max(data)))
                 result.append(dataframe.style.format('{:.3f}').background_gradient(cmap,
-                                                        vmin=-extreme, vmax=extreme).set_caption(substance.name))
+                                                                                   vmin=-extreme,
+                                                                                   vmax=extreme).set_caption(
+                    substance.name))
         return result
+
 
 class Recipe:
     """
@@ -1485,45 +1510,47 @@ class Recipe:
 
         return new_container
 
-    def create_solution(self, solute: Substance, concentration: str,
-                        solvent: Substance, quantity: str, name=None):
+    def create_solution(self, solute, solvent, name=None, **kwargs):
         """
+        Adds a step to the recipe which creates a solution.
 
-        Adds a step to the recipe which creates a stock solution.
+        Two out of concentration, quantity, and total_quantity must be specified.
 
         Arguments:
             solute: What to dissolve.
-            concentration: Desired concentration.
             solvent: What to dissolve with.
-            quantity: Desired total quantity. ('10 mL')
             name: Optional name for new container.
+            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
+            quantity: Desired quantity of solute. ('3 mL', '10 g')
+            total_quantity: Desired total quantity. ('3 mL', '10 g')
+
 
         Returns:
             A new Container so that it may be used in later recipe steps.
-
         """
-        if self.locked:
-            raise RuntimeError("This recipe is locked.")
+
         if not isinstance(solute, Substance):
-            raise TypeError("What must be a Substance.")
-        if not isinstance(concentration, str):
-            raise TypeError("Concentration must be a str.")
+            raise TypeError("Solute must be a Substance.")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a Substance.")
-        if not isinstance(quantity, str):
-            raise TypeError("Quantity must be a str.")
         if name and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
+        if 'concentration' in kwargs and not isinstance(kwargs['concentration'], str):
+            raise TypeError("Concentration must be a str.")
+        if 'quantity' in kwargs and not isinstance(kwargs['quantity'], str):
+            raise TypeError("Quantity must be a str.")
+        if 'total_quantity' in kwargs and not isinstance(kwargs['total_quantity'], str):
+            raise TypeError("Total quantity must be a str.")
+        if ('concentration' in kwargs) + ('total_quantity' in kwargs) + ('quantity' in kwargs) != 2:
+            raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
+
         if not name:
-            name = f"{solute.name} {concentration} {solvent.name}"
-        ratio, *_ = Unit.calculate_concentration_ratio(solute, concentration, solvent)
-        if ratio <= 0:
-            raise ValueError("Solution is impossible to create.")
+            name = f"solution of {solute.name} in {solvent.name}"
 
         new_container = Container(name)
         self.uses(new_container)
-        self.steps.append(RecipeStep('solution', None, new_container, solute, concentration, solvent, quantity))
+        self.steps.append(RecipeStep('solution', None, new_container, solute, solvent, kwargs))
 
         return new_container
 
@@ -1724,12 +1751,14 @@ class Recipe:
             elif operator == 'solution':
                 dest = step.to[0]
                 step.frm.append(None)
-                solute, concentration, solvent, quantity = step.operands
+                solute, solvent, kwargs = step.operands
+                # solute, concentration, solvent, quantity = step.operands
                 to_index = self.indexes[dest]
                 step.to[0] = self.results[to_index]
                 self.used.add(to_index)
-                self.results[to_index] = Container.create_solution(solute,
-                                                                   concentration, solvent, quantity, name=dest.name)
+                self.results[to_index] = Container.create_solution(solute, solvent, dest.name, **kwargs)
+                # self.results[to_index] = Container.create_solution(solute,
+                #                                                    concentration, solvent, quantity, name=dest.name)
                 step.to.append(self.results[to_index])
             elif operator == 'solution_from':
                 source = step.frm[0]

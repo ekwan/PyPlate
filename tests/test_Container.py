@@ -54,15 +54,15 @@ def test_Container_transfer(water, salt, water_stock, salt_water):
 
 def test_create_stock_solution(water, salt, salt_water):
     with pytest.raises(TypeError, match='Solute must be a Substance'):
-        Container.create_solution('salt', '0.5 M', water, '100 mL')
+        Container.create_solution('salt', water, concentration='0.5 M', total_quantity='100 mL')
     with pytest.raises(TypeError, match='Concentration must be a str'):
-        Container.create_solution(salt, 0.5, water, '100 mL')
+        Container.create_solution(salt, water, concentration=.5, total_quantity='100 mL')
     with pytest.raises(TypeError, match='Solvent must be a Substance'):
-        Container.create_solution(salt, '0.5 M', 'water', '100 mL')
-    with pytest.raises(TypeError, match='Quantity must be a str'):
-        Container.create_solution(salt, '0.5 M', water, 100)
+        Container.create_solution(salt, 'water', concentration='0.5 M', total_quantity='100 mL')
+    with pytest.raises(TypeError, match='Total quantity must be a str'):
+        Container.create_solution(salt, water, concentration='0.5 M', total_quantity=100.0)
 
-    stock = Container.create_solution(salt, '0.5 M', water, '100 mL')
+    stock = Container.create_solution(salt, water, concentration='0.5 M', total_quantity='100 mL')
     assert water in stock.contents and salt in stock.contents
     assert stock.volume == Unit.convert_to_storage(100, 'mL')
     assert stock.contents[salt] == pytest.approx(salt_water.contents[salt])
