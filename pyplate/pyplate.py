@@ -148,7 +148,7 @@ class Unit:
                 numerator[0] /= Unit.convert_prefix_to_multiplier(denominator[0][:-len(unit)])
                 denominator[0] = unit
         if numerator[1] not in ('U', 'mol', 'L', 'g') or denominator[0] not in ('mol', 'L', 'g'):
-            raise ValueError("Concentration must be of the form '1 umol/mL'." + f"({numerator}, {denominator})")
+            raise ValueError("Concentration must be of the form '1 umol/mL'.")
         return round(numerator[0], config.internal_precision), numerator[1], denominator[0]
 
     @staticmethod
@@ -175,8 +175,6 @@ class Unit:
 
         if from_unit == 'U' and not substance.is_enzyme():
             raise ValueError("Only enzymes can be measured in activity units. 'U'")
-        # if from_unit == 'L' and not substance.is_liquid():
-        #     raise ValueError("Only liquids can be measured by volume. 'L'")
 
         for suffix in ['U', 'L', 'g', 'mol']:
             if from_unit.endswith(suffix):
@@ -197,8 +195,6 @@ class Unit:
             result = quantity
         elif to_unit.endswith('L'):
             prefix = to_unit[:-1]
-            # if not substance.is_liquid():
-            #     return 0
             if from_unit == 'L':
                 result = quantity
             elif from_unit == 'mol':
@@ -803,6 +799,32 @@ class Container:
         if isinstance(source, (Plate, PlateSlicer)):
             return destination._transfer_slice(source, quantity)
         raise TypeError("Invalid source type.")
+
+    def get_concentration(self, solute, units='M'):
+        """
+        Get the concentration of solute in the current solution.
+
+        Args:
+            solute: Substance interested in.
+            units: Units to return concentration in, defaults to Molar.
+
+        Returns: Concentration
+
+        """
+        if not isinstance(solute, Substance):
+            raise TypeError("Solute must be a Substance.")
+        if not isinstance(units, str):
+            raise TypeError("Units must be a str.")
+
+        mult, *units = Unit.parse_concentration('1 ' + units)
+
+        numerator = Unit.convert(solute, f"{self.contents.get(solute, 0)} {config.moles_prefix}", units[0])
+        if units[1].endswith('L'):
+            denominator = Unit.convert_from_storage(self.volume, units[1])
+        else:
+            denominator = sum(Unit.convert(substance, f"{amount} {config.moles_prefix}", units[1]) for substance, amount in self.contents.items())
+
+        return round(numerator/denominator/mult, config.external_precision)
 
     @staticmethod
     def create_solution(solute, solvent, name=None, **kwargs):
