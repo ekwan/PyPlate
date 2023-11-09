@@ -76,6 +76,8 @@ The following are set based on preferences read `pyplate.yaml`:
   - Name of new container is optionally set to `new_name`
 - fill_to(solvent, quantity)
   - Returns new container filled with `solvent` up to `quantity`.
+- get_concentration(solute, units)
+  - Returns the current concentration of `solute` in `units`.
 
 #### Static Methods:
 
