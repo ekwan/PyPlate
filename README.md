@@ -31,17 +31,17 @@ All experiments are divided into a *design* phase and an *implementation* phase.
 
 from pyplate import Substance, Container, Plate, Recipe
 
-triethylamine = Substance.liquid("triethylamine", mol_weight=101.19, density=0.726)
-DMSO = Substance.liquid("DMSO", 78.13, 1.1004)
+triethylamine = Substance.liquid(name="triethylamine", mol_weight=101.19, density=0.726)
+DMSO = Substance.liquid(name="DMSO", mol_weight=78.13, density=1.1004)
 
-triethylamine_50mM = Container.create_solution(triethylamine, DMSO, concentration='50 mM', total_quantity='10 mL')
-plate = Plate('plate', max_volume_per_well='50 uL')
+triethylamine_50mM = Container.create_solution(solute=triethylamine, solvent=DMSO, concentration='50 mM', total_quantity='10 mL')
+plate = Plate(name='plate', max_volume_per_well='50 uL')
 
 recipe = Recipe().uses(triethylamine_50mM, plate)
-recipe.transfer(triethylamine_50mM, plate[2:7, 2:11], '10 uL')
+recipe.transfer(source=triethylamine_50mM, destination=plate[2:7, 2:11], quantity='10 uL')
 triethylamine_50mM, plate = recipe.bake()
 
-recipe.steps[-1].visualize('destination', 'final', 'uL')[0]
+recipe.steps[-1].visualize(what='destination', mode='final', unit='uL')[0]
 
 ```
 ![img.png](images/simple_visualization.png)
@@ -90,7 +90,7 @@ sodium_chloride_10mM = Container.create_solution(
 Diluting the above solute to 0.005 M:
 
 ```python
-sodium_chloride_10mM, sodium_chloride_5mM = Container.create_solution_from(sodium_chloride_10mM, sodium_chloride, "5 mM", water, "10 mL")
+sodium_chloride_10mM, sodium_chloride_5mM = Container.create_solution_from(source=sodium_chloride_10mM, solute=sodium_chloride, concentration="5 mM", solvent=water, quantity="10 mL")
 ```
 
 ### Manipulating Containers
@@ -98,8 +98,8 @@ sodium_chloride_10mM, sodium_chloride_5mM = Container.create_solution_from(sodiu
 Containers can be diluted to a desired concentration or filled to a desired volume.
 
 ```python
-salt_water = salt_water.dilute(sodium_chloride_10mM, '5 mM', water)
-salt_water = salt_water.fill_to(water, '50 mL')
+salt_water = salt_water.dilute(solute=sodium_chloride_10mM, concentration='5 mM', solvent=water)
+salt_water = salt_water.fill_to(solvent=water, quantity='50 mL')
 ```
 
 ### Creating a Plate
@@ -108,7 +108,7 @@ salt_water = salt_water.fill_to(water, '50 mL')
 
 To create a generic 96 well plate:
 
-`plate = Plate("test plate", max_volume_per_well="50 uL")`
+`plate = Plate(name="test plate", max_volume_per_well="50 uL")`
 
 Custom plates can be created with different number of rows, columns, and different labels:
 
@@ -141,7 +141,7 @@ Slicing syntax is supported:
 A `Recipe` is a set of instructions for transforming one set of containers into another.
 
 ```python
-plate = Plate('plate', max_volume_per_well='50 uL')
+plate = Plate(name='plate', max_volume_per_well='50 uL')
 recipe = Recipe()
 ```
 
@@ -154,13 +154,13 @@ recipe.uses(plate)
 It can be convenient to create solutions and declare them for use in the same step:
 
 ```python
-triethylamine_50mM = recipe.create_solution(triethylamine, DMSO, concentration='0.05 M', total_quantity='10.0 mL')
+triethylamine_50mM = recipe.create_solution(solute=triethylamine, solvent=DMSO, concentration='0.05 M', total_quantity='10.0 mL')
 ```
 
 (Note that solutions made in this way are not actually created until `recipe.bake()` is called.)  Performing transfer steps:
 
 ```python
-recipe.transfer(triethylamine_50mM, plate[:3], '10 uL')
+recipe.transfer(source=triethylamine_50mM, destination=plate[:3], quantity='10 uL')
 ```
 
 When `recipe.bake()` is called, the resulting `Container` and `Plate` objects are returned (leaving the input objects, if any, unchanged) in order of declaration or creation:
@@ -177,13 +177,12 @@ Each step has instructions as to what happened during the step (`step.instructio
 ### Visualizations
 
 Each step in a recipe that involves a plate will yield visualizations. We can visualize information about the source or
-destination plate (as applicable) or both. Visualization can be done on the final contents of the plate or a 'delta' of
-what changed during the step. Finally, the unit in which data is returned must be provided.
+destination plate (as applicable) or both. Visualization can be determined for two different modes, either the 'final' state of the plate or a 'delta' of what changed during the step. Finally, the unit in which data is returned must be provided.
 
 ```
 ...
 last_step = recipe.steps[-1]
-for df in last_step.visualize('destination', 'delta', 'umol'):
+for df in last_step.visualize(what='destination', mode='delta', unit='umol'):
     display.display_html(df)
 ```
 ![Example Visualizations](images/example_visualization.png)
@@ -195,6 +194,10 @@ The basic units of pyplate are moles, grams, liters, and activity units. ('mol',
 Any time units are required, metric prefixes may be specified. ('mg', 'umol', 'dL', ...)
 
 All quantities are specified as strings with a value and a unit. ('1 mmol', '10 g', '10 uL' ...)
+
+### Building documentation
+
+Documenation can be by executing `make docs`. The resulting documentation will be in the `docs` folder.
 
 ## License
 
