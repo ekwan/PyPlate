@@ -62,7 +62,7 @@ water = Substance.liquid(name="Water", mol_weight=18.01528, density=1.0)
 enzyme_X = Substance.enzyme(name="Enzyme X")
 ```
 
-Enzymes are like solids, but are specified in units of activity instead of moles.  The default density is 1.0.
+Enzymes are like solids, but are specified in *units of activity* instead of moles.  The default density for substances is 1.0.
 
 ### Containers
 
@@ -95,7 +95,7 @@ sodium_chloride_10mM, sodium_chloride_5mM = Container.create_solution_from(sourc
 
 ### Manipulating Containers
 
-Containers can be diluted to a desired concentration or filled to a desired volume.
+`Container`s can be diluted to a desired concentration or filled to a desired volume.
 
 ```python
 salt_water = salt_water.dilute(solute=sodium_chloride_10mM, concentration='5 mM', solvent=water)
@@ -110,9 +110,10 @@ To create a generic 96 well plate:
 
 `plate = Plate(name="test plate", max_volume_per_well="50 uL")`
 
-Custom plates can be created with different number of rows, columns, and different labels:
+Custom plates can be created with different numbers of rows and columns as well as different labels:
 
-`example`
+`plate = Plate(name="custom plate", max_volume_per_well="50 uL", rows=16, columns=24)`
+`plate = Plate(name="custom plate", max_volume_per_well="50 uL", rows=['i', 'ii', 'iii'], columns=['a', 'b', c'])`
 
 ### Locations on a Plate and slices
 
@@ -197,8 +198,11 @@ All quantities are specified as strings with a value and a unit. ('1 mmol', '10 
 
 ### Building documentation
 
-Documenation can be by executing `make docs`. The resulting documentation will be in the `docs` folder.
+Documentation can be built by executing `make docs`. The resulting documentation will be in the `docs` folder.
 
+### Running tests
+
+Tests can be run by executing `pytest`.
 ## License
 
 Licensed under the Apache License, Version 2.0 (the "License")
