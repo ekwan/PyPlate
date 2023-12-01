@@ -96,7 +96,8 @@ exp_space = ExperimentalSpace(
 	XY_identity_SZ,
 	...,
 	temperature_NG, 
-	zincation_source_NG, 		
+	zincation_source_NG,
+    ]
 )
 
 valid_experiment_CE = Experiment(factors = {
@@ -192,7 +193,7 @@ negishi_blocks = exp_space.generate_experiments(
 		Pd_ligand_precomplexes_NG, 
 		solvents_NG,
 		additives_NG
-	]
+	],
 	# all experiments are generated twice
 	n_replicates = 2,
 	blocking_factors = [{"coupling_type"}, {"N Ligand CE", "P Ligand CE"}, {"X Identity", "Y Identity"}]
