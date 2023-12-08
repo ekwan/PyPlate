@@ -181,22 +181,18 @@ print(exp_space.is_valid(invalid_exp_sz)) # False
 print(exp_space.is_valid(valid_exp_sz)) # True
 print(exp_space.is_valid(invalid_exp_sz)) # False
 
-negishi_blocks = exp_space.generate_experiments(
+CE_blocks = exp_space.generate_experiments(
 	fixed_factors = {
-		coupling_type: "Negishi"
+		coupling_type: "CE"
 	},
 	variable_factors = [
-		temperature_NG,
-		zincation_source_NG,
-		XY_Identity_NG,
-		Products_NG,
-		Pd_ligand_precomplexes_NG, 
-		solvents_NG,
-		additives_NG
+        N_Ligand_CE,
+        P_Ligand_CE,
+        XY_Identity_CE,
 	],
 	# all experiments are generated twice
 	n_replicates = 2,
-	blocking_factors = [{"coupling_type"}, {"N Ligand CE", "P Ligand CE"}, {"X Identity", "Y Identity"}]
+	blocking_factors = [{"N Ligand CE", "P Ligand CE"}, {"XY Identity"}]
 )
 
 print(cross_electrophile_block.experiments[0] == valid_exp_ng) # True
