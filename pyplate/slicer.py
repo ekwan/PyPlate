@@ -50,7 +50,8 @@ class Slicer:
     Does not currently support negative indexing.
     """
 
-    def __init__(self, array_obj: np.ndarray, row_labels, col_labels, item):
+    def __init__(self, array_obj: np.ndarray, row_labels: tuple | list, col_labels: tuple | list,
+                 item: Slice | list):
         """
 
         Args:\

@@ -4,6 +4,13 @@ from pyplate.pyplate import Container, Unit, config
 
 
 def test_dilute(salt, sodium_sulfate, triethylamine, water, dmso):
+    """
+    Test diluting solutions.
+    Create a solution of 10 quantity_unit of 0.001 numerator/denominator for each solute
+    and solvent and then dilute to 0.0005 numerator/denominator.
+    Ensure the new concentration is correct.
+
+    """
     solvents = [water, dmso]
     solutes = [salt, triethylamine, sodium_sulfate]
     units = ['g', 'mol', 'mL']

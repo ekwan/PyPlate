@@ -6,6 +6,14 @@ epsilon = 1e-6
 
 
 def test_create_solution(salt, water, triethylamine, dmso, sodium_sulfate, lipase):
+    """
+
+    Create a solution using each a quantity of each solvent and solute in each unit.
+    Try "0.001 numerator/denominator" and "0.01 numerator/10 denominator"
+    Ensure the correct amount of solvent, solute, and total solution is applied.
+    Also try to create a "1.1 U/denominator" enzyme solution for each solvent.
+
+    """
     solvents = [water, dmso]
     solutes = [salt, triethylamine, sodium_sulfate]
     units = ['g', 'mol', 'mL']
@@ -45,7 +53,7 @@ def test_create_solution(salt, water, triethylamine, dmso, sodium_sulfate, lipas
             assert all(value > 0 for value in con.contents.values())
             total = sum(Unit.convert(substance, f"{value} {config.moles_prefix}", quantity_unit) for
                         substance, value in con.contents.items())
-            assert abs(total - 10) < epsilon, f"Making 10 {quantity_unit} of a 1 U/{denominator}" \
+            assert abs(total - 10) < epsilon, f"Making 10 {quantity_unit} of a 1.1 U/{denominator}" \
                                               f" solution of {solute} and {solvent} failed."
             conc = con.contents[solute] / \
                 sum(Unit.convert(substance, f"{value} {config.moles_prefix}", denominator)

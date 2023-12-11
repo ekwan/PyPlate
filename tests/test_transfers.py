@@ -106,7 +106,6 @@ def test_transfer_from_slice(plate1, solution1):
     # solution3, plate3 = plate1[:].transfer(solution1, '1 mL')
     solution3, plate3 = Plate.transfer(solution1, plate1[:], '1 mL')
     destination_solution = Container('destination', '100 mL')
-    # plate4, destination_solution = destination_solution.transfer_slice(plate3, '0.5 mL')
     plate4, destination_solution = Container.transfer(plate3, destination_solution, '0.5 mL')
     # Original plate should have 1 mL in each well
     assert numpy.array_equal(plate3.volumes(), numpy.ones(plate3[:].shape) * 1000)

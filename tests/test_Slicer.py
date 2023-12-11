@@ -9,17 +9,19 @@ def array():
 
 
 def test_resolve_labels_zero():
-    # Index myst be in range 1..n
+    # Index must be in range 1..n
     with pytest.raises(ValueError):
         Slicer.resolve_labels(0, [])
 
 
 def test_resolve_labels_high():
+    # Index must be in range 1..n
     with pytest.raises(ValueError):
         Slicer.resolve_labels(100, ['1'])
 
 
 def test_resolve_labels_high_slices():
+    # Slice indexes must be in range 1..n
     with pytest.raises(ValueError):
         Slicer.resolve_labels(slice(100, None, None), ['1'])
     with pytest.raises(ValueError):
@@ -45,23 +47,24 @@ def test_resolve_labels_typerror():
 
 
 def test_Slicer_arraytype():
+    # array_obj must be a numpy.ndarray
     with pytest.raises(TypeError, match="must be a numpy.ndarray"):
         Slicer(None, None, None, None)
 
 
 def test_Slicer_row_labels(array):
+    # row_labels must be a list or tuple
     with pytest.raises(TypeError, match="row_labels"):
         Slicer(array, None, None, None)
+    # row_labels must not be empty
     with pytest.raises(TypeError, match="row_labels"):
         Slicer(array, (), None, None)
-    with pytest.raises(TypeError, match="row_labels"):
-        Slicer(array, [1], None, None)
 
 
 def test_Slicer_col_labels(array):
-    with pytest.raises(TypeError, match="row_labels"):
-        Slicer(array, None, None, None)
-    with pytest.raises(TypeError, match="row_labels"):
-        Slicer(array, (), None, None)
-    with pytest.raises(TypeError, match="row_labels"):
-        Slicer(array, [1], None, None)
+    # col_labels must be a list or tuple
+    with pytest.raises(TypeError, match="col_labels"):
+        Slicer(array, [], None, None)
+    # col_labels must not be empty
+    with pytest.raises(TypeError, match="col_labels"):
+        Slicer(array, ['1'], (), None)

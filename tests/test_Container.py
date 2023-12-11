@@ -4,6 +4,11 @@ from pyplate.pyplate import config, Unit
 
 
 def test_make_Container(water, salt):
+    """
+
+    Tests that `Container` constructor checks the type of all arguments.
+
+    """
     # Argument types checked
     with pytest.raises(TypeError, match="Name must be a str"):
         Container(1)
@@ -26,6 +31,12 @@ def test_make_Container(water, salt):
 
 
 def test_Container_transfer(water, salt, water_stock, salt_water):
+    """
+
+    Tests if transfers between `Container`s works properly.
+
+    """
+    # Argument types checked
     with pytest.raises(TypeError, match='into a Container'):
         Container.transfer(1, 1, '10 mL')
     with pytest.raises(TypeError, match='Invalid source type'):
@@ -51,8 +62,19 @@ def test_Container_transfer(water, salt, water_stock, salt_water):
     # Original containers should be unchanged.
     assert initial_hashes == (hash(water_stock), hash(salt_water))
 
+    salt_stock = Container('salt stock', initial_contents=[(salt, '10 g')])
+    container1, container2 = Container.transfer(salt_stock, salt_water, '1 g')
+    assert container2.contents[salt] == \
+           pytest.approx(salt_water.contents[salt] + Unit.convert(salt, '1 g', config.moles_prefix))
+
 
 def test_create_stock_solution(water, salt, salt_water):
+    """
+
+    Tests if transfers between `Container`s works properly.
+
+    """
+    # Argument types checked
     with pytest.raises(TypeError, match='Solute must be a Substance'):
         Container.create_solution('salt', water, concentration='0.5 M', total_quantity='100 mL')
     with pytest.raises(TypeError, match='Concentration must be a str'):
@@ -63,6 +85,7 @@ def test_create_stock_solution(water, salt, salt_water):
         Container.create_solution(salt, water, concentration='0.5 M', total_quantity=100.0)
 
     stock = Container.create_solution(salt, water, concentration='0.5 M', total_quantity='100 mL')
+    # stock should have 100 mL of water and 50 mmol of salt
     assert water in stock.contents and salt in stock.contents
     assert stock.volume == Unit.convert_to_storage(100, 'mL')
     assert stock.contents[salt] == pytest.approx(salt_water.contents[salt])

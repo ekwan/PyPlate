@@ -3,6 +3,12 @@ from pyplate.pyplate import Unit
 
 
 def test_convert(salt, water, lipase, dmso):
+    """
+
+    Test internal conversion utilities.
+
+    """
+    # Argument types checked
     with pytest.raises(TypeError, match='Invalid type for substance'):
         Unit.convert(None, '', '')
     with pytest.raises(TypeError, match='Quantity must be a str'):

@@ -4,6 +4,11 @@ from pyplate.pyplate import Plate, Unit, config, Container
 
 
 def test_make_Plate():
+    """
+
+    Test that all argument types are checked in Plate constructor.
+
+    """
     with pytest.raises(ValueError, match='invalid plate name'):
         Plate(1, '10 uL')
     with pytest.raises(ValueError, match='invalid plate name'):
@@ -39,6 +44,11 @@ def test_make_Plate():
 
 
 def test_volume_and_volumes(salt, water, dmso, empty_plate):
+    """
+
+    Test volume() and volumes() for a plate.
+
+    """
     epsilon = 1e-3
     with pytest.raises(TypeError, match="Substance is not a valid type"):
         empty_plate.volumes('1')
@@ -76,6 +86,11 @@ def test_volume_and_volumes(salt, water, dmso, empty_plate):
 
 
 def test_moles(salt, water, empty_plate):
+    """
+
+    Test moles() for a plate.
+
+    """
     with pytest.raises(TypeError, match="Substance is not a valid type"):
         empty_plate.moles('1')
 

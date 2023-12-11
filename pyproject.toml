@@ -21,5 +21,9 @@ dependencies = [
     "pyyaml"
 ]
 
+
+[tool.setuptools]
+packages = ["pyplate"]
+
 [project.urls]
 Repository = "https://github.com/ekwan/PyPlate"
