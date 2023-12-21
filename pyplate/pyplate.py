@@ -732,13 +732,12 @@ class Container:
         source_slice = copy(source_slice)
         source_slice.plate = deepcopy(source_slice.plate)
 
-        if source_slice.size == 1:
-            result, to = Container.transfer(source_slice.get(), to, quantity)
-        else:
-            to_array = [to]
-            result = numpy.vectorize(helper_func, cache=True)(source_slice.get())
-            to = to_array[0]
-        source_slice.set(result)
+        # original_values = source_slice.get()
+
+        to_array = [to]
+        source_slice.apply(helper_func)
+        to = to_array[0]
+        # source_slice.set(result)
         return source_slice.plate, to
 
     def __repr__(self):
@@ -1806,7 +1805,7 @@ class Recipe:
             elif operator == 'dilute':
                 dest = step.to[0]
                 solute, concentration, solvent, new_name = step.operands
-                step.frm.append(None)
+                step.fxrm.append(None)
                 to_index = self.indexes[dest]
                 step.to[0] = self.results[to_index]
                 self.used.add(to_index)
@@ -1856,11 +1855,7 @@ class PlateSlicer(Slicer):
     def _add(frm, to, quantity):
         to = copy(to)
         to.plate = deepcopy(to.plate)
-        result = numpy.vectorize(lambda elem: elem._add(frm, quantity), cache=True)(to.get())
-        if to.size == 1:
-            to.set(result.item())
-        else:
-            to.set(result)
+        to.apply(lambda elem: elem._add(frm, quantity))
         return to.plate
 
     @staticmethod
@@ -1875,10 +1870,7 @@ class PlateSlicer(Slicer):
                 return elem
 
             frm_array = [frm]
-            result = numpy.vectorize(helper_func, cache=True)(to.get())
-            if isinstance(to.get(), Container):  # A zero-dim array was returned.
-                result = result.item()
-            to.set(result)
+            to.apply(helper_func)
             return frm_array[0], to.plate
         if not isinstance(frm, (Plate, PlateSlicer)):
             raise TypeError("Invalid source type.")
@@ -1894,32 +1886,29 @@ class PlateSlicer(Slicer):
 
         if frm.size == 1:
             # Source from the single element in frm
-            if frm.shape != ():
-                raise RuntimeError("Shape of source should have been ()")
+            if frm.shape != (1, 1):
+                raise RuntimeError("Shape of source should have been (1, 1)")
 
             def helper_func(elem):
                 """ @private """
-                frm_array[0], elem = Container.transfer(frm_array[0], elem, quantity)
+                frm_array[0][0], elem = Container.transfer(frm_array[0][0], elem, quantity)
                 return elem
 
-            frm_array = [frm.get()]
-            result = numpy.vectorize(helper_func, cache=True)(to.get())
-            to.set(result)
-            frm.set(frm_array[0])
+            frm_array = frm.get()
+            to.apply(helper_func)
 
         elif to.size == 1:
             #  Replace the single element in self
-            if to.shape != ():
-                raise RuntimeError("Shape of source should have been ()")
+            if to.shape != (1, 1):
+                raise RuntimeError("Shape of source should have been (1, 1)")
 
             def helper_func(elem):
                 """ @private """
-                elem, to_array[0] = to_array[0].transfer(elem, quantity)
+                elem, to_array[0][0] = to_array[0][0].transfer(elem, quantity)
                 return elem
 
-            to_array = [to.get()]
-            frm.set(numpy.vectorize(helper_func, cache=True)(frm.get()))
-            to.set(to_array[0])
+            to_array = to.get()
+            frm.apply(helper_func)
 
         elif frm.size == to.size and frm.shape == to.shape:
             def helper(elem1, elem2):
@@ -2002,13 +1991,8 @@ class PlateSlicer(Slicer):
         Returns: New Plate with requested substances removed.
 
         """
-        result = numpy.vectorize(lambda elem: elem.remove(what), cache=True)(self.get())
         self.plate = deepcopy(self.plate)
-        if result.size == 1:
-            self.set(result.item())
-        else:
-            self.set(result)
-
+        self.apply(lambda elem: elem.remove(what))
         return self.plate
 
     def fill_to(self, solvent, quantity):
@@ -2022,11 +2006,7 @@ class PlateSlicer(Slicer):
         Returns: New Plate with desired final `quantity` in each well.
 
         """
-        result = numpy.vectorize(lambda elem: elem.fill_to(solvent, quantity), cache=True)(self.get())
         self.plate = deepcopy(self.plate)
-        if result.size == 1:
-            self.set(result.item())
-        else:
-            self.set(result)
+        self.apply(lambda elem: elem.fill_to(solvent, quantity))
 
         return self.plate
