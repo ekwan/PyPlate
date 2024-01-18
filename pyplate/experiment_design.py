@@ -39,6 +39,8 @@ class Factor:
                 and self.possible_values == other.possible_values
                 and self.verifier == other.verifier)
 
+    def __hash__(self):
+        return hash((self.name, tuple(self.possible_values), self.verifier))
 
 class Experiment:
     """
@@ -131,13 +133,26 @@ class ExperimentalSpace:
 
     def register_factor(self, factor: Factor) -> None:
         """
-        Register a factor with the experimental space. This is useful for keeping track
+        Register a factor with the experimental space. Ensures that factor
+        names are unique.
+
+        :param factor: The factor to register
+        :type factor: Factor
+        :return: None
         """
-        if factor.name in self.factors:
+        if factor in self.factors:
             raise ValueError(f"Factor {factor.name} already exists in experimental space")
         self.factors.add(factor)
 
     def add_experiment(self, experiment: Experiment) -> None:
+        """
+        Add an experiment to the experimental space. This is useful for manually
+        adding experiments without `generate_experiments`.
+
+        :param experiment: The experiment to add
+        :type experiment: Experiment
+        :return: None
+        """
         if not self.experiments:
             self.experiments = []
         if experiment.factors.keys() != {x.name for x in self.factors}:
@@ -151,25 +166,39 @@ class ExperimentalSpace:
         self.experiments.append(experiment)
 
     def filter_experiments(self, filter_function: callable) -> None:
+        """
+        Filter the experiments in the experimental space. This is useful for
+        removing experiments that do not meet certain criteria.
+
+        :param filter_function: A function that takes an experiment and returns True if it should be kept
+        :type filter_function: callable
+        :return: None
+        """
         self.experiments = [x for x in self.experiments if filter_function(x)]
 
     def get_registered_factor(self, factor_name) -> Factor:
+        """
+        Get a registered factor by name.
+
+        :param factor_name: The name of the factor to get
+        :type factor_name: str
+        :return: The factor object
+        :rtype: Factor
+        """
         for factor in self.factors:
             if factor.name == factor_name:
                 return factor
         raise ValueError(f"Factor {factor_name} not found in experimental space")
 
-    def generate_experiments(self, fixed_factors: list[Factor], variable_factors: list[Factor],
-                             n_replicates: int, blocking_factors: list[set[Factor]]) -> None:
+    def generate_experiments(self, factors: dict[str, [str | Substance | int | float]],
+                             n_replicates: int, blocking_factors: list[Factor]) -> None:
         #TODO: Implement stub
         """
         Generate the experiments for the experimental space. This is useful for generating
         a large number of experiments with a small number of factors.
 
-        :param fixed_factors: A list of factors that are fixed across all experiments
-        :type fixed_factors: list[Factor]
-        :param variable_factors: A list of factors that vary across experiments
-        :type variable_factors: list[Factor]
+        :param factors: A list of factors to generate experiments for
+        :type factors: list[Factor]
         :param n_replicates: The number of replicates for each experiment
         :type n_replicates: int
         :param blocking_factors: A list of sets factors that are blocked together. The
