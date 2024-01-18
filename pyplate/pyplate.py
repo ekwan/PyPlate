@@ -732,12 +732,9 @@ class Container:
         source_slice = copy(source_slice)
         source_slice.plate = deepcopy(source_slice.plate)
 
-        # original_values = source_slice.get()
-
         to_array = [to]
         source_slice.apply(helper_func)
         to = to_array[0]
-        # source_slice.set(result)
         return source_slice.plate, to
 
     def __repr__(self):
@@ -1367,7 +1364,7 @@ class RecipeStep:
         self.to = [to]
         self.operands = operands
 
-    def visualize(self, what, mode, unit, cmap=None):
+    def visualize(self, what, mode, unit, substance='all', cmap=None):
         """
 
         Provide visualization of what happened during the step.
@@ -1376,16 +1373,24 @@ class RecipeStep:
             what: 'source', 'destination', or 'both'
             mode: 'delta', or 'final'
             unit: Unit we are interested in. ('mmol', 'uL', 'mg')
+            substance: Substance we are interested in. ('all', 'water', 'ATP')
+            cmap: Colormap to use. Defaults to default_colormap from config.
 
-        Returns: A dictionary of changes, either a dataframe or an absolute difference in unit,
-                 or a list of two dictionaries, one for source and one for destination.
+        Returns: A dataframe with the requested information or a list of dataframes if what is 'both'.
         """
 
         def helper(elem):
             """ Returns volume of elem. """
+            if substance == 'all':
+                total = 0
+                for subs, amount in elem.contents.items():
+                    if subs.is_enzyme():
+                        total += Unit.convert(subs, f"{amount} U", unit)
+                    else:
+                        total += Unit.convert(subs, f"{amount} {config.moles_prefix}", unit)
+                return total
             if substance in elem.contents:
                 quantity = f"{elem.contents[substance]} {config.moles_prefix if not substance.is_enzyme() else 'U'}"
-
                 return Unit.convert(substance, quantity, unit)
             return 0
 
@@ -1402,23 +1407,18 @@ class RecipeStep:
 
         if not isinstance(what[0], Plate):
             return None
-        result = []
-        for substance in what[0].substances().union(what[1].substances()):
-            data = numpy.vectorize(helper, cache=True, otypes='d')(what[1].wells)
-            if mode == 'delta':
-                data -= numpy.vectorize(helper, cache=True, otypes='d')(what[0].wells)
-                if cmap is None:
-                    cmap = config.default_diverging_colormap
+        data = numpy.vectorize(helper, cache=True, otypes='d')(what[1].wells)
+        if mode == 'delta':
+            data -= numpy.vectorize(helper, cache=True, otypes='d')(what[0].wells)
             if cmap is None:
-                cmap = config.default_colormap
-            if numpy.sum(numpy.abs(data)) != 0:
-                dataframe = pandas.DataFrame(data, columns=what[0].column_names, index=what[0].row_names)
-                extreme = max(abs(numpy.min(data)), abs(numpy.max(data)))
-                result.append(dataframe.style.format('{:.3f}').background_gradient(cmap,
-                                                                                   vmin=-extreme,
-                                                                                   vmax=extreme).set_caption(
-                    substance.name))
-        return result
+                cmap = config.default_diverging_colormap
+        if cmap is None:
+            cmap = config.default_colormap
+        dataframe = pandas.DataFrame(data, columns=what[0].column_names, index=what[0].row_names)
+        extreme = max(abs(numpy.min(data)), abs(numpy.max(data)))
+        return dataframe.style.format('{:.3f}').background_gradient(cmap, vmin=-extreme,
+            vmax=extreme).set_caption(
+            substance.name if isinstance(substance, Substance) else substance)
 
 
 class Recipe:

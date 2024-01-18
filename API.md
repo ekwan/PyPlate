@@ -27,7 +27,7 @@ The following are set based on preferences read `pyplate.yaml`:
 ### Substance
 
 #### Definition: 
-- An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  Immutable.  Solids and enzymes are assumed to require zero volume.
+- An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  Immutable.  Solids and enzymes are assumed to have a density of 1.0.
 
 #### Constructors/Factory Methods
 
@@ -81,11 +81,11 @@ The following are set based on preferences read `pyplate.yaml`:
 
 #### Static Methods:
 
-- transfer(source, destination, quantity):
+- `transfer(source, destination, quantity)`:
   - Move *quantity* from *source* to *destination* container, returning copies of the objects with amounts adjusted accordingly.
   - Note that all `Substances` in the source will be transferred in proportion to their appropriate ratios.
   - *source* can be a container, a plate, or a slice of a plate.
-- create_solution(solute, solvent, name, concentration?, quantity?, total_quantity?)
+- `create_solution(solute, solvent, name, concentration?, quantity?, total_quantity?)`
   - Create a new container with the desired solution based on given arguments.
   - Two of concentration, quantity, total_quantity must be specified
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
