@@ -190,15 +190,23 @@ class ExperimentalSpace:
                 return factor
         raise ValueError(f"Factor {factor_name} not found in experimental space")
 
-    def generate_experiments(self, factors: dict[str, [str | Substance | int | float]],
-                             n_replicates: int, blocking_factors: list[Factor]) -> None:
+    
+    """
+    def generate_experimentt()
+    #GOAL : Perform a full factorial enumeratin of the experimental space
+    """
+
+    def generate_experiments(self, fixed_factors: list[Factor], factors: list[Factor],
+                             n_replicates: int, blocking_factors: list[set[Factor]]) -> None:
         #TODO: Implement stub
         """
         Generate the experiments for the experimental space. This is useful for generating
         a large number of experiments with a small number of factors.
 
-        :param factors: A list of factors to generate experiments for
-        :type factors: list[Factor]
+        :param fixed_factors: A list of factors that are fixed across all experiments
+        :type fixed_factors: list[Factor]
+        :param variable_factors: A list of factors that vary across experiments
+        :type variable_factors: list[Factor]
         :param n_replicates: The number of replicates for each experiment
         :type n_replicates: int
         :param blocking_factors: A list of sets factors that are blocked together. The
@@ -206,4 +214,31 @@ class ExperimentalSpace:
         :type blocking_factors: list[Factor]
         :return: None
         """
-        pass
+        G = nx.DiGraph()
+        root = "Experiment Space"
+        G.add_node(root)
+
+        # Convert Factor objects to their possible values
+        factor_values = {factor.name: factor.possible_values for factor in factors}
+        blocking_values = {factor.name: factor.possible_values for factor in blocking_factors}
+
+        # Generate all combinations
+        factor_combinations = list(itertools.product(*factor_values.values()))
+        blocking_combinations = list(itertools.product(*blocking_values.values()))
+
+        for block in blocking_combinations:
+            block_node = f"Block: {block}"
+            G.add_node(block_node)
+            G.add_edge(root, block_node)
+
+            for combination in factor_combinations:
+                combined_factors = dict(zip(variable_factors, combination))
+
+                for rep in range(1, n_replicates + 1):
+                    experiment_factors = {**fixed_factors, **combined_factors}
+                    experiment_id = self.experiment_id_generator()
+                    experiment = Experiment(experiment_factors, experiment_id, rep)
+                    G.add_node(experiment_id, data=experiment)
+                    G.add_edge(block_node, experiment_id)
+
+        return G
