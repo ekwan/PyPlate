@@ -1,6 +1,7 @@
 from typing import Union, Optional
 
 from pyplate import Substance, Container
+import itertools
 
 
 class Factor:
@@ -199,46 +200,63 @@ class ExperimentalSpace:
     def generate_experiments(self, fixed_factors: list[Factor], factors: list[Factor],
                              n_replicates: int, blocking_factors: list[set[Factor]]) -> None:
         #TODO: Implement stub
+        #New Attempt
         """
-        Generate the experiments for the experimental space. This is useful for generating
-        a large number of experiments with a small number of factors.
+        Proposed pseudocode:
+        Get the Blocking factors.
+        loop over blocking factor
+        For each possible value of the blocking factor,
+        iterate over all the possible values of factors holding the blocking factor value constant and then form lists
+        repeat until we have reached the end of blockng factors
 
-        :param fixed_factors: A list of factors that are fixed across all experiments
-        :type fixed_factors: list[Factor]
-        :param variable_factors: A list of factors that vary across experiments
-        :type variable_factors: list[Factor]
-        :param n_replicates: The number of replicates for each experiment
-        :type n_replicates: int
-        :param blocking_factors: A list of sets factors that are blocked together. The
-        order of the list determines the order of the blocks.
-        :type blocking_factors: list[Factor]
-        :return: None
         """
-        G = nx.DiGraph()
-        root = "Experiment Space"
-        G.add_node(root)
+        #Create dictionary of blocking factors
+        #blocking_factors_dictionary = {factor.name: factor.possible_values for factor in blocking_factors}
 
-        # Convert Factor objects to their possible values
-        factor_values = {factor.name: factor.possible_values for factor in factors}
-        blocking_values = {factor.name: factor.possible_values for factor in blocking_factors}
+        #Filter the available factor values
+        filtered_factors = {}
+        for factor in self.factors:
+            if factors[factor.name] == "all":
+                filtered_factors[factor.name] = factor.possible_values
+            else:
+                filtered_factors[factor.name] = [value for value in factor.possible_values if value in factors[factor.name]]
+        
+        # Initialize blocks
+        blocks = []
 
-        # Generate all combinations
-        factor_combinations = list(itertools.product(*factor_values.values()))
-        blocking_combinations = list(itertools.product(*blocking_values.values()))
+        # If needed form blocking combinations
+        #blocking_combinations = list(itertools.product(*[filtered_factors[name] for name in blocking_factors]))
 
-        for block in blocking_combinations:
-            block_node = f"Block: {block}"
-            G.add_node(block_node)
-            G.add_edge(root, block_node)
+        # Iterate over each combination of blocking factors
+        for block_factor in blocking_factors:
 
-            for combination in factor_combinations:
-                combined_factors = dict(zip(variable_factors, combination))
+            # Iterate over each value of the blocking factor
+            for block_value in filtered_factors[block_factor]:
+                block = []
 
-                for rep in range(1, n_replicates + 1):
-                    experiment_factors = {**fixed_factors, **combined_factors}
-                    experiment_id = self.experiment_id_generator()
-                    experiment = Experiment(experiment_factors, experiment_id, rep)
-                    G.add_node(experiment_id, data=experiment)
-                    G.add_edge(block_node, experiment_id)
+                # Filter out the current blocking factor and create combinations of the other factors
+                #Create a dictionary of the other factors
+                other_factors = {name: values for name, values in filtered_factors.items() if name != block_factor}
+                other_combinations = list(itertools.product(*other_factors.values()))
 
-        return G
+                # Generate experiments for each combination
+                for comb in other_combinations:
+                    factors_dict = dict(zip(other_factors.keys(), comb))
+                    factors_dict[block_factor] = block_value  # Set the value of the blocking factor value
+
+                    # Create replicates for each unique combination
+                    for rep in range(n_replicates):
+                        experiment = Experiment(factors=factors_dict, replicate_idx=rep+1)
+                        block.append(experiment)
+
+                # Add the block to the list of blocks
+                blocks.append(block)
+
+        return blocks
+            
+
+            
+
+        
+    
+    
