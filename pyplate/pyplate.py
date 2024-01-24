@@ -313,6 +313,48 @@ class Unit:
         return round(result, config.internal_precision)
 
     @staticmethod
+    def convert_from_storage_to_standard_format(what, quantity: float):
+        """
+        Converts a quantity of a substance or container to a standard format.
+        Example: (water, 1e6) -> (18.015, 'mL'), (NaCl, 1e6) -> (58.443, 'g')
+        Args:
+            what: Substance or Container
+            quantity: Quantity in storage format.
+
+        Returns: Tuple of quantity and unit.
+
+        """
+        if isinstance(what, Substance):
+            if what.is_enzyme():
+                unit = 'U'
+            elif what.is_solid():
+                unit = 'g'
+                # convert moles to grams
+                # molecular weight is in g/mol
+                quantity *= Unit.convert_prefix_to_multiplier(config.moles_prefix[0]) * what.mol_weight
+            elif what.is_liquid():
+                unit = 'L'
+                # convert moles to liters
+                # molecular weight is in g/mol
+                # density is in g/mL
+                quantity *= (Unit.convert_prefix_to_multiplier(config.moles_prefix[0])
+                             * what.mol_weight / what.density / 1e3)
+        elif isinstance(what, Container):
+            # Assume the container contains a liquid
+            unit = 'L'
+            quantity *= Unit.convert_prefix_to_multiplier(config.volume_prefix[0])
+        else:
+            raise TypeError("Invalid type for what.")
+
+        multiplier = 1
+        while quantity < 1:
+            quantity *= 1e3
+            multiplier /= 1e3
+        quantity = round(quantity, config.external_precision)
+        unit = {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
+        return quantity, unit
+
+    @staticmethod
     def get_human_readable_unit(value: float, unit: str):
         """
         Returns a more human-readable value and unit.
@@ -602,6 +644,22 @@ class Container:
                 if not isinstance(substance, Substance) or not isinstance(quantity, str):
                     raise TypeError("Element in initial_contents must be a (Substance, str) tuple.")
                 self._self_add(substance, quantity)
+            contents = []
+            for substance, quantity in self.contents.items():
+                quantity, unit = Unit.convert_from_storage_to_standard_format(substance, quantity)
+                contents.append(f"{quantity} {unit} of {substance.name}")
+            self.instructions = f"Add {', '.join(contents)} "
+            if self.max_volume != float('inf'):
+                max_volume, unit = Unit.convert_from_storage_to_standard_format(self, self.max_volume)
+                self.instructions += f" to a {max_volume} {unit} container."
+            else:
+                self.instructions += " to a container."
+        else:
+            if self.max_volume != float('inf'):
+                max_volume, unit = Unit.convert_from_storage_to_standard_format(self, self.max_volume)
+                self.instructions = f"Create a {max_volume} {unit} container."
+            else:
+                self.instructions = "Create a container."
 
     def __eq__(self, other):
         if not isinstance(other, Container):
@@ -901,13 +959,18 @@ class Container:
             return solution
         if 'quantity' in kwargs and 'total_quantity' in kwargs:
             result = Container(name, initial_contents=[(solute, kwargs['quantity'])])
-            return result.fill_to(solvent, kwargs['total_quantity'])
+            result = result.fill_to(solvent, kwargs['total_quantity'])
         else:  # 'quantity' and 'concentration'
             concentration = Unit.calculate_concentration_ratio(solute, kwargs['concentration'], solvent)
             quantity = Unit.convert(solute, kwargs['quantity'], concentration[1])
             result = Container(name, initial_contents=[(solute, kwargs['quantity'])])
             result._self_add(solvent, f"{quantity / concentration[0]} {concentration[1]}")
-            return result
+        contents = []
+        for substance, value in result.contents.items():
+            value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
+            contents.append(f"{value} {unit} of {substance.name}")
+        result.instructions = "Add " + ", ".join(contents) + " to a container."
+        return result
 
     @staticmethod
     def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance,
@@ -967,7 +1030,17 @@ class Container:
                                                        total_quantity=quantity)
         ratio = potential_solution.contents[solute] / source.contents[solute]
         solution = Container(name, max_volume=f"{source.max_volume} {config.volume_prefix}")
+
         residual, solution = Container.transfer(source, solution, f"{source.volume * ratio} {config.volume_prefix}")
+        solution = solution.fill_to(solvent, quantity)
+
+        contents = [(*Unit.convert_from_storage_to_standard_format(solution, solution.volume), source.name),
+                    (*Unit.convert_from_storage_to_standard_format(solvent, quantity), solvent.name)]
+        max_volume, unit = Unit.convert_from_storage_to_standard_format(solution, solution.max_volume)
+        solution.instructions = ("Add "
+                                 + ", ".join(f"{value} {unit} of {substance}" for value, unit, substance in contents)
+                                 + f" to a {max_volume} {unit} container.")
+
         return residual, solution.fill_to(solvent, quantity)
 
     def remove(self, what=Substance.LIQUID):
@@ -1418,7 +1491,7 @@ class RecipeStep:
         extreme = max(abs(numpy.min(data)), abs(numpy.max(data)))
         return dataframe.style.format('{:.3f}').background_gradient(cmap, vmin=-extreme,
             vmax=extreme).set_caption(
-            substance.name if isinstance(substance, Substance) else substance)
+            (substance.name if isinstance(substance, Substance) else substance) + f"  ({unit})")
 
 
 class Recipe:
