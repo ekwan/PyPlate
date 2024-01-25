@@ -755,7 +755,7 @@ class Container:
                                     "mg") for substance, amount in source_container.contents.items())
             transfer, unit = Unit.get_human_readable_unit(mass * ratio, 'mg')
 
-        to.instructions = f"Transfer {transfer} {unit} from {source_container.name} to {to.name}"
+        to.instructions += f"\nTransfer {transfer} {unit} of {source_container.name} to {to.name}"
         to.volume = round(sum(Unit.convert(substance, f"{amount} {config.moles_prefix}", config.volume_prefix) for
                               substance, amount in to.contents.items()), config.internal_precision)
         if to.volume > to.max_volume:
@@ -1059,6 +1059,12 @@ class Container:
         new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
         config.moles_prefix, config.volume_prefix) for substance, value in
                                    new_container.contents.items())
+        new_container.instructions = self.instructions
+        classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid', Substance.ENZYME: 'enzyme'}
+        if what in classes:
+            new_container.instructions += f"Remove all {classes[what]}s."
+        else:
+            new_container.instructions += f"Remove all {what.name}s."
         return new_container
 
     def dilute(self, solute: Substance, concentration: str, solvent: Substance, name=None):
@@ -1116,7 +1122,11 @@ class Container:
             destination.name = name
         else:
             destination = self
-        return destination._add(solvent, f"{required_umoles} umol")
+        needed_umoles = f"{required_umoles} umol"
+        result = destination._add(solvent, needed_umoles)
+        needed_volume, unit = Unit.get_human_readable_unit(Unit.convert(solvent, needed_umoles, 'umol'), 'L')
+        result.instructions += f"Dilute with {needed_volume} {unit} of {solvent.name}."
+        return result
 
     def dilute_mols(self, solute: Substance, quantity_in_moles: float, solvent: Substance, volume: float, name=None):
         """
@@ -1174,7 +1184,10 @@ class Container:
             destination.name = name
         else:
             destination = self
-        return destination._add(solvent, f"{required_umoles} umol")
+        result = destination._add(solvent, f"{required_umoles} umol")
+        needed_volume, unit = Unit.get_human_readable_unit(Unit.convert(solvent, f"{required_umoles} umol", 'umol'), 'L')
+        result.instructions += f"Dilute with {needed_volume} {unit} of {solvent.name}."
+        return result
 
     def fill_to(self, solvent: Substance, quantity: str):
         """
@@ -1202,7 +1215,11 @@ class Container:
                                for substance, value in self.contents.items() if not substance.is_enzyme())
 
         required_quantity = quantity - current_quantity
-        return self._add(solvent, f"{required_quantity} {quantity_unit}")
+        result = self._add(solvent, f"{required_quantity} {quantity_unit}")
+        required_volume = Unit.convert(solvent, f"{required_quantity} {quantity_unit}", 'L')
+        required_volume, unit = Unit.get_human_readable_unit(required_volume, 'L')
+        result.instructions += f"Fill with {required_volume} {unit} of {solvent.name}."
+        return result
 
 
 class Plate:
@@ -1290,9 +1307,9 @@ class Plate:
         else:
             raise ValueError("columns must be int or list")
 
-        self.wells = numpy.array([[Container(f"well {row + 1},{col + 1}",
+        self.wells = numpy.array([[Container(f"well {row},{col}",
                                              max_volume=f"{max_volume_per_well} L")
-                                   for col in range(self.n_columns)] for row in range(self.n_rows)])
+                                   for col in self.column_names] for row in self.row_names])
 
     def __getitem__(self, item) -> PlateSlicer:
         return PlateSlicer(self, item)
@@ -1952,9 +1969,11 @@ class PlateSlicer(Slicer):
         frm = copy(frm)
 
         if to.plate != frm.plate:
+            different = True
             to.plate = deepcopy(to.plate)
             frm.plate = deepcopy(frm.plate)
         else:
+            different = False
             to.plate = frm.plate = deepcopy(to.plate)
 
         if frm.size == 1:
@@ -1965,6 +1984,12 @@ class PlateSlicer(Slicer):
             def helper_func(elem):
                 """ @private """
                 frm_array[0][0], elem = Container.transfer(frm_array[0][0], elem, quantity)
+                if different:
+                    instructions = elem.instructions.splitlines()
+                    instructions[-1] = instructions[-1].replace(frm_array[0][0].name,
+                                                                frm.plate.name + " " + frm_array[0][0].name, 1)
+                    elem.instructions = "\n".join(instructions)
+
                 return elem
 
             frm_array = frm.get()
@@ -1978,6 +2003,9 @@ class PlateSlicer(Slicer):
             def helper_func(elem):
                 """ @private """
                 elem, to_array[0][0] = to_array[0][0].transfer(elem, quantity)
+                instructions = to_array[0][0].instructions.splitlines()
+                instructions[-1] = instructions[-1].replace(elem.name, frm.plate.name + " " + elem.name, 1)
+                elem.instructions = "\n".join(instructions)
                 return elem
 
             to_array = to.get()
@@ -1986,7 +2014,12 @@ class PlateSlicer(Slicer):
         elif frm.size == to.size and frm.shape == to.shape:
             def helper(elem1, elem2):
                 """ @private """
-                return Container.transfer(elem1, elem2, quantity)
+                elem1, elem2 = Container.transfer(elem1, elem2, quantity)
+                if different:
+                    instructions = elem2.instructions.splitlines()
+                    instructions[-1] = instructions[-1].replace(elem1.name, frm.plate.name + " " + elem1.name, 1)
+                    elem2.instructions = "\n".join(instructions)
+                return elem1, elem2
 
             func = numpy.frompyfunc(helper, 2, 2)
             frm_result, to_result = func(frm.get(), to.get())
