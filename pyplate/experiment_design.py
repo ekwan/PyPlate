@@ -263,7 +263,7 @@ class ExperimentalSpace:
 
                 # Create replicates for each unique combination
                 for rep in range(n_replicates):
-                    experiment = Experiment(factors=factors_dict, replicate_idx=rep+1)
+                    experiment = Experiment(factors=factors_dict, replicate_idx=rep+1, experiment_id=self.experiment_id_generator())
                     block.append(experiment)
 
             # Use the blocking factor combination as the key for the blocks dictionary

@@ -62,55 +62,37 @@ def test_experimental_space_add_experiment_verification(example_experimental_spa
 
 def test_experimental_space_generate_experiments(cookie_experimental_space):
     expected_exps = \
-        [
-            # 300 temp, chocolate chip block
-            [
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Chocolate Chip', 'Baking Time': 10}, 1, 1, None),
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Chocolate Chip', 'Baking Time': 10}, 1, 2, None),
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Chocolate Chip', 'Baking Time': 30}, 1, 1, None),
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Chocolate Chip', 'Baking Time': 30}, 1, 2, None)
-            ],
+        {(300, 'Chocolate Chip'): [
+            Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Chocolate Chip'}, 1, 1, None),
+            Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Chocolate Chip'}, 1, 2, None),
+            Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Chocolate Chip'}, 1, 1, None),
+            Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Chocolate Chip'}, 1, 2, None)],
+         (300, 'Oatmeal Raisin'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin'}, 1, 2, None)],
+         (300, 'Peanut Butter'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Peanut Butter'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Peanut Butter'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Peanut Butter'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Peanut Butter'}, 1, 2, None)],
+         (350, 'Chocolate Chip'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Chocolate Chip'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Chocolate Chip'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Chocolate Chip'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Chocolate Chip'}, 1, 2, None)],
+         (350, 'Oatmeal Raisin'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin'}, 1, 2, None)],
+         (350, 'Peanut Butter'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Peanut Butter'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Peanut Butter'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Peanut Butter'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Peanut Butter'}, 1, 2, None)]}
 
-            # 300 temp, oatmeal raisin block
-            [
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin', 'Baking Time': 10}, 1, 1, None),
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin', 'Baking Time': 10}, 1, 2, None),
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin', 'Baking Time': 30}, 1, 1, None),
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin', 'Baking Time': 30}, 1, 2, None)
-            ],
-
-            # 300 temp, peanut butter block
-            [
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Peanut Butter', 'Baking Time': 10}, 1, 1, None),
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Peanut Butter', 'Baking Time': 10}, 1, 2, None),
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Peanut Butter', 'Baking Time': 30}, 1, 1, None),
-                Experiment({'Baking Temperature': 300, 'Flavor': 'Peanut Butter', 'Baking Time': 30}, 1, 2, None)
-            ],
-
-            # 350 temp, chocolate chip block
-            [
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Chocolate Chip', 'Baking Time': 10}, 1, 1, None),
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Chocolate Chip', 'Baking Time': 10}, 1, 2, None),
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Chocolate Chip', 'Baking Time': 30}, 1, 1, None),
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Chocolate Chip', 'Baking Time': 30}, 1, 2, None)
-            ],
-
-            # 350 temp, oatmeal raisin block
-            [
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin', 'Baking Time': 10}, 1, 1, None),
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin', 'Baking Time': 10}, 1, 2, None),
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin', 'Baking Time': 30}, 1, 1, None),
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin', 'Baking Time': 30}, 1, 2, None)
-            ],
-
-            # 350 temp, peanut butter block
-            [
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Peanut Butter', 'Baking Time': 10}, 1, 1, None),
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Peanut Butter', 'Baking Time': 10}, 1, 2, None),
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Peanut Butter', 'Baking Time': 30}, 1, 1, None),
-                Experiment({'Baking Temperature': 350, 'Flavor': 'Peanut Butter', 'Baking Time': 30}, 1, 2, None)
-            ]
-        ]
     generated_exps = cookie_experimental_space.generate_experiments(
         factors={
             "Baking Time": [10, 30],
@@ -121,5 +103,4 @@ def test_experimental_space_generate_experiments(cookie_experimental_space):
         blocking_factors=["Baking Temperature", "Flavor"]
     )
 
-    for block in generated_exps:
-        assert collections.Counter(block) == collections.Counter(expected_exps.pop(0))
+    assert generated_exps == expected_exps
