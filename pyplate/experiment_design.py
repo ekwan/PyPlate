@@ -1,4 +1,4 @@
-from typing import Union, Optional
+from typing import Union, Optional, List
 
 from pyplate import Substance, Container
 import itertools
@@ -42,6 +42,7 @@ class Factor:
 
     def __hash__(self):
         return hash((self.name, tuple(self.possible_values), self.verifier))
+
 
 class Experiment:
     """
@@ -191,72 +192,59 @@ class ExperimentalSpace:
                 return factor
         raise ValueError(f"Factor {factor_name} not found in experimental space")
 
-    
-    """
-    def generate_experimentt()
-    #GOAL : Perform a full factorial enumeratin of the experimental space
-    """
-
-    def generate_experiments(self, fixed_factors: list[Factor], factors: list[Factor],
-                             n_replicates: int, blocking_factors: list[set[Factor]]) -> None:
-        #TODO: Implement stub
-        #New Attempt
+    def generate_experiments(self, factors: dict[str, [str | Substance]],
+                             n_replicates: int, blocking_factors: list[str]) -> list[list[Experiment]]:
         """
-        Proposed pseudocode:
-        Get the Blocking factors.
-        loop over blocking factor
-        For each possible value of the blocking factor,
-        iterate over all the possible values of factors holding the blocking factor value constant and then form lists
-        repeat until we have reached the end of blockng factors
+        Generate experiments for the experimental space. This is useful for
+        generating a full factorial design of a subset of the experimental space.
 
+        :param factors: A list of factors to generate experiments for (must be a subset of the experimental space factors)
+        :type factors: dict[str, [str | Substance]]
+        :param n_replicates: The number of replicates to generate for each experiment
+        :type n_replicates: int
+        :param blocking_factors: A list of factors to use for blocking
+        :type blocking_factors: list[str]
+        :return: A list of blocks, where each block is a list of experiments
         """
-        #Create dictionary of blocking factors
-        #blocking_factors_dictionary = {factor.name: factor.possible_values for factor in blocking_factors}
-
-        #Filter the available factor values
-        filtered_factors = {}
+        experiment_factor_values = {}
         for factor in self.factors:
             if factors[factor.name] == "all":
-                filtered_factors[factor.name] = factor.possible_values
+                experiment_factor_values[factor.name] = factor.possible_values
             else:
-                filtered_factors[factor.name] = [value for value in factor.possible_values if value in factors[factor.name]]
-        
+                experiment_factor_values[factor.name] = [value for value in factor.possible_values if
+                                                         value in factors[factor.name]]
+
+        non_blocking_factor_values = dict(filter(lambda x: x[0] not in blocking_factors, experiment_factor_values.items()))
+        blocking_factor_values = dict(filter(lambda x: x[0] in blocking_factors, experiment_factor_values.items()))
+
         # Initialize blocks
         blocks = []
 
-        # If needed form blocking combinations
-        #blocking_combinations = list(itertools.product(*[filtered_factors[name] for name in blocking_factors]))
+        """
+        The following lines return a list of tuples shown below, assuming you block on Factor 1 and Factor 2:
+        [
+            [
+                [("Factor 1", "value 1"), ("Factor 2", "value 1"), ("Factor 3", "value 1")],
+                [("Factor 1", "value 1"), ("Factor 2", "value 1"), ("Factor 3", "value 2")],
+            ],
+            [
+                [("Factor 1", "value 1"), ("Factor 2", "value 2"), ("Factor 3", "value 1")],
+                [("Factor 1", "value 1"), ("Factor 2", "value 2"), ("Factor 3", "value 2")],
+            ],
+            ...
+        ]
+        
+        Easy to use this to create dicts and thus experiments
+        """
+        blocking_factor_combos = [list(zip(blocking_factor_values.keys(), values)) for values in itertools.product(*blocking_factor_values.values())]
+        non_blocking_factor_combos = [list(zip(non_blocking_factor_values.keys(), values)) for values in itertools.product(*non_blocking_factor_values.values())]
 
-        # Iterate over each combination of blocking factors
-        for block_factor in blocking_factors:
-
-            # Iterate over each value of the blocking factor
-            for block_value in filtered_factors[block_factor]:
-                block = []
-
-                # Filter out the current blocking factor and create combinations of the other factors
-                #Create a dictionary of the other factors
-                other_factors = {name: values for name, values in filtered_factors.items() if name != block_factor}
-                other_combinations = list(itertools.product(*other_factors.values()))
-
-                # Generate experiments for each combination
-                for comb in other_combinations:
-                    factors_dict = dict(zip(other_factors.keys(), comb))
-                    factors_dict[block_factor] = block_value  # Set the value of the blocking factor value
-
-                    # Create replicates for each unique combination
-                    for rep in range(n_replicates):
-                        experiment = Experiment(factors=factors_dict, replicate_idx=rep+1)
-                        block.append(experiment)
-
-                # Add the block to the list of blocks
-                blocks.append(block)
+        for blocking_combo in blocking_factor_combos:
+            block = []
+            for non_blocking_combo in non_blocking_factor_combos:
+                for rep in range(n_replicates):
+                    experiment = Experiment(dict(blocking_combo + non_blocking_combo), rep + 1, self.experiment_id_generator())
+                    block.append(experiment)
+            blocks.append(block)
 
         return blocks
-            
-
-            
-
-        
-    
-    
