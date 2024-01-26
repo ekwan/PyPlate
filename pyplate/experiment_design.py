@@ -215,19 +215,15 @@ class ExperimentalSpace:
         :type blocking_factors: list[str]
         :return: A list of blocks, where each block is a list of experiments
         """
-        experiment_factor_values = {}
+        filtered_factors = {}
         for factor in self.factors:
             if factors[factor.name] == "all":
-                experiment_factor_values[factor.name] = factor.possible_values
+                filtered_factors[factor.name] = factor.possible_values
             else:
-                experiment_factor_values[factor.name] = [value for value in factor.possible_values if
-                                                         value in factors[factor.name]]
-
-        non_blocking_factor_values = dict(filter(lambda x: x[0] not in blocking_factors, experiment_factor_values.items()))
-        blocking_factor_values = dict(filter(lambda x: x[0] in blocking_factors, experiment_factor_values.items()))
-
+                filtered_factors[factor.name] = [value for value in factor.possible_values if value in factors[factor.name]]
+        
         # Initialize blocks
-        blocks = []
+        blocks = {}
 
         """
         The following lines return a list of tuples shown below, assuming you block on Factor 1 and Factor 2:
@@ -245,15 +241,78 @@ class ExperimentalSpace:
         
         Easy to use this to create dicts and thus experiments
         """
-        blocking_factor_combos = [list(zip(blocking_factor_values.keys(), values)) for values in itertools.product(*blocking_factor_values.values())]
-        non_blocking_factor_combos = [list(zip(non_blocking_factor_values.keys(), values)) for values in itertools.product(*non_blocking_factor_values.values())]
 
-        for blocking_combo in blocking_factor_combos:
+        # If needed form blocking combinations
+        blocking_combinations = list(itertools.product(*[filtered_factors[name] for name in blocking_factors]))
+
+        # Iterate over each combination of blocking factors
+        for block_combination in blocking_combinations:
             block = []
-            for non_blocking_combo in non_blocking_factor_combos:
+            
+            # Filter out the current blocking factors and create combinations of other factors
+            non_blocking_factors = {name: values for name, values in filtered_factors.items() if name not in blocking_factors}
+            other_combinations = list(itertools.product(*non_blocking_factors.values()))
+
+            # Generate experiments for each combination
+            for comb in other_combinations:
+                factors_dict = dict(zip(non_blocking_factors.keys(), comb))
+                
+                # Set the values of the blocking factors
+                for bf, value in zip(blocking_factors, block_combination):
+                    factors_dict[bf] = value
+
+                # Create replicates for each unique combination
                 for rep in range(n_replicates):
-                    experiment = Experiment(dict(blocking_combo + non_blocking_combo), self.experiment_id_generator(), rep + 1)
+                    experiment = Experiment(factors=factors_dict, replicate_idx=rep+1)
                     block.append(experiment)
-            blocks.append(block)
+
+            # Use the blocking factor combination as the key for the blocks dictionary
+            blocks[block_combination] = block
 
         return blocks
+    
+        #Another implementation
+        # experiment_factor_values = {}
+        # for factor in self.factors:
+        #     if factors[factor.name] == "all":
+        #         experiment_factor_values[factor.name] = factor.possible_values
+        #     else:
+        #         experiment_factor_values[factor.name] = [value for value in factor.possible_values if
+        #                                                  value in factors[factor.name]]
+
+        # non_blocking_factor_values = dict(filter(lambda x: x[0] not in blocking_factors, experiment_factor_values.items()))
+        # blocking_factor_values = dict(filter(lambda x: x[0] in blocking_factors, experiment_factor_values.items()))
+
+        # # Initialize blocks
+        # blocks = []
+
+        """
+        The following lines return a list of tuples shown below, assuming you block on Factor 1 and Factor 2:
+        [
+            [
+                [("Factor 1", "value 1"), ("Factor 2", "value 1"), ("Factor 3", "value 1")],
+                [("Factor 1", "value 1"), ("Factor 2", "value 1"), ("Factor 3", "value 2")],
+            ],
+            [
+                [("Factor 1", "value 1"), ("Factor 2", "value 2"), ("Factor 3", "value 1")],
+                [("Factor 1", "value 1"), ("Factor 2", "value 2"), ("Factor 3", "value 2")],
+            ],
+            ...
+        ]
+        
+        Easy to use this to create dicts and thus experiments
+        """
+        # blocking_factor_combos = [list(zip(blocking_factor_values.keys(), values)) for values in itertools.product(*blocking_factor_values.values())]
+        # non_blocking_factor_combos = [list(zip(non_blocking_factor_values.keys(), values)) for values in itertools.product(*non_blocking_factor_values.values())]
+
+        # for blocking_combo in blocking_factor_combos:
+        #     block = []
+        #     for non_blocking_combo in non_blocking_factor_combos:
+        #         for rep in range(n_replicates):
+        #             experiment = Experiment(dict(blocking_combo + non_blocking_combo), self.experiment_id_generator(), rep + 1)
+        #             block.append(experiment)
+        #     blocks.append(block)
+
+        # return blocks
+    
+
