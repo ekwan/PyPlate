@@ -108,6 +108,15 @@ class Experiment:
     def __len__(self):
         return len(self.factors)
 
+    def __eq__(self, other):
+        return (self.factors == other.factors
+                and self.experiment_id == other.experiment_id
+                and self.replicate_idx == other.replicate_idx
+                and self.well == other.well)
+
+    def __hash__(self):
+        return hash((frozenset(self.factors.items()), self.experiment_id, self.replicate_idx, self.well))
+
 
 class ExperimentalSpace:
     """
@@ -243,7 +252,7 @@ class ExperimentalSpace:
             block = []
             for non_blocking_combo in non_blocking_factor_combos:
                 for rep in range(n_replicates):
-                    experiment = Experiment(dict(blocking_combo + non_blocking_combo), rep + 1, self.experiment_id_generator())
+                    experiment = Experiment(dict(blocking_combo + non_blocking_combo), self.experiment_id_generator(), rep + 1)
                     block.append(experiment)
             blocks.append(block)
 

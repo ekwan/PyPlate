@@ -62,14 +62,14 @@ Represents the experimental space, including fixed and variable factors.
 
 f1 = Factor(name="Baking Time", possible_values=[10, 20, 30], verifier=verify_time)
 f2 = Factor(name="Baking Temperature", possible_values=[300, 350, 400], verifier=verify_temperature)
-f3 = Factor(name="Flavor", possible_values=["Chocolate Chip", "Oatmeal Rasin", "Peanut Butter"], verifier=verify_flavor)
+f3 = Factor(name="Flavor", possible_values=["Chocolate Chip", "Oatmeal Raisin", "Peanut Butter"], verifier=verify_flavor)
 
 # Create Experimental Space
 space = ExperimentalSpace(factors=[f1, f2, f3])
 space.generate_experiments(
     factors={
         "Baking Time": [10, 30],
-        "Baking Temperature": "all",
+        "Baking Temperature": [300, 350],
         "Flavor": "all"
     },
     n_replicates=2,
