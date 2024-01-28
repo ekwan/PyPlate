@@ -1,0 +1,29 @@
+[build-system]
+requires      = ["setuptools>=63.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyplate-hte"
+version = "0.2"
+description = "A Python tool for designing chemistry experiments in plate format"
+readme = "README.md"
+license = {file = "LICENSE.txt"}
+authors = [
+    {name = "Eugene Kwan and James Marvin"},
+    {email = "ekwan16@gmail.com"}
+]
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)"
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "pyyaml"
+]
+
+
+[tool.setuptools]
+packages = ["pyplate"]
+
+[project.urls]
+Repository = "https://github.com/ekwan/PyPlate"

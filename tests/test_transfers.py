@@ -1,117 +1,68 @@
-from pyplate.pyplate import Plate, Substance, Container, Unit
 import pytest
 import numpy
-
-
-@pytest.fixture
-def water() -> Substance:
-    return Substance.liquid('H2O', mol_weight=18.0153, density=1)
-
-
-@pytest.fixture
-def salt() -> Substance:
-    return Substance.solid('NaCl', 58.4428)
-
-
-@pytest.fixture
-def dmso() -> Substance:
-    return Substance.liquid('DMSO', 78.13, 1.1004)
-
-
-@pytest.fixture
-def sodium_sulfate() -> Substance:
-    return Substance.solid('Sodium sulfate', 142.04)
+from pyplate import Plate, Container
+from pyplate.pyplate import Unit, config
 
 
 @pytest.fixture
 def plate1() -> Plate:
-    return Plate('plate1', 50_000)
+    return Plate('plate1', '50 mL')
 
 
 @pytest.fixture
 def plate2() -> Plate:
-    return Plate('plate2', 50_000)
+    return Plate('plate2', '50 mL')
 
 
 @pytest.fixture
 def solution1(water, salt) -> Container:
-    return Container('sol1', max_volume=1_000, initial_contents=[(water, '100 mL'), (salt, '50 mol')])
+    return Container('sol1', initial_contents=[(water, '100 mL'), (salt, '50 mmol')])
 
 
 @pytest.fixture
 def solution2(dmso, sodium_sulfate) -> Container:
-    return Container('sol2', max_volume=1_000, initial_contents=[(dmso, '100 mL'), (sodium_sulfate, '50 mol')])
+    return Container('sol2', initial_contents=[(dmso, '100 mL'), (sodium_sulfate, '50 mmol')])
 
 
-def test_add_to_container(salt, water):
-    """
-    Tests adding a substance to a container.
-    """
-    container = Container('container', max_volume=10)
-    container = Container.add(salt, container, '10 mol')
-
-    # container should contain 10 moles of salt
-    assert salt in container.contents and Unit.convert_from_storage(container.contents[salt], 'mol') == 10
-
-    container1 = Container('container', max_volume=20)
-    container1 = Container.add(water, container1, '10 mL')
-    # container1 should contain 10 mL of water and its volume should be 10 mL
-    assert water in container1.contents and Unit.convert_from_storage(container1.contents[water], 'mL') == 10
-    assert Unit.convert_from_storage(container1.volume, 'mL') == 10
-
-    container2 = Container.add(salt, container1, '5 mol')
-    # container2's volume shouldn't be changed by adding salt
-    assert Unit.convert_from_storage(container2.volume, 'mL') == 10
-
-    container3 = Container.add(water, container2, '5 mL')
-    # water should stack in the contents and the volume should be updated
-    assert Unit.convert_from_storage(container3.contents[water], 'mL') == 15 and \
-           Unit.convert_from_storage(container3.volume, 'mL') == 15
-
-    # the original container should be unchanged
-    assert container.volume == 0 and \
-           Unit.convert_from_storage(container.contents[salt], 'mol') == 10
-
-
-def test_transfer_between_containers(solution1, solution2, water, salt):
+def test_transfer_between_containers(solution1, solution2, water, salt, dmso, sodium_sulfate):
     """
     Tests transferring from one container to another.
     """
-    solution3, solution4 = Container.transfer(solution1, solution2, '10 mL')  # solution2.transfer(solution1, '10 mL')
+    # solution1 has 100mL of water and 50 nmol of solt
+    # solution2 has 100mL of dmso and 50 nmol of sodium sulfate
+    solution1_volume = 100 + Unit.convert(salt, '50 mmol', 'mL')
+    solution2_volume = 100 + Unit.convert(sodium_sulfate, '50 mmol', 'mL')
+    solution3, solution4 = Container.transfer(solution1, solution2, f"{solution1_volume*0.1} mL")
     # original solutions should be unchanged
-    assert Unit.convert_from_storage(solution2.volume, 'mL') == 100 and \
-           Unit.convert_from_storage(solution1.volume, 'mL') == 100
+    assert solution1.volume == Unit.convert_to_storage(solution1_volume, 'mL')
+    assert solution2.volume == Unit.convert_to_storage(solution2_volume, 'mL')
     # 10 mL of water and 5 moles of salt should have been transferred
-    assert Unit.convert_from_storage(solution3.volume, 'mL') == 90 and \
-           Unit.convert_from_storage(solution4.volume, 'mL') == 110
-    assert Unit.convert_from_storage(solution3.contents[water], 'mL') == 90 and \
-           Unit.convert_from_storage(solution3.contents[salt], 'mol') == 45
-    assert Unit.convert_from_storage(solution4.contents[water], 'mL') == 10 and \
-           Unit.convert_from_storage(solution4.contents[salt], 'mol') == 5
+    assert solution3.volume == Unit.convert_to_storage(solution1_volume*0.9, 'mL')
+    assert solution4.volume == Unit.convert_to_storage(solution2_volume + solution1_volume*0.1, 'mL')
+    assert solution3.contents[water] == Unit.convert(water, '90 mL', config.moles_prefix)
+    assert solution3.contents[salt] == Unit.convert(salt, '45 mmol', config.moles_prefix)
+    assert solution4.contents[water] == pytest.approx(Unit.convert(water, '10 mL', config.moles_prefix))
+    assert solution4.contents[salt] == Unit.convert(salt, '5 mmol', config.moles_prefix)
 
 
-def test_add_to_slice(plate1, salt):
-    """
-    Tests adding a substance to each well in a slice.
-    """
-    plate3 = Plate.add(salt, plate1[:], '10 mol')
-    # 10 moles of salt should be in each well
-    assert numpy.array_equal(plate3.moles(salt), numpy.full(plate3.wells.shape, 10))
-    # Original plate should be unchanged
-    assert numpy.array_equal(plate1.moles(salt), numpy.zeros(plate1.wells.shape))
-
-
-def test_transfer_to_slice(plate1, solution1):
+def test_transfer_to_slice(plate1, solution1, salt):
     """
     Tests transferring from a container to each well in a slice.
     """
-    solution3, plate3 = Plate.transfer(solution1, plate1[:], '1 mL')  # plate1[:].transfer(solution1, '1 mL')
-    # 1 mL should have been transferred to each well in the plate
-    assert plate3.volume() == plate3[:].size * 1000         # volume() is in uL
-    assert numpy.all(numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, 'mL') == 1)(plate3.wells))
+    solution1_volume = 100 + Unit.convert(salt, '50 mmol', 'mL')
+    to_transfer = solution1_volume / 100
+    solution3, plate3 = Plate.transfer(solution1, plate1[:], f"{to_transfer} mL")
+    # 1 mL of water should have been transferred to each well in the plate
+    assert plate3.volume() == pytest.approx(plate3[:].size * 1000 * to_transfer)  # volume() is in uL
+    assert numpy.allclose(plate3.volumes(unit='mL'), numpy.ones(plate3.wells.shape) * to_transfer)
+    # assert numpy.all(numpy.vectorize(lambda elem: abs(elem.volume - to_transfer) < epsilon)(plate3.wells))
     # Original solution and plate should be unchanged
-    assert Unit.convert_from_storage(solution1.volume, 'mL') == 100
+    assert solution1.volume == Unit.convert_to_storage(solution1_volume, 'mL')
     assert plate1.volume() == 0
+
+    solution4, plate4 = Plate.transfer(solution1, plate1[1, 1], f"{to_transfer} mL")
+    assert plate4.volume() == pytest.approx(1000 * to_transfer)
+    assert solution1.volume - solution4.volume == pytest.approx(Unit.convert_to_storage(to_transfer, 'mL'))
 
 
 def test_transfer_between_slices(plate1, plate2, solution1, solution2):
@@ -154,8 +105,7 @@ def test_transfer_from_slice(plate1, solution1):
     """
     # solution3, plate3 = plate1[:].transfer(solution1, '1 mL')
     solution3, plate3 = Plate.transfer(solution1, plate1[:], '1 mL')
-    destination_solution = Container('destination', 100)
-    # plate4, destination_solution = destination_solution.transfer_slice(plate3, '0.5 mL')
+    destination_solution = Container('destination', '100 mL')
     plate4, destination_solution = Container.transfer(plate3, destination_solution, '0.5 mL')
     # Original plate should have 1 mL in each well
     assert numpy.array_equal(plate3.volumes(), numpy.ones(plate3[:].shape) * 1000)
@@ -163,3 +113,6 @@ def test_transfer_from_slice(plate1, solution1):
     assert destination_solution.volume == Unit.convert_to_storage(0.5 * plate3[:].size, 'mL')
     # Source wells should all have 0.5 mL
     assert numpy.array_equal(plate4.volumes(), numpy.ones(plate4[:].shape) * 0.5 * 1000)
+
+    plate4, destination_solution = Container.transfer(plate3[1, :], destination_solution, '0.5 mL')
+    assert plate3.volume() - plate4.volume() == 500 * plate3.n_columns

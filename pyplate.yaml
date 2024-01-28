@@ -7,3 +7,11 @@ external_precision: 3
 volume_storage: uL
 # 1e-6 means we will store moles as micromoles
 moles_storage: umol
+# density in g/mL
+solid_density: 1
+# units for %w/v
+default_weight_volume_units: g/mL
+default_moles_unit: mol
+default_volume_unit: uL
+default_colormap: Purples
+default_diverging_colormap: PuOr
