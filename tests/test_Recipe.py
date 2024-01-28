@@ -26,9 +26,8 @@ def test_uses(salt_water):
     """
     recipe = Recipe()
     recipe.uses(salt_water)
-    index = recipe.indexes.get(salt_water, None)
-    assert index is not None
-    assert recipe.results[index] == salt_water
+    assert salt_water.name in recipe.results
+    assert recipe.results[salt_water.name] == salt_water
 
     with pytest.raises(ValueError, match="Something declared as used wasn't used"):
         _ = recipe.bake()
@@ -58,7 +57,9 @@ def test_transfer(salt_water):
     recipe.transfer(salt_water, container, '10 mL')
     # Container should still be empty until we bake.
     assert container.volume == 0
-    new_salt_water, container = recipe.bake()
+    results = recipe.bake()
+    new_salt_water = results[salt_water.name]
+    container = results[container.name]
     assert container.volume == Unit.convert_to_storage(10, 'mL')
     assert salt_water.volume - new_salt_water.volume == Unit.convert_to_storage(10, 'mL')
 
@@ -70,7 +71,9 @@ def test_transfer(salt_water):
     recipe.uses(salt_water, plate)
     recipe.transfer(salt_water, plate, '5 uL')
     recipe.transfer(salt_water, plate[1, 1], '1 uL')
-    new_salt_water, new_plate = recipe.bake()
+    results = recipe.bake()
+    new_salt_water = results[salt_water.name]
+    new_plate = results[plate.name]
     # 5 uL transferred to 96 wells and 1 uL to one well.
     assert salt_water.volume - new_salt_water.volume == pytest.approx(Unit.convert_to_storage(5 * 96 + 1, 'uL'))
     volumes = new_plate.volumes(unit='uL')
@@ -83,7 +86,9 @@ def test_transfer(salt_water):
     recipe.uses(container, new_plate)
     recipe.transfer(new_plate[1, 1], container, '2 uL')
     recipe.transfer(new_plate[1:2, 1:2], container, '1 uL')
-    container, new_plate2 = recipe.bake()
+    results = recipe.bake()
+    container = results[container.name]
+    new_plate2 = results[new_plate.name]
     # 2 uL from plate[1, 1] and 1 uL from four wells.
     assert container.volume == Unit.convert_to_storage(2 + 4, 'uL')
     assert new_plate.volume('uL') - new_plate2.volume('uL') == 2 + 4
@@ -130,8 +135,11 @@ def test_create_container(water, salt):
 
     # Initial contents added correctly only at bake
     container3 = recipe.create_container('container3', initial_contents=[(water, '10 mL'), (salt, '5 mmol')])
-    recipe.used = set(recipe.indexes.values())
+    recipe.used = set(recipe.results.keys())
     assert container3.volume == 0
-    container, container2, container3, = recipe.bake()
+    results = recipe.bake()
+    container = results[container.name]
+    container2 = results[container2.name]
+    container3 = results[container3.name]
     assert Unit.convert_to_storage(10, 'mL') + Unit.convert(salt, '5 mmol', config.volume_prefix) == container3.volume
     assert container3.contents.get(salt, None) == Unit.convert_to_storage(5, 'mmol')

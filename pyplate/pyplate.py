@@ -339,6 +339,8 @@ class Unit:
                 # density is in g/mL
                 quantity *= (Unit.convert_prefix_to_multiplier(config.moles_prefix[0])
                              * what.mol_weight / what.density / 1e3)
+            else:
+                raise TypeError("Invalid type for what.")
         elif isinstance(what, Container):
             # Assume the container contains a liquid
             unit = 'L'
@@ -346,6 +348,8 @@ class Unit:
         else:
             raise TypeError("Invalid type for what.")
 
+        if round(quantity, config.external_precision) == 0:
+            return 0, unit[-1]
         multiplier = 1
         while quantity < 1:
             quantity *= 1e3
@@ -876,9 +880,11 @@ class Container:
         if units[1].endswith('L'):
             denominator = Unit.convert_from_storage(self.volume, units[1])
         else:
-            denominator = sum(Unit.convert(substance, f"{amount} {config.moles_prefix}", units[1]) for substance, amount in self.contents.items())
+            denominator = sum(
+                Unit.convert(substance, f"{amount} {config.moles_prefix}", units[1]) for substance, amount in
+                self.contents.items())
 
-        return round(numerator/denominator/mult, config.external_precision)
+        return round(numerator / denominator / mult, config.external_precision)
 
     @staticmethod
     def create_solution(solute, solvent, name=None, **kwargs):
@@ -1035,7 +1041,7 @@ class Container:
         solution = solution.fill_to(solvent, quantity)
 
         contents = [(*Unit.convert_from_storage_to_standard_format(solution, solution.volume), source.name),
-                    (*Unit.convert_from_storage_to_standard_format(solvent, quantity), solvent.name)]
+                    (*Unit.convert_from_storage_to_standard_format(solvent, solution.contents[solvent]), solvent.name)]
         max_volume, unit = Unit.convert_from_storage_to_standard_format(solution, solution.max_volume)
         solution.instructions = ("Add "
                                  + ", ".join(f"{value} {unit} of {substance}" for value, unit, substance in contents)
@@ -1043,7 +1049,7 @@ class Container:
 
         return residual, solution.fill_to(solvent, quantity)
 
-    def remove(self, what=Substance.LIQUID):
+    def remove(self, what: (Substance | int) = Substance.LIQUID):
         """
         Removes substances from `Container`
 
@@ -1057,8 +1063,8 @@ class Container:
         new_container.contents = {substance: value for substance, value in self.contents.items()
                                   if what not in (substance._type, substance)}
         new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
-        config.moles_prefix, config.volume_prefix) for substance, value in
-                                   new_container.contents.items())
+                                   config.moles_prefix, config.volume_prefix) for
+                                   substance, value in new_container.contents.items())
         new_container.instructions = self.instructions
         classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid', Substance.ENZYME: 'enzyme'}
         if what in classes:
@@ -1154,7 +1160,8 @@ class Container:
         if solute not in self.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
 
-        new_ratio, numerator, denominator = Unit.calculate_concentration_ratio_moles(solute, quantity_in_moles)
+        new_ratio, numerator, denominator =\
+            Unit.calculate_concentration_ratio_moles(solute, f"{quantity_in_moles} mol", solvent)
         if numerator == 'U':
             if not solute.is_enzyme():
                 raise TypeError("Solute must be an enzyme.")
@@ -1185,7 +1192,8 @@ class Container:
         else:
             destination = self
         result = destination._add(solvent, f"{required_umoles} umol")
-        needed_volume, unit = Unit.get_human_readable_unit(Unit.convert(solvent, f"{required_umoles} umol", 'umol'), 'L')
+        needed_volume, unit = Unit.get_human_readable_unit(Unit.convert(solvent, f"{required_umoles} umol", 'umol'),
+                                                           'L')
         result.instructions += f"Dilute with {needed_volume} {unit} of {solvent.name}."
         return result
 
@@ -1479,6 +1487,7 @@ class RecipeStep:
                     else:
                         total += Unit.convert(subs, f"{amount} {config.moles_prefix}", unit)
                 return total
+            assert isinstance(substance, Substance)
             if substance in elem.contents:
                 quantity = f"{elem.contents[substance]} {config.moles_prefix if not substance.is_enzyme() else 'U'}"
                 return Unit.convert(substance, quantity, unit)
@@ -1507,29 +1516,27 @@ class RecipeStep:
         dataframe = pandas.DataFrame(data, columns=what[0].column_names, index=what[0].row_names)
         extreme = max(abs(numpy.min(data)), abs(numpy.max(data)))
         return dataframe.style.format('{:.3f}').background_gradient(cmap, vmin=-extreme,
-            vmax=extreme).set_caption(
+                                                                    vmax=extreme).set_caption(
             (substance.name if isinstance(substance, Substance) else substance) + f"  ({unit})")
 
 
 class Recipe:
     """
     A list of instructions for transforming one set of containers into another. The intended workflow is to declare
-    the source containers, enumerate the desired transformations, and call recipe.bake(). This method will ensure
-    that all solid and liquid handling instructions are valid. If they are indeed valid, then the updated containers
-    will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is
-    considered immutable.
+    the source containers, enumerate the desired transformations, and call recipe.bake(). The name of each object used
+    by the Recipe must be unique. This method will ensure that all solid and liquid handling instructions are valid.
+    If they are indeed valid, then the updated containers will be generated. Once recipe.bake() has been called, no
+    more instructions can be added and the Recipe is considered immutable.
 
     Attributes:
         locked (boolean): Is the recipe locked from changes?
         steps (list): A list of steps to be completed upon bake() bring called.
         used (list): A list of Containers and Plates to be used in the recipe.
-        results (list): A list used in bake to return the mutated objects.
-        indexes (dict): A dictionary used to locate objects in the used list.
+        results (list): A dictionary used in bake to return the mutated objects.
     """
 
     def __init__(self):
-        self.indexes = {}
-        self.results = []
+        self.results = {}
         self.steps: list[RecipeStep] = []
         self.locked = False
         self.used = set()
@@ -1541,14 +1548,15 @@ class Recipe:
         if self.locked:
             raise RuntimeError("This recipe is locked.")
         for arg in args:
-            if arg not in self.indexes:
+            if isinstance(arg, (Container, Plate)):
                 # TODO: Do we need to keep track of substances?
-                if isinstance(arg, (Container, Plate)):
-                    self.indexes[arg] = len(self.results)
-                    self.results.append(deepcopy(arg))
+                if arg.name not in self.results:
+                    self.results[arg.name] = deepcopy(arg)
+                else:
+                    raise ValueError("An object with this name is already in use.")
         return self
 
-    def transfer(self, source: Container, destination: Container | Plate, quantity: str):
+    def transfer(self, source: Container, destination: Container | Plate | PlateSlicer, quantity: str):
         """
         Adds a step to the recipe which will move quantity from source to destination.
         Note that all Substances in the source will be transferred in proportion to their respective ratios.
@@ -1560,11 +1568,11 @@ class Recipe:
             raise TypeError("Invalid destination type.")
         if not isinstance(source, (Substance, Container, PlateSlicer)):
             raise TypeError("Invalid source type.")
-        if (source.plate if isinstance(source, PlateSlicer) else source) not in self.indexes:
+        if (source.plate.name if isinstance(source, PlateSlicer) else source.name) not in self.results:
             raise ValueError("Source not found in declared uses.")
-        if (destination.plate if isinstance(destination, PlateSlicer) else destination) not in self.indexes:
-            name = destination.plate.name if isinstance(destination, PlateSlicer) else destination.name
-            raise ValueError(f"Destination {name} has not been previously declared for use.")
+        destination_name = destination.plate.name if isinstance(destination, PlateSlicer) else destination.name
+        if destination_name not in self.results:
+            raise ValueError(f"Destination {destination_name} has not been previously declared for use.")
         if not isinstance(quantity, str):
             raise TypeError("Volume must be a str. ('5 mL')")
         if isinstance(source, Plate):
@@ -1711,10 +1719,10 @@ class Recipe:
         """
 
         if isinstance(destination, PlateSlicer):
-            if destination.plate not in self.indexes:
+            if destination.plate.name not in self.results:
                 raise ValueError(f"Destination {destination.plate.name} has not been previously declared for use.")
         elif isinstance(destination, (Container, Plate)):
-            if destination not in self.indexes:
+            if destination.name not in self.results:
                 raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
         else:
             raise TypeError(f"Invalid destination type: {type(destination)}")
@@ -1744,7 +1752,7 @@ class Recipe:
             raise TypeError("New name must be a str.")
         if not isinstance(destination, Container):
             raise TypeError("Destination must be a container.")
-        if destination not in self.indexes:
+        if destination.name not in self.results:
             raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
         if solute not in destination.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
@@ -1770,10 +1778,10 @@ class Recipe:
 
         """
         if isinstance(destination, PlateSlicer):
-            if destination.plate not in self.indexes:
+            if destination.plate.name not in self.results:
                 raise ValueError(f"Destination {destination.plate.name} has not been previously declared for use.")
         elif isinstance(destination, (Container, Plate)):
-            if destination not in self.indexes:
+            if destination.name not in self.results:
                 raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
         else:
             raise TypeError(f"Invalid destination type: {type(destination)}")
@@ -1804,125 +1812,118 @@ class Recipe:
                 dest = step.to[0]
                 step.frm.append(None)
                 max_volume, initial_contents = step.operands
-                to_index = self.indexes[dest]
-                step.to[0] = self.results[to_index]
-                self.used.add(to_index)
-                self.results[to_index] = Container(dest.name, max_volume, initial_contents)
-                step.to.append(self.results[to_index])
+                step.to[0] = self.results[dest.name]
+                self.used.add(dest.name)
+                self.results[dest.name] = Container(dest.name, max_volume, initial_contents)
+                step.to.append(self.results[dest.name])
             elif operator == 'transfer':
-                frm = step.frm[0]
+                source = step.frm[0]
+                source_name = source.plate.name if isinstance(source, PlateSlicer) else source.name
                 dest = step.to[0]
+                dest_name = dest.plate.name if isinstance(dest, PlateSlicer) else dest.name
                 quantity, = step.operands
-                # used items can change in a recipe
-                frm_index = self.indexes[frm] if not isinstance(frm, PlateSlicer) else self.indexes[frm.plate]
-                to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
 
-                step.frm[0] = self.results[frm_index]
-                step.to[0] = self.results[to_index]
-
-                self.used.add(frm_index)
-                self.used.add(to_index)
+                self.used.add(source_name)
+                self.used.add(dest_name)
 
                 # containers and such can change while baking the recipe
-                if isinstance(frm, PlateSlicer):
-                    new_frm = deepcopy(frm)
-                    new_frm.plate = self.results[frm_index]
-                    frm = new_frm
+                if isinstance(source, PlateSlicer):
+                    source = deepcopy(source)
+                    source.plate = self.results[source_name]
+                    step.frm[0] = source.plate
                 else:
-                    frm = self.results[frm_index]
+                    source = self.results[source_name]
+                    step.frm[0] = source
 
                 if isinstance(dest, PlateSlicer):
-                    new_to = deepcopy(dest)
-                    new_to.plate = self.results[to_index]
-                    dest = new_to
+                    dest = deepcopy(dest)
+                    dest.plate = self.results[dest_name]
+                    step.to[0] = dest.plate
                 else:
-                    dest = self.results[to_index]
+                    dest = self.results[dest_name]
+                    step.to[0] = dest
 
                 if isinstance(dest, Container):
-                    frm, dest = Container.transfer(frm, dest, quantity)
+                    source, dest = Container.transfer(source, dest, quantity)
                 elif isinstance(dest, PlateSlicer):
-                    frm, dest = Plate.transfer(frm, dest, quantity)
+                    source, dest = Plate.transfer(source, dest, quantity)
 
-                self.results[frm_index] = frm
-                self.results[to_index] = dest
-                step.frm.append(frm)
-                step.to.append(dest)
+                self.results[source_name] = source if not isinstance(source, PlateSlicer) else source.plate
+                self.results[dest_name] = dest if not isinstance(dest, PlateSlicer) else dest.plate
+                step.frm.append(self.results[source_name])
+                step.to.append(self.results[dest_name])
             elif operator == 'solution':
                 dest = step.to[0]
+                dest_name = dest.name
                 step.frm.append(None)
                 solute, solvent, kwargs = step.operands
-                # solute, concentration, solvent, quantity = step.operands
-                to_index = self.indexes[dest]
-                step.to[0] = self.results[to_index]
-                self.used.add(to_index)
-                self.results[to_index] = Container.create_solution(solute, solvent, dest.name, **kwargs)
-                step.to.append(self.results[to_index])
+
+                step.to[0] = self.results[dest_name]
+                self.used.add(dest_name)
+                self.results[dest_name] = Container.create_solution(solute, solvent, dest_name, **kwargs)
+                step.to.append(self.results[dest_name])
             elif operator == 'solution_from':
                 source = step.frm[0]
+                source_name = source.name
                 dest = step.to[0]
+                dest_name = dest.name
                 solute, concentration, solvent, quantity = step.operands
-                frm_index = self.indexes[source]
-                to_index = self.indexes[dest]
-                step.frm[0] = self.results[frm_index]
-                step.to[0] = self.results[to_index]
+                step.frm[0] = self.results[source_name]
+                step.to[0] = self.results[dest_name]
 
-                self.used.add(frm_index)
-                self.used.add(to_index)
-                source = self.results[frm_index]
-                self.results[frm_index], self.results[to_index] = Container.create_solution_from(source, solute,
-                                                                                                 concentration, solvent,
-                                                                                                 quantity, dest.name)
-                step.frm.append(self.results[frm_index])
-                step.to.append(self.results[to_index])
-
+                self.used.add(source_name)
+                self.used.add(dest_name)
+                source = self.results[source_name]
+                self.results[source_name], self.results[dest_name] = \
+                    Container.create_solution_from(source, solute, concentration, solvent, quantity, dest.name)
+                step.frm.append(self.results[source_name])
+                step.to.append(self.results[dest_name])
             elif operator == 'remove':
                 dest = step.to[0]
                 step.frm.append(None)
                 what, = step.operands
-                to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
-                step.to[0] = self.results[to_index]
-                self.used.add(to_index)
+                dest_name = dest.plate.name if isinstance(dest, PlateSlicer) else dest.name
+                step.to[0] = self.results[dest_name]
+                self.used.add(dest_name)
 
                 if isinstance(dest, PlateSlicer):
-                    new_to = deepcopy(dest)
-                    new_to.plate = self.results[to_index]
-                    dest = new_to
+                    dest = deepcopy(dest)
+                    dest.plate = self.results[dest_name]
                 else:
-                    dest = self.results[to_index]
+                    dest = self.results[dest_name]
 
-                self.results[to_index] = dest.remove(what)
-                step.to.append(self.results[to_index])
+                self.results[dest_name] = dest.remove(what)
+                step.to.append(self.results[dest_name])
             elif operator == 'dilute':
                 dest = step.to[0]
+                dest_name = dest.name
                 solute, concentration, solvent, new_name = step.operands
-                step.fxrm.append(None)
-                to_index = self.indexes[dest]
-                step.to[0] = self.results[to_index]
-                self.used.add(to_index)
-                self.results[to_index] = dest.dilute(solute, concentration, solvent, new_name)
-                step.to.append(self.results[to_index])
+                step.frm.append(None)
+                step.to[0] = self.results[dest_name]
+                self.used.add(dest_name)
+                self.results[dest_name] = dest.dilute(solute, concentration, solvent, new_name)
+                step.to.append(self.results[dest_name])
             elif operator == 'fill_to':
                 dest = step.to[0]
+                dest_name = dest.plate.name if isinstance(dest, PlateSlicer) else dest.name
                 solvent, quantity = step.operands
                 step.frm.append(None)
-                to_index = self.indexes[dest] if not isinstance(dest, PlateSlicer) else self.indexes[dest.plate]
-                step.to[0] = self.results[to_index]
-                self.used.add(to_index)
+                step.to[0] = self.results[dest_name]
+                self.used.add(dest_name)
 
                 if isinstance(dest, PlateSlicer):
-                    new_to = deepcopy(dest)
-                    new_to.plate = self.results[to_index]
-                    dest = new_to
+                    dest = deepcopy(dest)
+                    dest.plate = self.results[dest_name]
                 else:
-                    dest = self.results[to_index]
+                    dest = self.results[dest_name]
 
-                self.results[to_index] = dest.fill_to(solvent, quantity)
-                step.to.append(self.results[to_index])
+                self.results[dest_name] = dest.fill_to(solvent, quantity)
+                step.to.append(self.results[dest_name])
 
-        if len(self.used) != len(self.indexes):
+        if len(self.used) != len(self.results):
             raise ValueError("Something declared as used wasn't used.")
         self.locked = True
-        return [result for result in self.results if not isinstance(result, Substance)]
+        return self.results
 
 
 class PlateSlicer(Slicer):
@@ -1983,11 +1984,12 @@ class PlateSlicer(Slicer):
 
             def helper_func(elem):
                 """ @private """
-                frm_array[0][0], elem = Container.transfer(frm_array[0][0], elem, quantity)
+                assert isinstance(frm_array, numpy.ndarray)
+                frm_array[0, 0], elem = Container.transfer(frm_array[0, 0], elem, quantity)
                 if different:
                     instructions = elem.instructions.splitlines()
-                    instructions[-1] = instructions[-1].replace(frm_array[0][0].name,
-                                                                frm.plate.name + " " + frm_array[0][0].name, 1)
+                    instructions[-1] = instructions[-1].replace(frm_array[0, 0].name,
+                                                                frm.plate.name + " " + frm_array[0, 0].name, 1)
                     elem.instructions = "\n".join(instructions)
 
                 return elem
