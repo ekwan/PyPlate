@@ -1361,11 +1361,11 @@ class Plate:
             unit = config.default_moles_unit
         return self[:].moles(substance=substance, unit=unit)
 
-    def moles_dataframe(self, substance: Substance, unit: str = None, cmap: str = None):
+    def moles_dataframe(self, substance: Substance | Iterable[Substance], unit: str = None, cmap: str = None):
         """
 
         Arguments:
-            substance: Substance to display moles of.
+            substance: Substance, or list of Substances, to display moles of.
             unit: unit to return moles in. ('mol', 'mmol', 'umol', etc.)
             cmap: Colormap to shade dataframe with.
 
@@ -1376,16 +1376,19 @@ class Plate:
             unit = config.default_moles_unit
         if cmap is None:
             cmap = config.default_colormap
-        moles = self.moles(substance, unit)
+        if isinstance(substance, Iterable):
+            moles = sum(self.moles(sub, unit) for sub in substance)
+        else:
+            moles = self.moles(substance, unit)
         dataframe = pandas.DataFrame(moles, columns=self.column_names, index=self.row_names)
         return dataframe.style.format('{:.3f}').background_gradient(cmap, vmin=0, vmax=moles.max())
 
-    def volumes_dataframe(self, substance: Substance = None, unit: str = None, cmap: str = None):
+    def volumes_dataframe(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None, cmap: str = None):
         """
 
         Arguments:
             unit: unit to return volumes in.
-            substance: (optional) Substance to display volumes of.
+            substance: (optional) Substance, or list of Substances, to display volumes of.
             cmap: Colormap to shade dataframe with.
 
         Returns: Shaded dataframe of volumes in each well.
@@ -1395,7 +1398,10 @@ class Plate:
             unit = config.default_volume_unit
         if cmap is None:
             cmap = config.default_colormap
-        volumes = self.volumes(substance, unit)
+        if isinstance(substance, Iterable):
+            volumes = sum(self.volumes(sub, unit) for sub in substance)
+        else:
+            volumes = self.volumes(substance, unit)
         dataframe = pandas.DataFrame(volumes, columns=self.column_names, index=self.row_names)
         return dataframe.style.format('{:.3f}').background_gradient(cmap, vmin=0, vmax=volumes.max())
 
