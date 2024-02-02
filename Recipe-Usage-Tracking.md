@@ -1,102 +1,29 @@
-# Amount Usage Tracking
-
-## Modes:
-- `before`: Substances used to prepare for the entire experiment, accounts for substances not used in the steps of the experiment, but still used in the experiment.
-- `during`: Substances used during the experiment, accounts for substances used in the steps of the experiment.
-- `container`: Container level inflow and outflow level tracking, accounts for substances used in the steps of the experiment.
-
-## Usage Tracking
-Recipe objects have a `amount_used` method with the following signature. container is an optional parameter that defaults to `None`, only meant to be used when `mode='container'`.
-```python
-def amount_used(self, mode, container)
-```
-
-### `before` tracking
-For every container, track all additions from outside the experiment. This includes the following steps:
-- `create_container`
-- `create_solution`
-- `create_solution_from`
-- `dilute`
-- `fill_to`
-
-Modify each method above to update a `before` dictionary in the recipe with the following structure:
-```python
-{
-    substance: {
-        "in": amount ,
-        "out": amount
-    }
-}
-```
-
-### `during` tracking
-For every container, track all substances moved from container to container within the experiment. This includes the following steps:
-- `transfer`
-- `remove`
-
-Modify each method above to update a `during` dictionary in the recipe with the following structure:
-```python
-{
-    substance: {
-        "in": amount ,
-        "out": amount
-    }
-}
-```
-
-### `container` tracking
-For every container, track all substances moved into and out of the container. This includes every step in a recipe that modifies the amount of a substance in a container. This includes the following steps:
-
-Meant to track usage for a given stock solution.
-
-Modify each method above to update a `container` dictionary in the recipe with the following structure:
-```python
-{
-    container: {
-        substance: {
-            'in': amount,
-            'out': amount
-        }
-    }
-}
-```
-
-## QOL Methods
-- Provide a method to return the difference of in/out for each container.
-- Provide a method to return the difference of before/during each substance.
-
-
-
-
-
-
-
-Want to query either Substance or Container.
-
-
 # Substance tracking
 Substance usage may be in the context of just the recipe steps ("during") or recipe steps *and* prep ("before").
 
 Special case for Plate (actually a PlateSlicer), and PlateSlicer, iterate over all containers in slice
 Track quantity on substance level for this
+
+## methods to modify:
+
 "before" tracking:
-- `uses`
+- [ ] uses
 - `bake`
-    - `create_container`
-    - `create_solution`
-    - `create_solution_from`
-    - `dilute`
-    - `fill_to`
-    - `transfer`
-    - `remove`
+  - [x] `create_container`
+  - [ ] `create_solution`
+  - [ ] `create_solution_from`
+  - [ ] `dilute`
+  - [ ] `fill_to`
+  - [ ] `transfer`
+  - [ ] `remove`
 
 "during" tracking:
 - `bake`
-    - `create_solution_from` (only worried about source)
-    - `dilute`
-    - `fill_to`
-    - `transfer`
-    - `remove`
+    - [ ] `create_solution_from` (only worried about source)
+    - [ ] `dilute`
+    - [ ] `fill_to`
+    - [ ] `transfer`
+    - [ ] `remove`
   
 
 
@@ -107,6 +34,8 @@ Track quantity on substance level for this
   - mL if liquid
   - mg if solid
   - mmol if enzyme
+
+return type: str with quantity in mol, mmol, etc.
 
 def amounts_used(substance, timeframe="during", unit=None)
 
@@ -167,6 +96,3 @@ QOL method for Recipe that returns a list of steps that involves a specific cont
 - container: The container to search for
 def get_steps_using(self, container):
 
-
-#TODO:
-Make three simple recipes, write a unit test for these recipes, make sure you can pass them
