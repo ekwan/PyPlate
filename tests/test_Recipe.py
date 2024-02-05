@@ -19,10 +19,12 @@ def test_locked():
 def test_uses(salt_water):
     """
 
-    Test uses() for a Recipe.
-    Ensures the object is added and used.
-    uses() cannot be called once the recipe is baked.
+    Tests uses() for a Recipe.
 
+    It checks the following scenarios:
+    - The object is correctly added and used in the recipe.
+    - The uses method cannot be called once the recipe is baked.
+    - The recipe raises a ValueError if something declared as used wasn't actually used in the recipe.
     """
     recipe = Recipe()
     recipe.uses(salt_water)
@@ -40,9 +42,16 @@ def test_uses(salt_water):
 
 def test_transfer(salt_water):
     """
+    Tests the transfer method within a Recipe.
 
-    Test transfers within a Recipe.
-
+    It checks the following scenarios:
+    - Argument types are correctly validated.
+    - The volume of the destination container is correctly updated after a transfer.
+    - The volume of the source container is correctly reduced after a transfer.
+    - The transfer method cannot be called once the recipe is baked.
+    - The volume of a Plate is correctly updated after a transfer.
+    - The volume of a specific well in a Plate is correctly updated after a transfer.
+    - The volume of a Container is correctly updated after multiple transfers from different wells in a Plate.
     """
     container = Container('container')
     recipe = Recipe()
@@ -99,7 +108,14 @@ def test_create_container(water, salt):
 
     Test create_container within a Recipe.
 
+    It checks the following scenarios:
+    - Argument types are correctly validated.
+    - The container cannot be created once the recipe is baked.
+    - The name of the container is set correctly.
+    - The maximum volume of the container is set correctly.
+    - The initial contents of the container are added correctly only at bake.
     """
+
     recipe = Recipe()
     # Argument types checked
     with pytest.raises(TypeError, match='Name must be a str'):
