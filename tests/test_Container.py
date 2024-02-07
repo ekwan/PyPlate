@@ -8,6 +8,9 @@ def test_make_Container(water, salt):
 
     Tests that `Container` constructor checks the type of all arguments.
 
+    It checks the following scenarios:
+    - Argument types are correctly validated.
+
     """
     # Argument types checked
     with pytest.raises(TypeError, match="Name must be a str"):
@@ -28,6 +31,8 @@ def test_make_Container(water, salt):
         Container('container', '1 L', [1])
     with pytest.raises(TypeError, match="Element in initial_contents must be"):
         Container('container', '1 L', [water, salt])
+    with pytest.raises(TypeError, match="Element in initial_contents must be"):
+        Container('container', '1 L', [(water, 1), (salt, 1)])
 
 
 def test_Container_transfer(water, salt, water_stock, salt_water):
@@ -89,3 +94,136 @@ def test_create_stock_solution(water, salt, salt_water):
     assert water in stock.contents and salt in stock.contents
     assert stock.volume == Unit.convert_to_storage(100, 'mL')
     assert stock.contents[salt] == pytest.approx(salt_water.contents[salt])
+
+
+def test__self_add(water):
+    """
+
+    Tests _self_add method of Container.
+
+    It checks the following scenarios:
+    - The argument types are correctly validated.
+    - The substance is correctly added to the container.
+    - The method raises a ValueError if the substance cannot be added to the container.
+
+    """
+
+    container = Container('container', max_volume='5 mL')
+
+    # Argument types checked
+    with pytest.raises(TypeError, match='Source must be a Substance'):
+        container._self_add('water', '5 mL')
+    with pytest.raises(TypeError, match='Quantity must be a str'):
+        container._self_add(water, 5)
+
+    # Use the _self_add method to add the substance to the container
+    container._self_add(water, '5 mL')
+
+    # Check if the substance was correctly added to the container
+    assert water in container.contents
+    assert pytest.approx(container.contents[water]) == Unit.convert(water, '5 mL', config.moles_prefix)
+    assert pytest.approx(container.volume) == Unit.convert_to_storage(5, 'mL')
+
+    # Try to add more substance than the container can hold
+    with pytest.raises(ValueError, match='Exceeded maximum volume'):
+        container._self_add(water, '10 mL')
+
+
+def test__transfer(water):
+    """
+
+    Tests _transfer method of Container.
+
+    It checks the following scenarios:
+    - The argument types are correctly validated.
+    - The substance is correctly transferred to the second container.
+    - The method raises a ValueError if there is not enough substance in the source container.
+    - The method raises a ValueError if the second container cannot hold the transferred substance.
+
+    """
+
+    # Argument types checked
+    container1 = Container('container1', '10 mL')
+    container2 = Container('container2', '10 mL')
+    with pytest.raises(TypeError, match='Invalid source type'):
+        container1._transfer(1, '10 mL')
+    with pytest.raises(TypeError, match='Quantity must be a str'):
+        container1._transfer(container2, 5)
+
+    for unit in ['mL', 'mg', 'mmol']:
+        container1 = Container('container1', '10 mL', initial_contents=[(water, f"5 {unit}")])
+        container2 = Container('container2', '10 mL')
+        # Use the _transfer method to transfer the substance from the first to the second container
+        container1, container2 = container2._transfer(container1, f"2 {unit}")
+
+        # Check if the substance was correctly transferred
+        assert water in container2.contents
+        assert (pytest.approx(container2.contents[water]) ==
+                Unit.convert(water, f"2 {unit}", config.moles_prefix))
+        assert (pytest.approx(container2.volume) ==
+                Unit.convert(water, f"2 {unit}", config.volume_prefix))
+
+        # Check if the volume of the first container was correctly reduced
+        assert (pytest.approx(container1.contents[water]) ==
+                Unit.convert(water, f"3 {unit}", config.moles_prefix))
+        assert (pytest.approx(container1.volume) ==
+                Unit.convert(water, f"3 {unit}", config.volume_prefix))
+
+    container1 = Container('container1', '10 mL', initial_contents=[(water, '5 mL')])
+    container2 = Container('container2', '10 mL')
+
+    # Try to transfer more substance than the first container holds
+    with pytest.raises(ValueError, match='Not enough mixture left in source container'):
+        container2._transfer(container1, '10 mL')
+
+    container1 = Container('container1', '20 mL', initial_contents=[(water, '20 mL')])
+    # Try to transfer more substance than the second container can hold
+    with pytest.raises(ValueError, match='Exceeded maximum volume'):
+        container2._transfer(container1, '20 mL')
+
+
+def test_get_concentration(water, salt, dmso):
+    """
+
+    Tests get_concentration method of Container.
+
+    It checks the following scenarios:
+    - The argument types are correctly validated.
+    - The method returns the correct concentration of the substance in the container.
+    - The method raises a ValueError if the substance is not in the container.
+
+    """
+
+    # Argument types checked
+    container = Container('container', '10 mL')
+    with pytest.raises(TypeError, match='Solute must be a Substance'):
+        container.get_concentration('water')
+    with pytest.raises(TypeError, match='Units must be a str'):
+        container.get_concentration(water, 1)
+
+    # Check if the method returns the correct concentration of the substance in the container
+    for value in [0.1, 0.5, 1.0]:
+        stock = Container.create_solution(salt, water, concentration=f"{value} M", total_quantity='100 mL')
+        assert stock.get_concentration(salt) == pytest.approx(value, abs=1e-3)
+
+    ratio = stock.contents[salt] / sum(stock.contents.values())
+    assert pytest.approx(ratio, abs=1e-3) == stock.get_concentration(salt, 'mol/mol')
+    # Try to get the concentration of a substance that is not in the container
+    assert stock.get_concentration(dmso) == 0
+
+
+def test_create_solution_from(water, salt):
+    # Create a stock solution of 1 M salt water
+    stock = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
+
+    # Create a solution of 0.5 M salt water from the stock solution
+    stock, solution = Container.create_solution_from(stock, salt,'0.5 M', water, '50 mL')
+
+    # Should contain 25 mmol of salt and have a total volume of 50 mL
+    assert pytest.approx(Unit.convert(salt, '25 mmol', config.moles_prefix)) == solution.contents[salt]
+    assert pytest.approx(Unit.convert(water, '50 mL', config.volume_prefix)) == solution.volume
+    assert pytest.approx(Unit.convert_from_storage(solution.volume, 'mL')) == 50.0
+
+    # Try to create a solution with more volume than the source container holds
+    with pytest.raises(ValueError, match='Exceeded maximum volume'):
+        Container.create_solution_from(stock, salt, '1 M', water, '100 mL')

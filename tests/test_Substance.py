@@ -6,6 +6,9 @@ def test_make_solid():
     """
 
     Tests creating a solid `Substance`.
+    It checks the following scenarios:
+    - Argument types are correctly validated.
+    - Arguments are sane.
 
     """
     # Argument types checked
@@ -36,6 +39,9 @@ def test_make_liquid():
     """
 
     Tests creating a liquid `Substance`.
+    It checks the following scenarios:
+    - Argument types are correctly validated.
+    - Arguments are sane.
 
     """
     # Argument types checked
