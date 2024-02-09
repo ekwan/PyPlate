@@ -1,29 +1,36 @@
 # Substance tracking
-Substance usage may be in the context of just the recipe steps ("during") or recipe steps *and* prep ("before").
+#TODO: reword this
+Substance usage may be in the context of when the containers are first used ("during") or before they are used ("before").
+
+Two phases:
+Prep: before any containers are used
+Dispensing: after containers are used
+
+Usage is defined as calling any of the methods below on a Recipe.
+- `create_solution_from`
+- `dilute`
+- `transfer`
+- `remove`
 
 Special case for Plate (actually a PlateSlicer), and PlateSlicer, iterate over all containers in slice
 Track quantity on substance level for this
 
 ## methods to modify:
 
-"before" tracking:
-- [ ] uses
+"all" tracking:
+- [x] `uses`
 - `bake`
-  - [x] `create_container`
-  - [ ] `create_solution`
-  - [ ] `create_solution_from`
-  - [ ] `dilute`
-  - [ ] `fill_to`
-  - [ ] `transfer`
-  - [ ] `remove`
-
-"during" tracking:
-- `bake`
-    - [ ] `create_solution_from` (only worried about source)
-    - [ ] `dilute`
+    - [x] `create_container`
+    - [x] `create_solution`
+    - [ ] `create_solution_from` (only worried about solvent going in to destination) (no plates)
     - [ ] `fill_to`
+    - [ ] `dilute` (account for *additional* solvent added to container)
+
+"dispensing only" tracking:
+- `bake`
+    - [ ] `create_solution_from` (only worried about source) (no plates)
+    - [ ] `dilute`
     - [ ] `transfer`
-    - [ ] `remove`
   
 
 
@@ -73,15 +80,21 @@ Track volume on container level for this
 
 Special case for Plate (actually a PlateSlicer), and PlateSlicer, iterate over all containers in slice
 
-- `uses`
+"all" tracking:
+- [x] `uses`
 - `bake`
-    - `create_container`
-    - `create_solution`
-    - `create_solution_from`
-    - `dilute`
-    - `fill_to`
-    - `transfer`
-    - `remove`
+    - [x] `create_container`
+    - [x] `create_solution`
+    - [ ] `create_solution_from` (only worried about solvent going in to destination) (no plates)
+    - [ ] `fill_to`
+    - [ ] `dilute` (account for *additional* solvent added to container)
+
+"dispensing only" tracking:
+- `bake`
+    - [ ] `create_solution_from` (only worried about source) (no plates)
+    - [ ] `dilute`
+    - [ ] `transfer`
+
 
 ## notes
 keep track of first use for containers for custom starting point.

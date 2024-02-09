@@ -31,10 +31,12 @@ All values returned to the user are rounded to config.external_precision for eas
 # Allow typing reference while still building classes
 from __future__ import annotations
 
+from collections import defaultdict
 from functools import cache
 from typing import Tuple, Dict, Iterable
 from copy import deepcopy, copy
 import numpy
+import numpy as np
 import pandas
 
 from pyplate.slicer import Slicer
@@ -1063,7 +1065,7 @@ class Container:
         new_container.contents = {substance: value for substance, value in self.contents.items()
                                   if what not in (substance._type, substance)}
         new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
-                                   config.moles_prefix, config.volume_prefix) for
+        config.moles_prefix, config.volume_prefix) for
                                    substance, value in new_container.contents.items())
         new_container.instructions = self.instructions
         classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid', Substance.ENZYME: 'enzyme'}
@@ -1160,7 +1162,7 @@ class Container:
         if solute not in self.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
 
-        new_ratio, numerator, denominator =\
+        new_ratio, numerator, denominator = \
             Unit.calculate_concentration_ratio_moles(solute, f"{quantity_in_moles} mol", solvent)
         if numerator == 'U':
             if not solute.is_enzyme():
@@ -1383,7 +1385,8 @@ class Plate:
         dataframe = pandas.DataFrame(moles, columns=self.column_names, index=self.row_names)
         return dataframe.style.format('{:.3f}').background_gradient(cmap, vmin=0, vmax=moles.max())
 
-    def volumes_dataframe(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None, cmap: str = None):
+    def volumes_dataframe(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None,
+                          cmap: str = None):
         """
 
         Arguments:
@@ -1543,6 +1546,18 @@ class Recipe:
 
     def __init__(self):
         self.results = {}
+        #TODO: fix defaultdict for plates
+        # factory function for volume tracking
+        self.all_volume_tracking: dict[Container, dict] = defaultdict(lambda: {
+            "in": 0,
+            "out": 0
+        })
+        self.dispensing_volume_tracking: dict[Container, dict] = defaultdict(lambda: {
+            "in": 0,
+            "out": 0
+        })
+        self.all_substance_tracking: dict[Substance, float] = defaultdict(float)
+        self.dispensing_substance_tracking: dict[Substance, float] = defaultdict(float)
         self.steps: list[RecipeStep] = []
         self.locked = False
         self.used = set()
@@ -1555,11 +1570,22 @@ class Recipe:
             raise RuntimeError("This recipe is locked.")
         for arg in args:
             if isinstance(arg, (Container, Plate)):
-                # TODO: Do we need to keep track of substances?
+                if isinstance(arg, Plate):
+                    for well in arg.wells:
+                        for substance, amount in well.contents.items():
+                            self.all_substance_tracking[substance] += amount
+                else:
+                    for substance, amount in arg.contents.items():
+                        self.all_substance_tracking[substance] += amount
                 if arg.name not in self.results:
                     self.results[arg.name] = deepcopy(arg)
                 else:
                     raise ValueError("An object with this name is already in use.")
+            elif isinstance(arg, Iterable):
+                unpacked = list(arg)
+                if not all(isinstance(elem, (Container, Plate)) for elem in unpacked):
+                    raise TypeError("Invalid type in iterable.")
+                self.uses(*unpacked)
         return self
 
     def transfer(self, source: Container, destination: Container | Plate | PlateSlicer, quantity: str):
@@ -1816,13 +1842,30 @@ class Recipe:
             operator = step.operator
             if operator == 'create_container':
                 dest = step.to[0]
+                dest_name = dest.name
                 step.frm.append(None)
                 max_volume, initial_contents = step.operands
                 step.to[0] = self.results[dest.name]
                 self.used.add(dest.name)
                 self.results[dest.name] = Container(dest.name, max_volume, initial_contents)
                 step.to.append(self.results[dest.name])
+
+                if isinstance(self.results[dest_name], PlateSlicer):
+                    for well in self.results[dest_name].array:
+                        for substance, amount in well.contents.items():
+                            self.all_substance_tracking[substance] += amount
+
+                    self.all_volume_tracking[dest_name]["in"] = np.full(self.results[dest_name].array.shape,
+                                                                        self.results[dest_name].volume)
+                elif isinstance(self.results[dest_name], Container):
+                    for substance, amount in self.results[dest_name].contents.items():
+                        self.all_substance_tracking[substance] += amount
+                        self.dispensing_volume_tracking[dest_name] = {
+                            "in": dest.volume,
+                            "out": 0
+                        }
             elif operator == 'transfer':
+                #TODO: Handle sources as plates
                 source = step.frm[0]
                 source_name = source.plate.name if isinstance(source, PlateSlicer) else source.name
                 dest = step.to[0]
@@ -1849,6 +1892,9 @@ class Recipe:
                     dest = self.results[dest_name]
                     step.to[0] = dest
 
+                orig_source = source
+                orig_dest = dest
+
                 if isinstance(dest, Container):
                     source, dest = Container.transfer(source, dest, quantity)
                 elif isinstance(dest, PlateSlicer):
@@ -1856,6 +1902,21 @@ class Recipe:
 
                 self.results[source_name] = source if not isinstance(source, PlateSlicer) else source.plate
                 self.results[dest_name] = dest if not isinstance(dest, PlateSlicer) else dest.plate
+                if isinstance(self.results[dest_name], PlateSlicer):
+                    for index, well in enumerate(self.results[dest_name].array):
+                        for substance, amount in well.contents.items():
+                            difference = amount - orig_dest.array[well].contents[substance]
+                            self.dispensing_substance_tracking[substance] += difference
+                        self.dispensing_volume_tracking[dest]["in"][index] += quantity
+
+                    for index, well in enumerate(self.results[source_name].array):
+                        self.all_volume_tracking[well]["out"] += quantity
+                elif isinstance(self.results[dest_name], Container):
+                    for substance, amount in self.results[dest_name].contents.items():
+                        difference = amount - dest.contents[substance]
+                        self.dispensing_substance_tracking[substance] += difference
+                    self.dispensing_volume_tracking[dest_name]["in"] += quantity
+                    self.all_volume_tracking[dest_name]["out"] += quantity
                 step.frm.append(self.results[source_name])
                 step.to.append(self.results[dest_name])
             elif operator == 'solution':
@@ -1868,6 +1929,15 @@ class Recipe:
                 self.used.add(dest_name)
                 self.results[dest_name] = Container.create_solution(solute, solvent, dest_name, **kwargs)
                 step.to.append(self.results[dest_name])
+                if isinstance(self.results[dest_name], PlateSlicer):
+                    for index, well in enumerate(self.results[dest_name].array):
+                        for substance, amount in well.contents.items():
+                            self.all_substance_tracking[substance] += amount
+                        self.all_volume_tracking[well]["in"][index] += self.results[dest_name].volume
+                elif isinstance(self.results[dest_name], Container):
+                    for substance, amount in self.results[dest_name].contents.items():
+                        self.all_substance_tracking[substance] += amount
+                    self.all_volume_tracking[dest_name]["in"] += self.results[dest_name].volume
             elif operator == 'solution_from':
                 source = step.frm[0]
                 source_name = source.name
@@ -1884,6 +1954,17 @@ class Recipe:
                     Container.create_solution_from(source, solute, concentration, solvent, quantity, dest.name)
                 step.frm.append(self.results[source_name])
                 step.to.append(self.results[dest_name])
+                if isinstance(self.results[dest_name], Container):
+                    self.all_substance_tracking[solvent] += self.results[dest_name].contents[solvent] - dest.contents.get(solvent, 0)
+                    for substance, amount in self.results[dest_name].contents.items():
+                        difference = amount - self.results[source_name].contents[substance]
+                        if substance != solvent:
+                            self.dispensing_substance_tracking[substance] += difference
+                    volume_difference_after_transfer = self.results[dest_name].volume - dest.volume
+                    self.dispensing_volume_tracking[dest_name]["in"] += volume_difference_after_transfer
+                    self.dispensing_volume_tracking[source_name]["out"] += volume_difference_after_transfer
+                    #TODO: convert solvent amount to volume with Unit
+                    self.all_volume_tracking[dest_name]["in"] += volume_difference_after_transfer
             elif operator == 'remove':
                 dest = step.to[0]
                 step.frm.append(None)
@@ -1899,6 +1980,12 @@ class Recipe:
                     dest = self.results[dest_name]
 
                 self.results[dest_name] = dest.remove(what)
+                # get difference of each substance form result and dest
+                if isinstance(self.results[dest_name], PlateSlicer):
+                    for index, well in enumerate(self.results[dest_name].array):
+                        self.dispensing_volume_tracking[dest_name]["out"][index] += dest.volume - self.results[dest_name].volume
+                elif isinstance(self.results[dest_name], Container):
+                    self.dispensing_volume_tracking[dest_name]["out"] += dest.volume - self.results[dest_name].volume
                 step.to.append(self.results[dest_name])
             elif operator == 'dilute':
                 dest = step.to[0]
@@ -1909,7 +1996,20 @@ class Recipe:
                 self.used.add(dest_name)
                 self.results[dest_name] = dest.dilute(solute, concentration, solvent, new_name)
                 step.to.append(self.results[dest_name])
+                solvent_used = self.results[dest_name].contents[solvent] - dest.contents[solvent]
+                if isinstance(self.results[dest_name], PlateSlicer):
+                    # TODO: calculate solvent_used per well in plate
+                    for index, well in enumerate(self.results[dest_name].array):
+                        self.dispensing_substance_tracking[solvent] += solvent_used
+                        self.dispensing_volume_tracking[dest_name]["in"][index] += solvent_used
+                        self.all_volume_tracking[dest_name]["in"][index] += solvent_used
+                elif isinstance(self.results[dest_name], Container):
+                    self.dispensing_substance_tracking[solvent] += solvent_used
+                    # TODO: convert solvent_used to volume with United
+                    self.dispensing_volume_tracking[dest_name]["in"] += solvent_used
+                    self.all_volume_tracking[dest_name]["in"] += self.results[dest_name].volume - dest.volume
             elif operator == 'fill_to':
+                #TODO: update to follow same logic as dilute
                 dest = step.to[0]
                 dest_name = dest.plate.name if isinstance(dest, PlateSlicer) else dest.name
                 solvent, quantity = step.operands
@@ -1924,12 +2024,61 @@ class Recipe:
                     dest = self.results[dest_name]
 
                 self.results[dest_name] = dest.fill_to(solvent, quantity)
+                solvent_used = self.results[dest_name].contents[solvent] - dest.contents[solvent]
+                if isinstance(self.results[dest_name], PlateSlicer):
+                    for index, well in enumerate(self.results[dest_name].array):
+                        for substance, amount in well.contents.items():
+                            difference = amount - dest.array[well].contents[substance]
+                            self.dispensing_substance_tracking[substance] += difference
+                        self.dispensing_volume_tracking[dest_name]["in"][index] += solvent_used
+                        self.all_volume_tracking[dest_name]["in"][index] += self.results[dest_name].volume - dest.volume
+                elif isinstance(self.results[dest_name], Container):
+                    for substance, amount in self.results[dest_name].contents.items():
+                        difference = amount - dest.contents[substance]
+                        self.dispensing_substance_tracking[substance] += difference
+                    self.dispensing_volume_tracking[dest_name]["in"] += solvent_used
+                    self.all_volume_tracking[dest_name]["in"] += self.results[dest_name].volume - dest.volume
                 step.to.append(self.results[dest_name])
 
         if len(self.used) != len(self.results):
             raise ValueError("Something declared as used wasn't used.")
         self.locked = True
         return self.results
+
+    def amount_used(self, substance: Substance, timeframe: str = 'during', unit: str = None):
+        """
+        Returns the amount of substance used in the recipe.
+
+        Args:
+            substance: Substance to check.
+            timeframe: 'before' or 'during'. Before refers to the initial state of the containers aka recipe "prep", and
+            during refers to
+            unit: Unit to return amount in.
+
+        Returns: Amount of substance used in the recipe.
+
+        """
+        # TODO: get internal storage unit and use normal Unit.convert method
+        if unit is None:
+            unit = config.default_moles_unit
+        if timeframe == 'all':
+            internal_dict = self.all_substance_tracking
+            return Unit.convert_from_storage(internal_dict[substance], unit)
+        elif timeframe == 'dispensing':
+            internal_dict = self.dispensing_substance_tracking
+            return Unit.convert_from_storage(internal_dict[substance], unit)
+
+    def substances_used(self, timeframe: str = 'before'):
+        """
+        Returns the set of substances used in the recipe.
+
+        Returns: Set of substances used in the recipe.
+
+        """
+        if timeframe == 'all':
+            return set(self.all_substance_tracking.keys())
+        elif timeframe == 'dispensing':
+            return set(self.dispensing_substance_tracking.keys())
 
 
 class PlateSlicer(Slicer):
