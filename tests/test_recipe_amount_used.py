@@ -162,8 +162,97 @@ def test_amount_used_dilute(salt_water, salt, water):
     assert recipe.amount_used(substance = salt, timeframe = 'during', unit = 'mmol') == expected_salt_amount
 
 
-#Still under testing
+#Testing create_solution
+def test_amount_used_create_solution(salt, water):
+    """
+    Tests that the substance amount tracking is accurately implemented during the creation of a solution within a recipe.
+
+    This test verifies the `amount_used` method to correctly report the amount of salt utilized in preparing a specific solution. The testing procedure includes:
+    - Initiating a recipe and declaring the usage of salt and water as solute and solvent, respectively.
+    - Creating a solution with a predefined concentration of '0.5 M' and a total quantity of '20 mL', effectively dissolving the salt within the water.
+    - Executing the `bake` method to finalize the creation of the solution.
+
+    The assertions made are:
+    - The initial volume of the container is checked before the solution creation, ensuring it starts from a baseline of zero.
+    - The amount of salt reported as used during the recipe matches the expected calculation, which is '10 mmol' for achieving the desired solution concentration and volume. This confirms the `amount_used` method's accuracy in reflecting substance usage throughout the recipe's actions.
+
+    Parameters:
+    - salt (Substance): The salt intended to be dissolved to create the solution.
+    - water (Substance): The water used as a solvent for the solution.
+
+    """
+
+    #Create recipe
+    recipe = Recipe()
+    recipe.uses(salt, water)
+    
+    #Create solution and add to container
+    container = recipe.create_solution(salt, water, concentration='0.5 M',total_quantity = '20 mL')
+    ##What is the initial volume of container here?
+    assert container.volume == 0
+
+    #Bake recipe
+    recipe.bake()
+    
+    #Assertions
+    expected_salt_amount = '10 mmol'
+    assert recipe.amount_used(substance = salt, timeframe = 'during', unit = 'mmol') == expected_salt_amount
+
+
+def test_amount_used_remove(salt_water, salt):
+    """
+    Tests the accuracy of substance amount tracking during the removal of a solution in a recipe.
+
+    This test verifies the `amount_used` method for correctly reporting the amount of salt removed from a container. The procedure includes:
+    - Creating a recipe and a container with an initial volume of '20 mL' of saltwater, implying a certain concentration of salt.
+    - Removing '10 mL' of the saltwater from the container, which would also remove a proportional amount of salt based on the solution's concentration.
+    - Baking the recipe to finalize the removal process.
+
+    The test asserts:
+    - The amount of salt removed during the recipe matches the expected value based on the initial concentration and the volume removed. The expected salt amount should logically reflect the proportion of salt in the removed volume, which, in a homogenous solution, would be half of the initial amount if '20 mL' contained '50 mmol' of salt.
+
+    Parameters:
+    - salt_water (Container): A fixture representing the saltwater solution to be partially removed.
+    - salt (Substance): The salt substance, expected to be tracked through the `amount_used` method.
+    """
+
+    #Create recipe
+    recipe = Recipe()
+
+    #Deine initial contents
+    initial_contents = [(salt, '50 mmol')]
+
+    #Create container
+    container = recipe.create_container('container', '20 mL', initial_contents)
+
+    #Remove 10 mL from container
+    #Substance is solid, which leads to some errors
+    recipe.remove(container,'25 mmol')
+
+    #Bake recipe
+    recipe.bake()
+
+    #Assertions
+    expected_salt_amount = '25 mmol'
+    assert recipe.amount_used(substance = salt, timeframe = 'during', unit = 'mmol') == expected_salt_amount
+
+
+
 def test_amount_used_with_no_usage(salt):
+   
+    """
+    Verifies that the amount of a substance reported as used is zero when the substance is not utilized in the recipe.
+
+    This test case is designed to confirm the functionality of the `amount_used` method in scenarios where a specific substance is declared for a recipe but not actually used in any of the recipe steps. The key actions in this test include:
+    - Initiating a recipe without adding any steps that involve the use of the specified substance (salt, in this case).
+    - Finalizing the recipe preparation process by baking the recipe.
+    
+    The assertion checks:
+    - That the `amount_used` method correctly reports '0 mmol' for the salt, reflecting that it was not used during the recipe's preparation, thus ensuring accurate tracking of substance usage within the recipe.
+
+    Parameters:
+    - salt (Substance): The substance fixture representing salt, intended to verify the tracking of substance usage.
+    """
 
     recipe = Recipe()
     # No usage of salt
@@ -171,10 +260,28 @@ def test_amount_used_with_no_usage(salt):
     # Expecting 0 usage since salt wasn't used
     assert recipe.amount_used(substance=salt, timeframe='before', unit='mmol') == '0 mmol'
 
-def test_amount_used_incorrect_timeframe(salt_water, salt):
+
+def test_amount_used_incorrect_timeframe(salt_water, salt ,plate):
+    
+    """
+    Ensures an error is raised when querying the amount of substance used with an unsupported timeframe.
+
+    This test aims to verify the error handling capabilities of the `amount_used` method within the `Recipe` class, particularly when an invalid or unsupported timeframe is specified. The test follows these steps:
+    - Initializes a recipe and declares the use of a saltwater solution.
+    - Transfers a specified volume of the saltwater solution to a plate, simulating a typical recipe action.
+    - Completes the recipe by invoking the `bake` method.
+    
+    The critical part of this test is the assertion that checks:
+    - A `ValueError` is raised when attempting to call `amount_used` with a timeframe argument that the method does not support (`'later'` in this case). The error message is expected to match "Unsupported timeframe," indicating that the method correctly identifies and rejects invalid timeframe inputs.
+
+    Parameters:
+    - salt_water (Container): A fixture representing the saltwater solution used in the recipe.
+    - salt (Substance): The substance fixture representing salt, intended to be tracked within the recipe.
+    - plate (Plate): A fixture representing a plate, to which the saltwater solution is transferred as part of the recipe.
+    """
     recipe = Recipe()
     recipe.uses(salt_water, Container('container'))
-    recipe.transfer(salt_water, Container('another container'), '10 mL')
+    recipe.transfer(salt_water, plate, '10 mL')
     recipe.bake()
     
     # Raising errors for unexpected timeframes
