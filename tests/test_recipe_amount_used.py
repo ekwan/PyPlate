@@ -227,18 +227,19 @@ def test_amount_used_remove(salt_water, salt):
 
     #Remove 10 mL from container
     #Substance is solid, which leads to some errors
-    recipe.remove(container,'25 mmol')
+    recipe.remove(container,salt)
 
     #Bake recipe
     recipe.bake()
 
     #Assertions
-    expected_salt_amount = '25 mmol'
+    expected_salt_amount = '0 mmol'
     assert recipe.amount_used(substance = salt, timeframe = 'during', unit = 'mmol') == expected_salt_amount
 
 
 
 def test_amount_used_with_no_usage(salt):
+    #TODO - timeframe changed from before and during to all and dispensing
    
     """
     Verifies that the amount of a substance reported as used is zero when the substance is not utilized in the recipe.
