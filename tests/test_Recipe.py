@@ -113,7 +113,7 @@ def test_create_container(water, salt):
     - The container cannot be created once the recipe is baked.
     - The name of the container is set correctly.
     - The maximum volume of the container is set correctly.
-    - The initial contents of the container are added correctly only at bake.
+    - The initial contents of the container are added only at bake.
     """
 
     recipe = Recipe()
