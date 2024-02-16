@@ -1546,7 +1546,7 @@ class Recipe:
 
     def __init__(self):
         self.results = {}
-        self.all_volume_tracking: dict[Container | PlateSlicer, dict] = {}
+        self.all_volume_tracking: dict[Container | PlateSlicer | Plate, dict] = {}
         self.dispensing_volume_tracking: dict[Container | PlateSlicer, dict] = {}
         self.all_substance_tracking: dict[Substance, float] = defaultdict(float)
         self.dispensing_substance_tracking: dict[Substance, float] = defaultdict(float)
@@ -1602,9 +1602,11 @@ class Recipe:
         for arg in args:
             if isinstance(arg, (Container, Plate)):
                 if isinstance(arg, Plate):
-                    for well in arg.wells:
+                    for index, well in numpy.ndenumerate(arg.wells):
                         for substance, amount in well.contents.items():
                             self.all_substance_tracking[substance] += amount
+                    for index, well in numpy.ndenumerate(arg.wells):
+                        self._update_volume_dict(arg, "all", "in", f'{well.volume} {config.default_volume_unit}', index)
                 else:
                     for substance, amount in arg.contents.items():
                         self.all_substance_tracking[substance] += amount
@@ -1961,11 +1963,11 @@ class Recipe:
                     for index, well in np.ndenumerate(self.results[dest_name].array):
                         for substance, amount in well.contents.items():
                             self.all_substance_tracking[substance] += amount
-                        self._update_volume_dict(self.results[dest_name], "all", "in", self.results[dest_name].volume, index)
+                        self._update_volume_dict(self.results[dest_name], "all", "in", f'{self.results[dest_name].volume} {config.default_volume_unit}', index)
                 elif isinstance(self.results[dest_name], Container):
                     for substance, amount in self.results[dest_name].contents.items():
                         self.all_substance_tracking[substance] += amount
-                    self._update_volume_dict(self.results[dest_name], "all", "in", self.results[dest_name].volume)
+                    self._update_volume_dict(self.results[dest_name], "all", "in", f'{self.results[dest_name].volume} {config.default_volume_unit}')
             elif operator == 'solution_from':
                 source = step.frm[0]
                 source_name = source.name
@@ -2020,10 +2022,10 @@ class Recipe:
                 if isinstance(self.results[dest_name], PlateSlicer):
                     for index, well in numpy.ndenumerate(self.results[dest_name].array):
                         volume_difference = dest.volume - self.results[dest_name].volume
-                        self._update_volume_dict(self.results[dest_name], "dispensing", "out", volume_difference, index)
+                        self._update_volume_dict(self.results[dest_name], "dispensing", "out", f'{volume_difference} {config.default_volume_unit}', index)
                 elif isinstance(self.results[dest_name], Container):
                     volume_difference = dest.volume - self.results[dest_name].volume
-                    self._update_volume_dict(self.results[dest_name], "dispensing", "out", volume_difference)
+                    self._update_volume_dict(self.results[dest_name], "dispensing", "out", f'{volume_difference} {config.default_volume_unit}')
                 step.to.append(self.results[dest_name])
             elif operator == 'dilute':
                 dest = step.to[0]
@@ -2099,14 +2101,13 @@ class Recipe:
             unit = config.default_moles_unit
         if timeframe == 'all':
             internal_dict = self.all_substance_tracking
-            output = Unit.convert(substance, f"{internal_dict[substance]} {config.moles_prefix}", unit)
-            return f'{output} {unit}'
         elif timeframe == 'dispensing':
             internal_dict = self.dispensing_substance_tracking
-            output = Unit.convert(substance, f"{internal_dict[substance]} {config.moles_prefix}", unit)
-            return f'{output} {unit}'
         else:
             raise ValueError("Invalid timeframe.")
+        output = Unit.convert(substance, f"{internal_dict[substance]} {config.moles_prefix}", unit)
+        output = round(output, config.external_precision)
+        return f'{output} {unit}'
 
     def substances_used(self, timeframe: str = 'before'):
         """
@@ -2137,16 +2138,13 @@ class Recipe:
             unit = config.default_volume_unit
         if timeframe == 'all':
             output_dict = deepcopy(self.all_volume_tracking[container])
-            output_dict['in'] = Unit.convert_from_storage(output_dict['in'], unit)
-            output_dict['out'] = Unit.convert_from_storage(output_dict['out'], unit)
-            return output_dict
         elif timeframe == 'dispensing':
             output_dict = deepcopy(self.dispensing_volume_tracking[container])
-            output_dict['in'] = Unit.convert_from_storage(output_dict['in'], unit)
-            output_dict['out'] = Unit.convert_from_storage(output_dict['out'], unit)
-            return output_dict
         else:
             raise ValueError("Invalid timeframe.")
+        output_dict['in'] = round(Unit.convert_from_storage(output_dict['in'], unit), config.external_precision)
+        output_dict['out'] = round(Unit.convert_from_storage(output_dict['out'], unit), config.external_precision)
+        return output_dict
 
 
 class PlateSlicer(Slicer):

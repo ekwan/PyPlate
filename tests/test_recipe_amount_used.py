@@ -1,6 +1,8 @@
+import numpy as np
 
 from pyplate.pyplate import Recipe, Container
 import pytest
+
 
 def test_amount_used(salt_water, salt):
     container = Container('container')
@@ -9,7 +11,7 @@ def test_amount_used(salt_water, salt):
     recipe.uses(salt_water, container)
     recipe.transfer(salt_water, container, '10 mL')
     recipe.bake()
-    assert recipe.amount_used(substance = salt, timeframe = 'before', unit = 'mmol') == '50 mmol'
+    assert recipe.amount_used(substance=salt, timeframe='all', unit='mmol') == '50.0 mmol'
 
 
 def test_recipe_tracking_before(water):
@@ -31,34 +33,34 @@ def test_recipe_tracking_before(water):
     - water (Substance): The substance object representing water, provided by a pytest fixture.
 
     """
-    
+
     other_container = Container('other container')
-    
+
     recipe = Recipe()
-    #uses to tell recipe about other containers
+    # uses to tell recipe about other containers
     recipe.uses(other_container)
-    
-    #Add solute and solvent to the create_solution method
+
+    # Add solute and solvent to the create_solution method
     initial_contents = [(water, '10 mL')]
 
-    #Implicit definition of container being used
-    container = recipe.create_container('container','20 mL', initial_contents)
+    # Implicit definition of container being used
+    container = recipe.create_container('container', '20 mL', initial_contents)
 
-    #Transfer 5 mL from container to other_container
+    # Transfer 5 mL from container to other_container
     recipe.transfer(container, other_container, '5 mL')
 
-    
     recipe.bake()
-    #Assertions
+    # Assertions
     step = recipe.steps[-1]
 
     print(step.frm)
     print(step.to)
-    assert recipe.amount_used(substance = water, timeframe = 'before', unit = 'mL') == '10 mL'
-    assert recipe.amount_used(substance = water, timeframe = 'during', unit = 'mL') == '5 mL'
+    assert recipe.amount_used(substance=water, timeframe='all', unit='mL') == '10.0 mL'
+    assert recipe.amount_used(substance=water, timeframe='dispensing', unit='mL') == '5.0 mL'
 
 
 def test_container_to_plate(triethylamine, empty_plate):
+    # TODO: double check volumes here
     """
     Tests the transfer of a substance from a container to a plate within a Recipe context.
 
@@ -75,48 +77,49 @@ def test_container_to_plate(triethylamine, empty_plate):
 
     The test outputs the initial volume of the container, the source and destination of the final transfer step, and an related print statements. It asserts that the final volumes and substance usage match expected values.
     """
-    
-    #create_recipe
+
+    # create_recipe
     recipe = Recipe()
-    
-    #define initial and transfer volumes
+
+    # define initial and transfer volumes
     initial_volume = '10 mL'
     transfer_volume = '100 uL'
 
-    #define initial contents and create container
+    # define initial contents and create container
     initial_contents = [(triethylamine, initial_volume)]
-    container = recipe.create_container('container', max_volume = '20 mL', initial_contents = initial_contents)
+    container = recipe.create_container('container', max_volume='20 mL', initial_contents=initial_contents)
 
-    #Test if container.volume is correct intially
+    # Test if container.volume is correct intially
     assert container.volume == 0
 
-    #Make sure that the recipe uses empty_plate 
+    # Make sure that the recipe uses empty_plate
     recipe.uses(empty_plate)
 
-    recipe.transfer( container, empty_plate, transfer_volume)
+    recipe.transfer(container, empty_plate, transfer_volume)
     results = recipe.bake()
     container = results[container.name]
+    plate = results[empty_plate.name]
 
-    #Calculate expected volume
-    expected_volume_plate = '400 uL'
-    expected_volume_container = '400 uL'
+    # Calculate expected volume
+    expected_volume_plate = 400
+    expected_volume_container = 400
 
-    #Assertions
+    # Assertions
     step = recipe.steps[-1]
 
     print(step.frm)
     print(step.to)
 
     print("Assertions start here")
-    
-    assert container.volume == expected_volume_container
-    assert empty_plate.volume == expected_volume_plate
-    assert pytest.approx(recipe.amount_used(substance = triethylamine, timeframe = 'during', unit = 'uL')) == expected_volume_plate
 
+    assert pytest.approx(container.volume) == expected_volume_plate
+    assert (np.full((8, 12), expected_volume_container) == plate.volumes(unit='uL')).all()
+    assert pytest.approx(
+        recipe.amount_used(substance=triethylamine, timeframe='during', unit='uL')) == expected_volume_plate
 
 
 def test_amount_used_dilute(salt_water, salt, water):
-        
+    # TODO: walk through recipe, find incorrect values
     """
     Tests that the substance amount tracking is correctly tracked during dilution in a recipe.
 
@@ -135,34 +138,34 @@ def test_amount_used_dilute(salt_water, salt, water):
     - salt (Substance): Salt substance to be tracked.
     - water (Substance): Water used as the solvent for dilution.
     """
-    
-    #Using self defined container
+
+    # Using self defined container
     container = Container('container')
 
-    #Create recipe
+    # Create recipe
     recipe = Recipe()
-    
-    #container = recipe.create_container('container', '20 mL', [(salt_water, '10 mL')])
 
-    #Define what the recipe uses
+    # container = recipe.create_container('container', '20 mL', [(salt_water, '10 mL')])
+
+    # Define what the recipe uses
     recipe.uses(salt_water, container)
-    #container._add(salt_water, '10 mL')
+    # container._add(salt_water, '10 mL')
 
     recipe.transfer(salt_water, container, '10 mL')
 
-    #Add solute to recipe
-    #container = container._add(salt, '50 mmol') #Does not do anything as the container that is used in the recipe is the one that was stored initially
-    recipe.dilute(container,solute=salt, concentration='0.5 M',solvent=water)
+    # Add solute to recipe
+    # container = container._add(salt, '50 mmol') #Does not do anything as the container that is used in the recipe is the one that was stored initially
+    recipe.dilute(container, solute=salt, concentration='0.5 M', solvent=water)
     recipe.bake()
 
-    assert container.volume == 0 
-    #Results would contain the pointers to the new containers, so assert from there
+    assert container.volume == 0
+    # Results would contain the pointers to the new containers, so assert from there
 
     expected_salt_amount = '50 mmol'
-    assert recipe.amount_used(substance = salt, timeframe = 'during', unit = 'mmol') == expected_salt_amount
+    assert recipe.amount_used(substance=salt, timeframe='during', unit='mmol') == expected_salt_amount
 
 
-#Testing create_solution
+# Testing create_solution
 def test_amount_used_create_solution(salt, water):
     """
     Tests that the substance amount tracking is accurately implemented during the creation of a solution within a recipe.
@@ -182,21 +185,21 @@ def test_amount_used_create_solution(salt, water):
 
     """
 
-    #Create recipe
+    # Create recipe
     recipe = Recipe()
     recipe.uses(salt, water)
-    
-    #Create solution and add to container
-    container = recipe.create_solution(salt, water, concentration='0.5 M',total_quantity = '20 mL')
+
+    # Create solution and add to container
+    container = recipe.create_solution(salt, water, concentration='0.5 M', total_quantity='20 mL')
     ##What is the initial volume of container here?
     assert container.volume == 0
 
-    #Bake recipe
+    # Bake recipe
     recipe.bake()
-    
-    #Assertions
-    expected_salt_amount = '10 mmol'
-    assert recipe.amount_used(substance = salt, timeframe = 'during', unit = 'mmol') == expected_salt_amount
+
+    # Assertions
+    expected_salt_amount = '10.0 mmol'
+    assert recipe.amount_used(substance=salt, timeframe='all', unit='mmol') == expected_salt_amount
 
 
 def test_amount_used_remove(salt_water, salt):
@@ -216,31 +219,30 @@ def test_amount_used_remove(salt_water, salt):
     - salt (Substance): The salt substance, expected to be tracked through the `amount_used` method.
     """
 
-    #Create recipe
+    # Create recipe
     recipe = Recipe()
 
-    #Deine initial contents
+    # Deine initial contents
     initial_contents = [(salt, '50 mmol')]
 
-    #Create container
+    # Create container
     container = recipe.create_container('container', '20 mL', initial_contents)
 
-    #Remove 10 mL from container
-    #Substance is solid, which leads to some errors
-    recipe.remove(container,salt)
+    # Remove 10 mL from container
+    # Substance is solid, which leads to some errors
+    recipe.remove(container, salt)
 
-    #Bake recipe
+    # Bake recipe
     recipe.bake()
 
-    #Assertions
-    expected_salt_amount = '0 mmol'
-    assert recipe.amount_used(substance = salt, timeframe = 'during', unit = 'mmol') == expected_salt_amount
-
+    # Assertions
+    expected_salt_amount = '0.0 mmol'
+    assert recipe.amount_used(substance=salt, timeframe='dispensing', unit='mmol') == expected_salt_amount
 
 
 def test_amount_used_with_no_usage(salt):
-    #TODO - timeframe changed from before and during to all and dispensing
-   
+    # TODO - timeframe changed from before and during to all and dispensing
+
     """
     Verifies that the amount of a substance reported as used is zero when the substance is not utilized in the recipe.
 
@@ -259,11 +261,10 @@ def test_amount_used_with_no_usage(salt):
     # No usage of salt
     recipe.bake()
     # Expecting 0 usage since salt wasn't used
-    assert recipe.amount_used(substance=salt, timeframe='before', unit='mmol') == '0 mmol'
+    assert recipe.amount_used(substance=salt, timeframe='all', unit='mmol') == '0.0 mmol'
 
 
-def test_amount_used_incorrect_timeframe(salt_water, salt ,plate):
-    
+def test_amount_used_incorrect_timeframe(salt_water, salt, empty_plate):
     """
     Ensures an error is raised when querying the amount of substance used with an unsupported timeframe.
 
@@ -281,14 +282,15 @@ def test_amount_used_incorrect_timeframe(salt_water, salt ,plate):
     - plate (Plate): A fixture representing a plate, to which the saltwater solution is transferred as part of the recipe.
     """
     recipe = Recipe()
-    recipe.uses(salt_water, Container('container'))
-    recipe.transfer(salt_water, plate, '10 mL')
+    container = Container('container')
+    recipe.uses(salt_water, container)
+    recipe.uses(empty_plate)
+    recipe.transfer(salt_water, empty_plate, '10 uL')
+    recipe.transfer(salt_water, container, '10 uL')
     recipe.bake()
-    
+
     # Raising errors for unexpected timeframes
-    with pytest.raises(ValueError, match="Unsupported timeframe"):
+    with pytest.raises(ValueError, match="Invalid timeframe"):
         recipe.amount_used(substance=salt, timeframe='later', unit='mmol')
 
-#Try substance with solid and liquid
-
-
+# Try substance with solid and liquid
