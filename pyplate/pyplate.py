@@ -1819,8 +1819,8 @@ class Recipe:
             raise TypeError("Destination must be a container.")
         if destination.name not in self.results:
             raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
-        if solute not in destination.contents:
-            raise ValueError(f"Container does not contain {solute.name}.")
+        # if solute not in destination.contents:
+        #     raise ValueError(f"Container does not contain {solute.name}.")
 
         ratio, *_ = Unit.calculate_concentration_ratio(solute, concentration, solvent)
         if ratio <= 0:
