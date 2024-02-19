@@ -201,6 +201,46 @@ def test_amount_used_create_solution(salt, water):
     expected_salt_amount = '10.0 mmol'
     assert recipe.amount_used(substance=salt, timeframe='all', unit='mmol') == expected_salt_amount
 
+# Try substance with solid and liquid
+def test_amount_used_create_solution_from(salt, water, triethylamine):
+    """
+    Tests accurate tracking of salt usage when creating a new solution from an existing diluted solution.
+
+    This test simulates the scenario of diluting an existing salt solution with a different solvent (triethylamine) to create a new solution with the same concentration. The test procedure involves:
+    - Creating an initial salt solution with a specified concentration and total quantity.
+    - Creating a new solution from this initial solution, aiming to maintain the same concentration but with a different solvent, and specifying a unique name for the new container.
+    - Baking the recipe to apply all declared operations.
+
+    Assertions:
+    - The amount of salt used in both the creation of the initial solution and the new solution from it matches the expected '10 mmol', demonstrating accurate tracking of substance usage.
+    - The 'residual' volume after creating the new solution is 0, indicating all available solution was used.
+    - The volume of the newly created container is expected to be '20 mL', reflecting the specified quantity for the new solution.
+
+    Parameters:
+    - salt (Substance): The solute used in the solutions.
+    - water (Substance): The solvent for the initial solution.
+    - triethylamine (Substance): The solvent for the new solution created from the existing one.
+    """
+   # Creating solution from a diluted solution
+    recipe = Recipe()
+    
+    # Create initial solution and add to container
+    initial_container_name = "initial_salt_solution"
+    container = recipe.create_solution(salt, water, concentration='0.5 M', total_quantity='20 mL', name=initial_container_name)
+    
+    # Create solution from the initial one with a new solvent
+    new_container_name = "new_solution_from_initial"
+    residual, new_container = recipe.create_solution_from(container, solute=salt, concentration='0.5 M', solvent=triethylamine, quantity='20 mL', name=new_container_name)
+    
+    # Bake recipe to finalize
+    recipe.bake()
+
+    # Assertions for substance amount used and container volumes
+    expected_salt_amount = '10 mmol'
+    assert recipe.amount_used(substance=salt, timeframe='during', unit='mmol') == expected_salt_amount, "The reported amount of salt used does not match the expected value."
+    assert residual == 0, "Expected residual volume to be 0 after creating new solution."
+    assert new_container.volume == '20 mL', "Expected new container volume to match the specified total quantity for the new solution."
+
 
 def test_amount_used_remove(salt_water, salt):
     """
@@ -293,4 +333,12 @@ def test_amount_used_incorrect_timeframe(salt_water, salt, empty_plate):
     with pytest.raises(ValueError, match="Invalid timeframe"):
         recipe.amount_used(substance=salt, timeframe='later', unit='mmol')
 
-# Try substance with solid and liquid
+
+
+
+
+
+
+
+
+
