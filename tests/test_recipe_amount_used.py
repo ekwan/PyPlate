@@ -118,8 +118,7 @@ def test_container_to_plate(triethylamine, empty_plate):
         recipe.amount_used(substance=triethylamine, timeframe='during', unit='uL')) == expected_volume_plate
 
 
-def test_amount_used_dilute(salt_water, salt, water):
-    # TODO: walk through recipe, find incorrect values
+def test_amount_used_dilute(salt, water):
     """
     Tests that the substance amount tracking is correctly tracked during dilution in a recipe.
 
@@ -148,21 +147,22 @@ def test_amount_used_dilute(salt_water, salt, water):
     # container = recipe.create_container('container', '20 mL', [(salt_water, '10 mL')])
 
     # Define what the recipe uses
-    recipe.uses(salt_water, container)
+    recipe.uses(container)
+    salt_solution = recipe.create_solution(salt, water, concentration='0.5 M', total_quantity='20 mL')
     # container._add(salt_water, '10 mL')
 
-    recipe.transfer(salt_water, container, '10 mL')
+    recipe.transfer(salt_solution, container, '10 mL')
 
     # Add solute to recipe
     # container = container._add(salt, '50 mmol') #Does not do anything as the container that is used in the recipe is the one that was stored initially
-    recipe.dilute(container, solute=salt, concentration='0.5 M', solvent=water)
+    recipe.dilute(container, solute=salt, concentration='0.25 M', solvent=water)
     recipe.bake()
 
     assert container.volume == 0
     # Results would contain the pointers to the new containers, so assert from there
 
-    expected_salt_amount = '50 mmol'
-    assert recipe.amount_used(substance=salt, timeframe='during', unit='mmol') == expected_salt_amount
+    expected_salt_amount = '5.0 mmol'
+    assert recipe.amount_used(substance=salt, timeframe='dispensing', unit='mmol') == expected_salt_amount
 
 
 # Testing create_solution
@@ -281,7 +281,6 @@ def test_amount_used_remove(salt_water, salt):
 
 
 def test_amount_used_with_no_usage(salt):
-    # TODO - timeframe changed from before and during to all and dispensing
 
     """
     Verifies that the amount of a substance reported as used is zero when the substance is not utilized in the recipe.
