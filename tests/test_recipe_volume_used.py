@@ -1,14 +1,13 @@
 import numpy as np
+
 from pyplate.pyplate import Recipe, Container
 import pytest
 
-def test_simple_volume_used(salt_water, water):
-    container = Container('container', initial_contents=[(water, '20 mL')])
-    recipe = Recipe()
-    recipe.uses(salt_water, container)
-    recipe.transfer(salt_water, container, '10 mL')
-    #recipe.transfer
+
+def test_volume_used_fill_to(salt, water):
+    water_container = Container('container')
+    recipe = Recipe().uses(water_container)
+    recipe.fill_to(water_container, water, '10 mL')
     recipe.bake()
-    
-    #Assertions
-    assert recipe.volume_used(container, 'all', 'mL') == 100
+
+    assert recipe.volume_used(container=water_container, timeframe='all', unit='mL') == {"in": 10.0, "out": 0.0}
