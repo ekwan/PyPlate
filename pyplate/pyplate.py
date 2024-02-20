@@ -1554,42 +1554,43 @@ class Recipe:
         self.locked = False
         self.used = set()
 
-    def _update_volume_dict(self, container: Container | PlateSlicer, mode: str, key: str, value: float,
+    def _update_volume_dict(self, container: Container | Plate, timeframe: str, direction: str, value: str,
                             index: tuple[int, int] | None = None):
         """
         Update the volume tracking dictionary for a container or plate.
 
         Args:
             container: Container or PlateSlicer to update.
-            mode: 'in' or 'out' to indicate whether volume is being added or removed.
+            timeframe: 'in' or 'out' to indicate whether volume is being added or removed.
 
         """
+        container_name = container.name
         if isinstance(container, PlateSlicer):
-            if mode == "dispensing":
-                if container not in self.dispensing_volume_tracking:
-                    self.dispensing_volume_tracking[container] = {
+            if timeframe == "dispensing":
+                if container_name not in self.dispensing_volume_tracking:
+                    self.dispensing_volume_tracking[container_name] = {
                         'in': np.zeros((container.n_rows, container.n_cols)),
                         'out': np.zeros((container.n_rows, container.n_cols))
                     }
-                self.dispensing_volume_tracking[container][key][index] += Unit.parse_quantity(value)[0]
-            elif mode == "all":
-                if container not in self.all_volume_tracking:
-                    self.all_volume_tracking[container] = {
+                self.dispensing_volume_tracking[container_name][direction][index] += Unit.parse_quantity(value)[0]
+            elif timeframe == "all":
+                if container_name not in self.all_volume_tracking:
+                    self.all_volume_tracking[container_name] = {
                         'in': np.zeros((container.n_rows, container.n_cols)),
                         'out': np.zeros((container.n_rows, container.n_cols))
                     }
-                self.all_volume_tracking[container][key][index] += Unit.parse_quantity(value)[0]
+                self.all_volume_tracking[container_name][direction][index] += Unit.parse_quantity(value)[0]
             else:
                 raise ValueError("Invalid mode.")
         else:
-            if mode == "dispensing":
-                if container not in self.dispensing_volume_tracking:
-                    self.dispensing_volume_tracking[container] = {'in': 0, 'out': 0}
-                self.dispensing_volume_tracking[container][key] += Unit.parse_quantity(value)[0]
-            elif mode == "all":
-                if container not in self.all_volume_tracking:
-                    self.all_volume_tracking[container] = {'in': 0, 'out': 0}
-                self.all_volume_tracking[container][key] += Unit.parse_quantity(value)[0]
+            if timeframe == "dispensing":
+                if container_name not in self.dispensing_volume_tracking:
+                    self.dispensing_volume_tracking[container_name] = {'in': 0, 'out': 0}
+                self.dispensing_volume_tracking[container_name][direction] += Unit.parse_quantity(value)[0]
+            elif timeframe == "all":
+                if container_name not in self.all_volume_tracking:
+                    self.all_volume_tracking[container_name] = {'in': 0, 'out': 0}
+                self.all_volume_tracking[container_name][direction] += Unit.parse_quantity(value)[0]
             else:
                 raise ValueError("Invalid mode.")
 
@@ -1938,7 +1939,7 @@ class Recipe:
                 if isinstance(orig_source, PlateSlicer):
                     for index, well in np.ndenumerate(orig_source.array):
                         for substance, amount in well.contents.items():
-                            difference = amount - source.array[well].contents[substance]
+                            difference = amount - source.wells[index].contents[substance]
                             self.dispensing_substance_tracking[substance] += difference
                         self._update_volume_dict(self.results[source_name], "dispensing", "out", quantity, index)
                 elif isinstance(orig_source, Container):
