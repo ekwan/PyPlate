@@ -1028,8 +1028,8 @@ class Container:
         if new_ratio <= 0:
             raise ValueError("Solution is impossible to create.")
 
-        if abs(new_ratio - current_ratio) <= 1e-6:
-            return deepcopy(source)
+        if abs(new_ratio - current_ratio) <= 1e-3:
+            new_ratio = current_ratio
 
         if new_ratio > current_ratio:
             raise ValueError("Desired concentration is higher than current concentration.")
@@ -1636,7 +1636,7 @@ class Recipe:
             raise RuntimeError("This recipe is locked.")
         if not isinstance(destination, (Container, Plate, PlateSlicer)):
             raise TypeError("Invalid destination type.")
-        if not isinstance(source, (Substance, Container, PlateSlicer)):
+        if not isinstance(source, (Container, Plate, PlateSlicer)):
             raise TypeError("Invalid source type.")
         if (source.plate.name if isinstance(source, PlateSlicer) else source.name) not in self.results:
             raise ValueError("Source not found in declared uses.")

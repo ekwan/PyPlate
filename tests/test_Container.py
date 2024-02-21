@@ -224,6 +224,7 @@ def test_create_solution_from(water, salt):
     assert pytest.approx(Unit.convert(water, '50 mL', config.volume_prefix)) == solution.volume
     assert pytest.approx(Unit.convert_from_storage(solution.volume, 'mL')) == 50.0
 
+    # stock should have a volume of 75 mL and 75 mmol of salt
     # Try to create a solution with more volume than the source container holds
-    with pytest.raises(ValueError, match='Exceeded maximum volume'):
+    with pytest.raises(ValueError, match='Not enough mixture left in source container'):
         Container.create_solution_from(stock, salt, '1 M', water, '100 mL')
