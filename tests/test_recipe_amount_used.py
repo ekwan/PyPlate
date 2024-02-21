@@ -115,7 +115,7 @@ def test_container_to_plate(triethylamine, empty_plate):
     assert pytest.approx(container.volume) == expected_volume_plate
     assert (np.full((8, 12), expected_volume_container) == plate.volumes(unit='uL')).all()
     assert pytest.approx(
-        recipe.amount_used(substance=triethylamine, timeframe='during', unit='uL')) == expected_volume_plate
+        recipe.amount_used(substance=triethylamine, timeframe='dispensing', unit='uL')) == expected_volume_plate
 
 
 def test_amount_used_dilute(salt, water):
