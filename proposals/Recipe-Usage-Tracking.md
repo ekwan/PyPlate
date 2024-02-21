@@ -22,15 +22,15 @@ Track quantity on substance level for this
 - `bake`
     - [x] `create_container`
     - [x] `create_solution`
-    - [ ] `create_solution_from` (only worried about solvent going in to destination) (no plates)
-    - [ ] `fill_to`
-    - [ ] `dilute` (account for *additional* solvent added to container)
+    - [x] `create_solution_from` (only worried about solvent going in to destination) (no plates)
+    - [x] `fill_to`
+    - [x] `dilute` (account for *additional* solvent added to container)
 
 "dispensing only" tracking:
 - `bake`
-    - [ ] `create_solution_from` (only worried about source) (no plates)
-    - [ ] `dilute`
-    - [ ] `transfer`
+    - [x] `create_solution_from` (only worried about source) (no plates)
+    - [x] `dilute`
+    - [x] `transfer`
   
 
 
@@ -75,16 +75,16 @@ if plate, return dataframe with volume in each cell
 def volume_used(self, what, timeframe="first_use", unit=None)
 
 
-## methods to modify:
+## methods to test:
 Track volume on container level for this
 
 Special case for Plate (actually a PlateSlicer), and PlateSlicer, iterate over all containers in slice
 
 "all" tracking:
-- [x] `uses`
+- [ ] `uses`
 - `bake`
-    - [x] `create_container`
-    - [x] `create_solution`
+    - [ ] `create_container`
+    - [ ] `create_solution`
     - [ ] `create_solution_from` (only worried about solvent going in to destination) (no plates)
     - [ ] `fill_to`
     - [ ] `dilute` (account for *additional* solvent added to container)
