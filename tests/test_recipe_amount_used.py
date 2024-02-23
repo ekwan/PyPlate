@@ -280,7 +280,7 @@ def test_amount_used_remove(salt_water, salt):
     assert recipe.amount_used(substance=salt, timeframe='dispensing', unit='mmol') == expected_salt_amount
 
 
-def test_amount_used_with_no_usage(salt):
+test_amount_used_with_no_usage(salt):
 
     """
     Verifies that the amount of a substance reported as used is zero when the substance is not utilized in the recipe.

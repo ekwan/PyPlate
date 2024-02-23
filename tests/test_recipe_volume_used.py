@@ -179,7 +179,9 @@ def test_volume_used_dilute(sodium_sulfate, water):
     recipe.dilute(container, solute=sodium_sulfate, concentration = '0.25 M', solvent = water)
     recipe.bake()
 
+    #steps = recipe.steps[-1]
+
     assert container.volume == 0
 
-    assert pytest.approx(recipe.volume_used(container = container, timeframe='all', unit = 'mL')) == {"in": 20, "out":0}
-    #recipe.volume_used(container = container, timeframe='all', unit = 'mL') == {"in": 20, "out":0}
+    assert pytest.approx(recipe.volume_used(container = container, timeframe='all', unit = 'mL')) == {"in": 20.0, "out":0.0}
+    #assert recipe.volume_used(container = container, timeframe='all', unit = 'mL') == {"in": 20, "out":0.0}
