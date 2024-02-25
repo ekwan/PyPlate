@@ -1328,7 +1328,7 @@ class Plate:
     def __repr__(self):
         return f"Plate: {self.name}"
 
-    def volumes(self, substance: Substance = None, unit: str = None) -> numpy.ndarray:
+    def volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> numpy.ndarray:
         """
 
         Arguments:
@@ -1351,7 +1351,7 @@ class Plate:
         """
         return self[:].substances()
 
-    def moles(self, substance: Substance, unit: str = None) -> numpy.ndarray:
+    def moles(self, substance: (Substance | Iterable[Substance]), unit: str = None) -> numpy.ndarray:
         """
 
         Arguments:
@@ -1364,17 +1364,18 @@ class Plate:
             unit = config.default_moles_unit
         return self[:].moles(substance=substance, unit=unit)
 
-    def dataframe(self, unit: str, substance: (str | Substance) = 'all', cmap: str = None):
+    def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None):
         """
 
         Arguments:
             unit: unit to return quantities in.
-            substance: (optional) Substance to display quantity of.
+            substance: (optional) Substance or Substances to display quantity of.
             cmap: Colormap to shade dataframe with.
 
         Returns: Shaded dataframe of quantities in each well.
 
         """
+        # Types are checked in PlateSlicer.dataframe
         return self[:].dataframe(substance=substance, unit=unit, cmap=cmap)
 
     def volume(self, unit: str = 'uL'):
@@ -1435,6 +1436,7 @@ class Plate:
 
 class RecipeStep:
     def __init__(self, operator, frm, to, *operands):
+        self.objects_used = set()
         self.operator = operator
         self.frm = [frm]
         self.to = [to]
@@ -1890,6 +1892,13 @@ class Recipe:
 
         # for operation, *rest in self.steps:
         for step in self.steps:
+            # Keep track of what was used in each step
+            for elem in step.frm + step.to:
+                if isinstance(elem, PlateSlicer):
+                    step.objects_used.add(elem.plate.name)
+                elif isinstance(elem, (Container, Plate)):
+                    step.objects_used.add(elem.name)
+
             operator = step.operator
             if operator == 'create_container':
                 dest = step.to[0]
@@ -2177,6 +2186,105 @@ class Recipe:
         output_dict['out'] = round(Unit.convert_from_storage(output_dict['out'], unit), config.external_precision)
         return output_dict
 
+    def visualize(self, what: Plate, mode: str, when: (int | str), unit: str,
+                  substance: (str | Substance) = 'all', cmap: str = None):
+        """
+
+        Provide visualization of what happened during the step.
+
+        Args:
+            what: Plate we are interested in.
+            mode: 'delta', or 'final'
+            when: Number of the step or the name of the stage to visualize.
+            unit: Unit we are interested in. ('mmol', 'uL', 'mg')
+            substance: Substance we are interested in. ('all', water, ATP)
+            cmap: Colormap to use. Defaults to default_colormap from config.
+
+        Returns: A dataframe with the requested information.
+        """
+        if not isinstance(what, Plate):
+            raise TypeError("What must be a Plate.")
+        if mode not in ['delta', 'final']:
+            raise ValueError("Invalid mode.")
+        if not isinstance(when, (int, str)):
+            raise TypeError("When must be an int or str.")
+        if isinstance(when, str) and when not in self.stages:
+            raise ValueError("Invalid stage.")
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+        if substance != 'all' and not isinstance(substance, Substance):
+            raise TypeError("Substance must be a Substance or 'all'")
+        if cmap is None:
+            cmap = config.default_colormap
+        if not isinstance(cmap, str):
+            raise TypeError("Colormap must be a str.")
+
+        def helper(elem):
+            """ Returns amount of substance in elem. """
+            if substance == 'all':
+                amount = 0
+                for subst, quantity in elem.contents.items():
+                    substance_unit = 'U' if subst.is_enzyme() else config.moles_prefix
+                    amount += Unit.convert_from(subst, quantity, substance_unit, unit)
+                return amount
+            else:
+                substance_unit = 'U' if substance.is_enzyme() else config.moles_prefix
+                return Unit.convert_from(substance, elem.contents.get(substance, 0), substance_unit, unit)
+
+        if isinstance(when, str):
+            start_index = self.stages[when].start
+            end_index = self.stages[when].stop
+        else:
+            if when >= len(self.steps):
+                raise ValueError("Invalid step number.")
+            if when < 0:
+                when = max(0, len(self.steps) + when)
+            start_index = when
+            end_index = when + 1
+
+        start = None
+        end = None
+        for i in range(start_index, end_index):
+            step = self.steps[i]
+            if what.name in step.objects_used:
+                start = i
+                break
+        for i in range(end_index - 1, start_index - 1, -1):
+            step = self.steps[i]
+            if what.name in step.objects_used:
+                end = i
+                break
+        if start is None or end is None:
+            raise ValueError("Plate not used in the desired step(s).")
+
+        df = None
+        if mode == 'delta':
+            before_data = None
+            if what.name == self.steps[start].frm[0].name:
+                before_data = self.steps[start].frm[0][:].get_dataframe()
+            elif what.name == self.steps[start].to[0].name:
+                before_data = self.steps[start].to[0][:].get_dataframe()
+            before_data = before_data.applymap(numpy.vectorize(helper, cache=True, otypes='d'))
+            after_data = None
+            if what.name == self.steps[end].frm[1].name:
+                after_data = self.steps[end].frm[1][:].get_dataframe()
+            elif what.name == self.steps[end].to[1].name:
+                after_data = self.steps[end].to[1][:].get_dataframe()
+            after_data = after_data.applymap(numpy.vectorize(helper, cache=True, otypes='d'))
+            df = after_data - before_data
+        else:
+            data = None
+            if what.name == self.steps[end].frm[1].name:
+                data = self.steps[end].frm[1][:].get_dataframe()
+            elif what.name == self.steps[end].to[1].name:
+                data = self.steps[end].to[1][:].get_dataframe()
+            df = data.applymap(numpy.vectorize(helper, cache=True, otypes='d'))
+
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+        vmin, vmax = df.min().min(), df.max().max()
+        styler = df.style.format(precision=precision).background_gradient(cmap, vmin=vmin, vmax=vmax)
+        return styler
+
 
 class PlateSlicer(Slicer):
     """ @private """
@@ -2288,12 +2396,12 @@ class PlateSlicer(Slicer):
 
         return frm.plate, to.plate
 
-    def dataframe(self, unit: str, substance: Substance = 'all', cmap: str = None):
+    def dataframe(self, unit: str, substance: (str | Substance| Iterable[Substance]) = 'all', cmap: str = None):
         """
 
         Arguments:
             unit: unit to return quantities in.
-            substance: Substance to display quantity of.
+            substance: Substance or Substances to display quantity of.
             cmap: Colormap to shade dataframe with.
 
         Returns: Shaded dataframe of quantities in each well.
@@ -2301,7 +2409,8 @@ class PlateSlicer(Slicer):
         """
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
-        if substance != 'all' and not isinstance(substance, Substance):
+        if (substance != 'all' and not isinstance(substance, Substance) and
+                not (isinstance(substance, Iterable) and all(isinstance(x, Substance) for x in substance))):
             raise TypeError("Substance must be a Substance or 'all'")
         if cmap is None:
             cmap = config.default_colormap
@@ -2316,26 +2425,24 @@ class PlateSlicer(Slicer):
                     substance_unit = 'U' if subst.is_enzyme() else config.moles_prefix
                     amount += Unit.convert_from(subst, quantity, substance_unit, unit)
                 return amount
+            elif isinstance(substance, Iterable):
+                amount = 0
+                for subst in substance:
+                    substance_unit = 'U' if subst.is_enzyme() else config.moles_prefix
+                    amount += Unit.convert_from(subst, elem.contents.get(subst, 0), substance_unit, unit)
+                return amount
             else:
                 substance_unit = 'U' if substance.is_enzyme() else config.moles_prefix
                 return Unit.convert_from(substance, elem.contents.get(substance, 0), substance_unit, unit)
 
-        if not isinstance(unit, str):
-            raise TypeError("Unit must be a str.")
-        if substance != 'all' and not isinstance(substance, Substance):
-            raise TypeError("Substance must be a Substance or 'all'")
-        if cmap is None:
-            cmap = config.default_colormap
-        if not isinstance(cmap, str):
-            raise TypeError("Colormap must be a str.")
-
         values = numpy.vectorize(helper, cache=True, otypes='d')(self.get())
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         df = self.get_dataframe().apply(numpy.vectorize(helper, cache=True, otypes='d'))
-        styler = df.style.format(precision=precision).background_gradient(cmap, vmin=0, vmax=df.max().max())
+        vmin, vmax = df.min().min(), df.max().max()
+        styler = df.style.format(precision=precision).background_gradient(cmap, vmin=vmin, vmax=vmax)
         return styler
 
-    def volumes(self, substance: Substance = None, unit: str = 'uL') -> numpy.ndarray:
+    def volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = 'uL') -> numpy.ndarray:
         """
 
         Arguments:
@@ -2350,15 +2457,25 @@ class PlateSlicer(Slicer):
             return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, unit), cache=True,
                                    otypes='d')(self.get())
 
-        if not isinstance(substance, Substance):
-            raise TypeError(f"Substance is not a valid type, {type(substance)}.")
+        if isinstance(substance, Substance):
+            substance = [substance]
+        if not(substance is None or (isinstance(substance, Iterable) and all(isinstance(x, Substance) for x in substance))):
+            raise TypeError("Substance must be a Substance or an Iterable of Substances.")
+
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
 
         def helper(elem):
+            amount = 0
             """ Returns volume of elem. """
-            if substance in elem.contents:
-                quantity = f"{elem.contents[substance]} {config.moles_prefix}"
-                return Unit.convert(substance, quantity, unit)
-            return 0
+            if substance is None:
+                for subs, quantity in elem.contents.items():
+                    substance_unit = 'U' if subs.is_enzyme() else config.moles_prefix
+                    amount += Unit.convert_from(subs, quantity, substance_unit, unit)
+            else:
+                for subs in substance:
+                    substance_unit = 'U' if subs.is_enzyme() else config.moles_prefix
+                    amount += Unit.convert_from(subs, elem.contents.get(subs, 0), substance_unit, unit)
+            return round(amount, precision)
 
         return numpy.vectorize(helper, cache=True, otypes='d')(self.get())
 
@@ -2371,7 +2488,7 @@ class PlateSlicer(Slicer):
         substances_arr = numpy.vectorize(lambda elem: elem.contents.keys(), cache=True)(self.get())
         return set.union(*map(set, substances_arr.flatten()))
 
-    def moles(self, substance: Substance, unit: str = 'mol') -> numpy.ndarray:
+    def moles(self, substance: (Substance | Iterable[Substance]), unit: str = 'mol') -> numpy.ndarray:
         """
         Arguments:
             unit: unit to return moles in. ('mol', 'mmol', 'umol', etc.)
@@ -2380,15 +2497,21 @@ class PlateSlicer(Slicer):
         Returns: moles of substance in each well.
         """
 
-        if not isinstance(substance, Substance):
+        if (not isinstance(substance, Substance) or
+                (isinstance(substance, Iterable) and not all(isinstance(x, Substance) for x in substance))):
             raise TypeError(f"Substance is not a valid type, {type(substance)}.")
 
+        if isinstance(substance, Substance):
+            substance = [substance]
+
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+
         def helper(elem):
-            """ Returns moles of substance in elem. """
-            if substance not in elem.contents:
-                return 0
-            quantity = f"{elem.contents[substance]} {config.moles_prefix}"
-            return Unit.convert(substance, quantity, unit)
+            amount = 0
+            for subs in substance:
+                if not subs.is_enzyme():
+                    amount += Unit.convert_from(subs, elem.contents.get(subs, 0), config.moles_prefix, unit)
+            return round(amount, precision)
 
         return numpy.vectorize(helper, cache=True, otypes='d')(self.get())
 
