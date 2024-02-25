@@ -36,6 +36,7 @@ class Config:
         self.default_volume_unit = yaml_config['default_volume_unit']
         self.default_colormap = yaml_config['default_colormap']
         self.default_diverging_colormap = yaml_config['default_diverging_colormap']
+        self.precisions = yaml_config['precisions']
 
 
 from .pyplate import Substance, Container, Plate, Recipe

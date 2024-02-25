@@ -1364,50 +1364,18 @@ class Plate:
             unit = config.default_moles_unit
         return self[:].moles(substance=substance, unit=unit)
 
-    def moles_dataframe(self, substance: Substance | Iterable[Substance], unit: str = None, cmap: str = None):
+    def dataframe(self, unit: str, substance: (str | Substance) = 'all', cmap: str = None):
         """
 
         Arguments:
-            substance: Substance, or list of Substances, to display moles of.
-            unit: unit to return moles in. ('mol', 'mmol', 'umol', etc.)
+            unit: unit to return quantities in.
+            substance: (optional) Substance to display quantity of.
             cmap: Colormap to shade dataframe with.
 
-        Returns: Shaded dataframe of number of moles of substance in each well.
+        Returns: Shaded dataframe of quantities in each well.
 
         """
-        if unit is None:
-            unit = config.default_moles_unit
-        if cmap is None:
-            cmap = config.default_colormap
-        if isinstance(substance, Iterable):
-            moles = sum(self.moles(sub, unit) for sub in substance)
-        else:
-            moles = self.moles(substance, unit)
-        dataframe = pandas.DataFrame(moles, columns=self.column_names, index=self.row_names)
-        return dataframe.style.format('{:.3f}').background_gradient(cmap, vmin=0, vmax=moles.max())
-
-    def volumes_dataframe(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None,
-                          cmap: str = None):
-        """
-
-        Arguments:
-            unit: unit to return volumes in.
-            substance: (optional) Substance, or list of Substances, to display volumes of.
-            cmap: Colormap to shade dataframe with.
-
-        Returns: Shaded dataframe of volumes in each well.
-
-        """
-        if unit is None:
-            unit = config.default_volume_unit
-        if cmap is None:
-            cmap = config.default_colormap
-        if isinstance(substance, Iterable):
-            volumes = sum(self.volumes(sub, unit) for sub in substance)
-        else:
-            volumes = self.volumes(substance, unit)
-        dataframe = pandas.DataFrame(volumes, columns=self.column_names, index=self.row_names)
-        return dataframe.style.format('{:.3f}').background_gradient(cmap, vmin=0, vmax=volumes.max())
+        return self[:].dataframe(substance=substance, unit=unit, cmap=cmap)
 
     def volume(self, unit: str = 'uL'):
         """
@@ -2226,6 +2194,10 @@ class PlateSlicer(Slicer):
     def array(self, array):
         self.plate.wells = array
 
+    def get_dataframe(self):
+        return pandas.DataFrame(self.plate.wells, columns=self.plate.column_names,
+                                index=self.plate.row_names).iloc[self.slices]
+
     @staticmethod
     def _add(frm, to, quantity):
         to = copy(to)
@@ -2315,6 +2287,53 @@ class PlateSlicer(Slicer):
             raise ValueError("Source and destination slices must be the same size and shape.")
 
         return frm.plate, to.plate
+
+    def dataframe(self, unit: str, substance: Substance = 'all', cmap: str = None):
+        """
+
+        Arguments:
+            unit: unit to return quantities in.
+            substance: Substance to display quantity of.
+            cmap: Colormap to shade dataframe with.
+
+        Returns: Shaded dataframe of quantities in each well.
+
+        """
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+        if substance != 'all' and not isinstance(substance, Substance):
+            raise TypeError("Substance must be a Substance or 'all'")
+        if cmap is None:
+            cmap = config.default_colormap
+        if not isinstance(cmap, str):
+            raise TypeError("Colormap must be a str.")
+
+        def helper(elem):
+            """ Returns amount of substance in elem. """
+            if substance == 'all':
+                amount = 0
+                for subst, quantity in elem.contents.items():
+                    substance_unit = 'U' if subst.is_enzyme() else config.moles_prefix
+                    amount += Unit.convert_from(subst, quantity, substance_unit, unit)
+                return amount
+            else:
+                substance_unit = 'U' if substance.is_enzyme() else config.moles_prefix
+                return Unit.convert_from(substance, elem.contents.get(substance, 0), substance_unit, unit)
+
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+        if substance != 'all' and not isinstance(substance, Substance):
+            raise TypeError("Substance must be a Substance or 'all'")
+        if cmap is None:
+            cmap = config.default_colormap
+        if not isinstance(cmap, str):
+            raise TypeError("Colormap must be a str.")
+
+        values = numpy.vectorize(helper, cache=True, otypes='d')(self.get())
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+        df = self.get_dataframe().apply(numpy.vectorize(helper, cache=True, otypes='d'))
+        styler = df.style.format(precision=precision).background_gradient(cmap, vmin=0, vmax=df.max().max())
+        return styler
 
     def volumes(self, substance: Substance = None, unit: str = 'uL') -> numpy.ndarray:
         """
