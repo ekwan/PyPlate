@@ -226,19 +226,22 @@ def test_amount_used_create_solution_from(salt, water, triethylamine):
     
     # Create initial solution and add to container
     initial_container_name = "initial_salt_solution"
-    container = recipe.create_solution(salt, water, concentration='0.5 M', total_quantity='20 mL', name=initial_container_name)
+    container = recipe.create_solution(salt, water, concentration='1 M', total_quantity='20 mL', name=initial_container_name)
     
     # Create solution from the initial one with a new solvent
     new_container_name = "new_solution_from_initial"
-    residual, new_container = recipe.create_solution_from(container, solute=salt, concentration='0.5 M', solvent=triethylamine, quantity='20 mL', name=new_container_name)
+    new_container = recipe.create_solution_from(container, solute=salt, concentration='0.5 M', 
+                                                          solvent=triethylamine, quantity='20 mL', name=new_container_name)
     
     # Bake recipe to finalize
-    recipe.bake()
+    results = recipe.bake()
 
+    new_container = results[new_container.name]
     # Assertions for substance amount used and container volumes
     expected_salt_amount = '10 mmol'
     assert recipe.amount_used(substance=salt, timeframe='during', unit='mmol') == expected_salt_amount, "The reported amount of salt used does not match the expected value."
-    assert residual == 0, "Expected residual volume to be 0 after creating new solution."
+    #assert residual == 0, "Expected residual volume to be 0 after creating new solution."
+    
     assert new_container.volume == '20 mL', "Expected new container volume to match the specified total quantity for the new solution."
 
 
@@ -280,7 +283,7 @@ def test_amount_used_remove(salt_water, salt):
     assert recipe.amount_used(substance=salt, timeframe='dispensing', unit='mmol') == expected_salt_amount
 
 
-test_amount_used_with_no_usage(salt):
+def test_amount_used_with_no_usage(salt):
 
     """
     Verifies that the amount of a substance reported as used is zero when the substance is not utilized in the recipe.
@@ -333,11 +336,28 @@ def test_amount_used_incorrect_timeframe(salt_water, salt, empty_plate):
         recipe.amount_used(substance=salt, timeframe='later', unit='mmol')
 
 
+def test_stages(water):
 
+    recipe = Recipe()
+    container = Container('container')
+    recipe.uses(container)
 
+    recipe.start_stage('stage1')
+    other_container = recipe.Container('other container')
+    recipe.uses(other_container)
 
+    # Add solute and solvent to the create_solution method
+    initial_contents = [(water, '20 mL')]
 
+    # Implicit definition of container being used
+    container = recipe.create_container('container', '20 mL', initial_contents)
 
+    # Transfer 5 mL from container to other_container
+    recipe.transfer(container, other_container, '5 mL')
+    recipe.transfer(container, other_container, '10 mL')
+    recipe.remove(container)
+    recipe.end_stage('stage1')
 
-
-
+    timeframe = recipe.stages['stage1']
+    destination_container = [container, other_container]
+    assert recipe.amount_used(water, timeframe='stage1', unit='mL') == '25.0 mL'

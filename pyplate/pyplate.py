@@ -1785,7 +1785,7 @@ class Recipe:
             raise ValueError("Solution is impossible to create.")
 
         new_container = Container(name, max_volume=f"{source.max_volume} {config.volume_prefix}")
-        self.uses(new_container, source)
+        self.uses(new_container)
         self.steps.append(RecipeStep('solution_from', source, new_container, solute, concentration, solvent, quantity))
 
         return new_container
