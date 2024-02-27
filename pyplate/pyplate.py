@@ -1339,8 +1339,8 @@ class Plate:
             numpy.ndarray of volumes for each well in desired unit.
 
         """
-        if unit is None:
-            unit = config.default_volume_unit
+
+        # Arguments are type checked in PlateSlicer.volumes
         return self[:].volumes(substance=substance, unit=unit)
 
     def substances(self):
@@ -1360,8 +1360,8 @@ class Plate:
 
         Returns: moles of substance in each well.
         """
-        if unit is None:
-            unit = config.default_moles_unit
+
+        # Arguments are type checked in PlateSlicer.moles
         return self[:].moles(substance=substance, unit=unit)
 
     def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None):
@@ -2396,7 +2396,7 @@ class PlateSlicer(Slicer):
 
         return frm.plate, to.plate
 
-    def dataframe(self, unit: str, substance: (str | Substance| Iterable[Substance]) = 'all', cmap: str = None):
+    def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None):
         """
 
         Arguments:
@@ -2442,7 +2442,7 @@ class PlateSlicer(Slicer):
         styler = df.style.format(precision=precision).background_gradient(cmap, vmin=vmin, vmax=vmax)
         return styler
 
-    def volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = 'uL') -> numpy.ndarray:
+    def volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> numpy.ndarray:
         """
 
         Arguments:
@@ -2453,14 +2453,21 @@ class PlateSlicer(Slicer):
             numpy.ndarray of volumes for each well in uL
 
         """
+        if unit is None:
+            unit = config.default_volume_unit
+
         if substance is None:
             return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, unit), cache=True,
                                    otypes='d')(self.get())
 
         if isinstance(substance, Substance):
             substance = [substance]
-        if not(substance is None or (isinstance(substance, Iterable) and all(isinstance(x, Substance) for x in substance))):
+
+        if not (substance is None or
+                (isinstance(substance, Iterable) and all(isinstance(x, Substance) for x in substance))):
             raise TypeError("Substance must be a Substance or an Iterable of Substances.")
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
 
@@ -2497,12 +2504,16 @@ class PlateSlicer(Slicer):
         Returns: moles of substance in each well.
         """
 
-        if (not isinstance(substance, Substance) or
-                (isinstance(substance, Iterable) and not all(isinstance(x, Substance) for x in substance))):
-            raise TypeError(f"Substance is not a valid type, {type(substance)}.")
 
         if isinstance(substance, Substance):
             substance = [substance]
+        if unit is None:
+            unit = config.default_moles_unit
+
+        if not isinstance(substance, Iterable) or not all(isinstance(x, Substance) for x in substance):
+            raise TypeError(f"Substance must be a Substance or an Iterable of Substances.")
+        if not isinstance(unit, str):
+            raise TypeError(f"Unit must be a str.")
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
 
