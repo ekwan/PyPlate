@@ -1997,6 +1997,17 @@ class Recipe:
                         for substance, amount in step.frm[0].contents.items():
                             difference = step.frm[0].contents.get(substance, 0) - step.frm[1].contents.get(substance, 0)
                             tracking_dict[substance] += difference
+                elif step.frm[1].name in dest_containers:
+                    if isinstance(step.frm[0], PlateSlicer):
+                        for index, well in np.ndenumerate(step.frm[0].array):
+                            for substance, amount in well.contents.items():
+                                difference = step.frm[1].wells[index].contents.get(substance, 0) - step.frm[0].wells[
+                                    index].contents.get(substance, 0)
+                                tracking_dict[substance] += difference
+                    elif isinstance(step.frm[0], Container):
+                        for substance, amount in step.frm[0].contents.items():
+                            difference = step.frm[1].contents.get(substance, 0) - step.frm[0].contents.get(substance, 0)
+                            tracking_dict[substance] += difference
             elif operator == 'solution':
                 if step.to[1].name in dest_containers:
                     if isinstance(step.to[1], PlateSlicer):
@@ -2087,9 +2098,11 @@ class Recipe:
                 before_stage_steps = self.steps[slice(0, self.stages[timeframe].start)]
                 self._dry_bake(before_stage_steps, before_substances, dest_names)
             self._dry_bake(stage_steps, after_substances, dest_names)
-        return Unit.convert(substance,
-                            f'{after_substances[substance] - before_substances[substance]} {config.moles_prefix}',
-                            unit)
+        delta = after_substances[substance] - before_substances[substance]
+        if delta < 0:
+            raise ValueError(
+                f"Destination containers contains {delta} {config.moles_prefix} less of substance: {substance} after stage {timeframe}. Did you specify the correct destinations?")
+        return Unit.convert(substance, f'{delta} {config.moles_prefix}', unit)
 
     def substances_used(self, timeframe: str = 'before'):
         """
