@@ -355,9 +355,13 @@ def test_stages(water):
     # Transfer 5 mL from container to other_container
     recipe.transfer(container, other_container, '5 mL')
     recipe.transfer(container, other_container, '10 mL')
-    recipe.remove(container)
+    
     recipe.end_stage('stage1')
+    recipe.transfer(container, other_container, '2 mL')
+    recipe.bake()
+
 
     timeframe = recipe.stages['stage1']
-    destination_container = [container, other_container]
-    assert recipe.amount_used(water, timeframe='stage1', unit='mL') == '25.0 mL'
+    destination_container = [other_container]
+    assert recipe.amount_used(water, timeframe='stage1', unit='mL') == 15.0 mL
+    assert recipe.amount_used(water, timeframe='all', unit='mL') == 17.0
