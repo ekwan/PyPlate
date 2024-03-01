@@ -339,12 +339,9 @@ def test_amount_used_incorrect_timeframe(salt_water, salt, empty_plate):
 def test_stages(water):
 
     recipe = Recipe()
-    container = Container('container')
-    recipe.uses(container)
 
     recipe.start_stage('stage1')
-    other_container = recipe.Container('other container')
-    recipe.uses(other_container)
+    other_container = recipe.create_container('other container')
 
     # Add solute and solvent to the create_solution method
     initial_contents = [(water, '20 mL')]
@@ -361,7 +358,6 @@ def test_stages(water):
     recipe.bake()
 
 
-    timeframe = recipe.stages['stage1']
     destination_container = [other_container]
-    assert recipe.amount_used(water, timeframe='stage1', unit='mL') == 15.0 mL
-    assert recipe.amount_used(water, timeframe='all', unit='mL') == 17.0
+    assert recipe.amount_used(water, timeframe='stage1', unit='mL', destinations=destination_container) == 15.0
+    assert recipe.amount_used(water, timeframe='all', unit='mL', destinations=destination_container) == 17.0
