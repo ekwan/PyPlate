@@ -1,3 +1,5 @@
+### Formulas used to calculate concentrations in `Unit.calculate_concentration_ratio`
+#### Ratio of moles to moles is calculated based on the numerator and denominator of desired concentration.
 x = solute in moles, y = solvent in moles
 
 $MW_x$ = molecular weight of solute, $d_x$ = density of solute
@@ -96,7 +98,7 @@ $\frac{x}{y} = \frac{x\cdot MW_y/d_y}{1 - c\cdot MW_x/d_x}$
 
 ---
 ---
-
+### Formulas used in `Container.create_solution` to calculate quantity of solvent and solute if given total quantity and concentration.
 #### For quantities of grams, we convert $\frac{x}{y}$ to $\frac{g}{g}$
 
 $\frac{x}{y}\cdot \frac{MW_x}{MW_y}$
@@ -108,7 +110,7 @@ $\frac{x}{y}\cdot \frac{MW_x/d_x}{MW_y/d_y}$
 #### For quantities of moles, we do nothing since the ratio is already in $\frac{mol}{mol}$
 
 ---
-
+#### quantity is total_quantity
 $ratio = quantity_{solute}/quantity_{solvent}$
 
 $quantity_{solute} = ratio\cdot quantity_{solvent}$
