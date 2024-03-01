@@ -280,3 +280,7 @@ recipe.amount_used(water, timeframe="stage1", unit="mL") should return "2mL"
     **and**
     because 4mL of water total is in all of the destination containers at the end of stage1
 
+
+# implementation
+Look at before/after for each step in the given stage, update substance measurement for containers in destination_containers
+calculate deltas when finished
