@@ -39,11 +39,15 @@ plate = Plate(name='plate', max_volume_per_well='50 uL')
 
 recipe = Recipe().uses(triethylamine_50mM, plate)
 recipe.transfer(source=triethylamine_50mM, destination=plate[2:7, 2:11], quantity='10 uL')
-triethylamine_50mM, plate = recipe.bake()
+results = recipe.bake()
+triethylamine_50mM = results[triethylamine_50mM.name]
+plate = results[plate.name]
 
-recipe.steps[-1].visualize(what='destination', mode='final', unit='uL')[0]
+
+recipe.visualize(what=plate, mode='final', when=0, unit='uL')
 
 ```
+
 ![img.png](images/simple_visualization.png)
 ## User Guide
 
@@ -146,7 +150,7 @@ plate = Plate(name='plate', max_volume_per_well='50 uL')
 recipe = Recipe()
 ```
 
-`Container`s and `Plate`s must be declared in the `Recipe` before use:
+`Container`s and `Plate`s must be declared in the `Recipe` before use. Each object used in a recipe must be uniquely named.
 
 ```python
 recipe.uses(plate)
@@ -158,33 +162,41 @@ It can be convenient to create solutions and declare them for use in the same st
 triethylamine_50mM = recipe.create_solution(solute=triethylamine, solvent=DMSO, concentration='0.05 M', total_quantity='10.0 mL')
 ```
 
-(Note that solutions made in this way are not actually created until `recipe.bake()` is called.)  Performing transfer steps:
+(Note that solutions made in this way are not actually created until `recipe.bake()` is called.)
+
+Performing transfer steps:
 
 ```python
 recipe.transfer(source=triethylamine_50mM, destination=plate[:3], quantity='10 uL')
 ```
 
-When `recipe.bake()` is called, the resulting `Container` and `Plate` objects are returned (leaving the input objects, if any, unchanged) in order of declaration or creation:
+When `recipe.bake()` is called, a dictionary of object names to resulting objects is returned (leaving the input objects, if any, unchanged.)
 
 ```
-plate, triethylamine_50mM = recipe.bake()
+results = recipe.bake()
+plate = results[plate.name]
+triethylamine_50mM = results[triethylamine_50mM.name]
 ```
 
 
 Each operation called on a recipe is stored as a step. You can retrieve the steps for a recipe using `recipe.steps`.
-Each step has instructions as to what happened during the step (`step.instruction`) as well as visualizations.
+Each step has instructions as to what happened during the step (`step.instruction`).
 
+
+### Stages
+
+Stages are a method of breaking a recipe into addresable parts.
+A recipe can be broken into stages using `start_stage(name)` and `end_stage(name)`. You must end a stage before starting a new stage. These stage names can be used for visualizations.
 
 ### Visualizations
 
-Each step in a recipe that involves a plate will yield visualizations. We can visualize information about the source or
-destination plate (as applicable) or both. Visualization can be determined for two different modes, either the 'final' state of the plate or a 'delta' of what changed during the step. Finally, the unit in which data is returned must be provided.
+A visualization is represented as a dataframe consisting of floats, which denotes the quantity of substances that are added to or removed from different parts of a plate during a recipe. By default, all substances are tracked, but it is possible to request tracking for a specific substance.
+
+Visualizations can be prepared for the plates that are modified during the recipe, either for a specific recipe step or across a stage. In a recipe, each step is numbered, starting at zero. 
+There are two modes for determining visualization: 'final' state and 'delta' of the changes made during the step or stage. Additionally, the unit in which the data is returned must be specified.
 
 ```
-...
-last_step = recipe.steps[-1]
-for df in last_step.visualize(what='destination', mode='delta', unit='umol'):
-    display.display_html(df)
+recipe.visualize(what=plate, mode='delta', when=1, substance=triethylamine, unit='umol')
 ```
 ![Example Visualizations](images/example_visualization.png)
 
@@ -195,6 +207,8 @@ The basic units of pyplate are moles, grams, liters, and activity units. ('mol',
 Any time units are required, metric prefixes may be specified. ('mg', 'umol', 'dL', ...)
 
 All quantities are specified as strings with a value and a unit. ('1 mmol', '10 g', '10 uL' ...)
+
+Concentration can be any of '0.1 M', '0.1 m', '0.1 g/mL', '0.01 umol/10 uL', '5 %v/v', '5 %w/v', or '5 %w/w'.
 
 ### Building documentation
 
