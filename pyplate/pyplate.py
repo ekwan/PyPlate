@@ -1438,8 +1438,8 @@ class RecipeStep:
     def __init__(self, operator, frm, to, *operands):
         self.objects_used = set()
         self.operator = operator
-        self.frm: list[Container | PlateSlicer | None] = [frm]
-        self.to: list[Container | PlateSlicer] = [to]
+        self.frm: list[Container | PlateSlicer | Plate | None] = [frm]
+        self.to: list[Container | PlateSlicer | Plate] = [to]
         self.trash = {}
         self.operands = operands
 
@@ -2234,14 +2234,14 @@ class Recipe:
 
         dest_names = set()
         if destinations == "plates":
-            for container in self.used:
-                if isinstance(container, Plate):
-                    dest_names.add(container.name)
+            dest_names = set(elem.name for elem in self.results.values() if isinstance(elem, Plate))
         elif isinstance(destinations, Iterable):
             for container in destinations:
                 if container.name not in self.used:
                     raise ValueError(f"Destination {container.name} was not used in the recipe.")
                 dest_names.add(container.name)
+        else:
+            raise ValueError("Invalid destinations.")
 
         delta = 0
 
@@ -2250,14 +2250,25 @@ class Recipe:
 
         stage_steps = self.steps[self.stages[timeframe]]
         for step in stage_steps:
+            if substance not in step.substances_used:
+                continue
+
             before_substances = 0
             after_substances = 0
             if step.to[0] is not None and step.to[0].name in dest_names:
-                before_substances += step.to[0].contents.get(substance, 0)
-                after_substances += step.to[1].contents.get(substance, 0)
+                if isinstance(step.to[0], Plate):
+                    before_substances += sum(well.contents.get(substance, 0) for well in step.to[0].wells.flatten())
+                    after_substances += sum(well.contents.get(substance, 0) for well in step.to[1].wells.flatten())
+                else:  # Container
+                    before_substances += step.to[0].contents.get(substance, 0)
+                    after_substances += step.to[1].contents.get(substance, 0)
             elif step.frm[0] is not None and step.frm[0].name in dest_names:
-                before_substances += step.frm[0].contents.get(substance, 0)
-                after_substances += step.frm[1].contents.get(substance, 0)
+                if isinstance(step.frm[0], Plate):
+                    before_substances += sum(well.contents.get(substance, 0) for well in step.frm[0].wells.flatten())
+                    after_substances += sum(well.contents.get(substance, 0) for well in step.frm[1].wells.flatten())
+                else:  # Container
+                    before_substances += step.frm[0].contents.get(substance, 0)
+                    after_substances += step.frm[1].contents.get(substance, 0)
             after_substances += step.trash.get(substance, 0)
             delta += after_substances - before_substances
 
