@@ -46,6 +46,7 @@ def amount_used(self, substance: Substance, timeframe: str = 'all', unit: str = 
 ```
 - `substance`: The substance to measure  
 - `timeframe`: The timeframe over which the deltas of the destinations should be compared  
+- `unit`: The unit to return usage in
 - `destinations`: A list of `Containers` to be considered destinations. Alternatively, pass in `"plates"` to  consider all
 plates to be destinations. By default, all plates are considered destinations.
 
@@ -69,16 +70,6 @@ Let us consider the minimal recipe:
 >          trash: {water: "0 mmol", sodium_sulfate: "0 mmol"} 
 > ```
 1. The `stock_solution` container is created by creating 50 mL of a 0.5 M solution of `water` and `sodium_sulfate`
-
-[//]: # (> Contents of containers:)
-
-[//]: # (> ```python)
-
-[//]: # (> stock_solution: {water: "2578 mmol", sodium_sulfate: "25 mmol"})
-
-[//]: # (> dest_container: {water: "0 mmol", sodium_sulfate: "0 mmol"})
-
-[//]: # (> ```)
 2. 10 mL of the solution in `stock_solution` is transferred into `dest_container`. 
 > Contents of containers at the end of Stage 1:
 > ```python
@@ -105,7 +96,7 @@ Let us consider the minimal recipe:
 >          trash: {water: "515 mmol", sodium_sulfate: "0 mmol"} 
 > ```
 
-#### Example calls:
+### Example calls:
 > How much sodium sulfate was used during the whole recipe if `dest_container` is our only destination?
 > ```python
 > recipe.amount_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[dest_container])
@@ -135,3 +126,65 @@ You may want to keep track of the flows of a given solution. i.e. How much of a 
 or into it.
 
 Timeframes are specified using recipe stages as in substance-level tracking.
+
+### Method signature
+```python
+def get_container_flows(self, container: Container | Plate, timeframe: str = 'all', unit: str | None = None)
+```
+- `container`: The container to get flows for
+- `timeframe`: The timeframe over which the deltas of the destinations should be compared
+- `unit`: The unit to return flows in
+
+### Default Units
+Default units for substances are determined by their type:
+- solids: `g`
+- liquids: `mL`
+- enzyme: `U`
+
+### Example 
+#### The recipe begins:
+- The recipe defines that it is using the dest_container Container
+#### Stage 1:
+> Flows of containers at the start of Stage 1:
+> ```python
+> dest_container: {in: "0 mL", out: "0 mL"}
+> stock_solution: {in: "0 mL", out: "0 mL"}
+> ```
+1. The `stock_solution` container is created by creating 50 mL of a 0.5 M solution of `water` and `sodium_sulfate`
+2. 10 mL of the solution in `stock_solution` is transferred into `dest_container`.
+> Contents of containers at the end of Stage 1:
+> ```python
+> dest_container: {in: "10 mL", out: "0 mL"}
+> stock_solution: {in: "50 mL", out: "10 mL"}
+> ```
+
+
+#### Stage 2:
+
+> Contents of containers at the beginning of Stage 2:
+> ```python
+> dest_container: {in: "10 mL", out: "0 mL"}
+> stock_solution: {in: "50 mL", out: "10 mL"}
+> ```
+1. All of the water in `dest_container` is removed.
+
+> Contents of containers at the end of Stage 2:
+> ```python
+> dest_container: {in: "10 mL", out: "9.2779 mL"}
+> stock_solution: {in: "50 mL", out: "10 mL"}
+> ```
+
+### Example calls:
+> What are the flows for `stock_solution` across the entire recipe?
+> ```python
+> recipe.get_container_flows(self, container=stock_solution, timeframe='all', unit='mL')
+> ```
+> We take the difference of the flows of `stock_solution` at the beginning and end of the recipe and return the
+> dictionary. The difference of the outflows is `10 mL` and the difference of the inflows is `50 mL`.
+ 
+> What are the flows for `dest_container` across `Stage 2`?
+> ```python
+> recipe.get_container_flows(self, container=dest_container, timeframe='Stage 2', unit='mL')
+> ```
+> We take the difference of the flows of `dest_container` at the beginning and end of the recipe and return the
+> dictionary. The difference of the outflows is `9.2779 mL` and the difference of the inflows is `0 mL`.
