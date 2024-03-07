@@ -117,13 +117,16 @@ To create a generic 96 well plate:
 Custom plates can be created with different numbers of rows and columns as well as different labels:
 
 `plate = Plate(name="custom plate", max_volume_per_well="50 uL", rows=16, columns=24)`
+
+or
+
 `plate = Plate(name="custom plate", max_volume_per_well="50 uL", rows=['i', 'ii', 'iii'], columns=['a', 'b', c'])`
 
 ### Locations on a Plate and slices
 
 PyPlate follows the `pandas` convention of having both integer- and label-based indices for referencing wells in `Plate`s.  When row or column specifiers are provided as integers, they are assumed to be integer indices (1, 2, 3, ...).  When specifiers are provided as strings, they are assumed to be label indices ("A", "B", "C", ...).
 
-By default, rows in plates are given alphabetical labels "A", "B", "C", ... and columns in plates are given numerical labels 1, 2, 3.  However, rows and columns are always given integer indices 1, 2, 3, ....  For example, "B:3" and (2,3) both refer to well B3.
+By default, rows in plates are given alphabetical labels "A", "B", "C", ... and columns in plates are given numerical labels "1", "2", "3".  However, rows and columns are always given integer indices 1, 2, 3, ....  For example, "B:3" and (2,3) both refer to well B3.
 
 Here are some ways to refer to a specific well:
 

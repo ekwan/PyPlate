@@ -469,10 +469,12 @@ class Substance:
         concentration: Calculated concentration if `Substance` is a liquid (mol/mL).
         molecule: `cctk.Molecule` if provided.
     """
-    # An attribute `classes` could be added to support classes of substances.
+
     SOLID = 1
     LIQUID = 2
     ENZYME = 3
+
+    classes = {SOLID: 'Solids', LIQUID: 'Liquids', ENZYME: 'Enzymes'}
 
     def __init__(self, name: str, mol_type: int, molecule=None):
         """
@@ -1442,6 +1444,7 @@ class RecipeStep:
         self.to: list[Container | PlateSlicer | Plate] = [to]
         self.trash = {}
         self.operands = operands
+        self.instructions = ""
 
     def visualize(self, what, mode, unit, substance='all', cmap=None):
         """
@@ -1911,7 +1914,7 @@ class Recipe:
                 self.used.add(dest.name)
                 self.results[dest.name] = Container(dest.name, max_volume, initial_contents)
                 step.to.append(self.results[dest.name])
-
+                step.instructions = f"Create container {dest.name} with initial contents: {initial_contents}."
                 if isinstance(self.results[dest_name], PlateSlicer):
                     for well in self.results[dest_name].array:
                         for substance, amount in well.contents.items():
@@ -1932,6 +1935,9 @@ class Recipe:
                 dest = step.to[0]
                 dest_name = dest.plate.name if isinstance(dest, PlateSlicer) else dest.name
                 quantity, = step.operands
+
+                step.instructions = f"""Transfer {quantity} from {str(source) if isinstance(source, PlateSlicer) else
+                                    source.name} to {dest.name}."""
 
                 self.used.add(source_name)
                 self.used.add(dest_name)
@@ -1980,6 +1986,19 @@ class Recipe:
                 dest_name = dest.name
                 step.frm.append(None)
                 solute, solvent, kwargs = step.operands
+                # kwargs should have two out of concentration, quantity, and total_quantity
+                if 'concentration' in kwargs and 'total_quantity' in kwargs:
+                    step.instructions = f"""Create a solution of {solute.name} in {solvent.name
+                        } with a concentration of {kwargs['concentration']
+                        } and a total quantity of {kwargs['total_quantity']}."""
+                elif 'concentration' in kwargs and 'quantity' in kwargs:
+                    step.instructions = f"""Create a solution of {solute.name} in {solvent.name
+                        } with a concentration of {kwargs['concentration']
+                        } and a quantity of {kwargs['quantity']}."""
+                elif 'quantity' in kwargs and 'total_quantity' in kwargs:
+                    step.instructions = f"""Create a solution of {solute.name} in {solvent.name
+                        } with a total quantity of {kwargs['total_quantity']
+                        } and a quantity of {kwargs['quantity']}."""
 
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
@@ -2005,7 +2024,8 @@ class Recipe:
                 solute, concentration, solvent, quantity = step.operands
                 step.frm[0] = self.results[source_name]
                 step.to[0] = self.results[dest_name]
-
+                step.instructions = f"""Create {quantity} of a {concentration} solution of {solute.name
+                                    } in {solvent.name} from {source_name}."""
                 self.used.add(source_name)
                 self.used.add(dest_name)
                 source = self.results[source_name]
@@ -2049,6 +2069,10 @@ class Recipe:
                 else:
                     dest = self.results[dest_name]
 
+                if isinstance(what, Substance):
+                    step.instructions = f"Remove {what.name} from {dest_name}."
+                else:
+                    step.instructions = f"Remove all {Substance.classes[what]} from {dest_name}."
                 self.results[dest_name] = dest.remove(what)
                 # get difference of each substance form result and dest
                 if isinstance(self.results[dest_name], PlateSlicer):
@@ -2068,6 +2092,7 @@ class Recipe:
                 step.frm.append(None)
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
+                step.instructions = f"Dilute {solute.name} in {dest_name} to {concentration} with {solvent.name}."
                 self.results[dest_name] = self.results[dest_name].dilute(solute, concentration, solvent, new_name)
                 step.to.append(self.results[dest_name])
                 if isinstance(self.results[dest_name], PlateSlicer):
@@ -2091,6 +2116,7 @@ class Recipe:
                 solvent, quantity = step.operands
                 step.frm.append(None)
                 step.to[0] = self.results[dest_name]
+                step.instructions = f"Fill {dest.name} with {solvent.name} up to {quantity}."
                 self.used.add(dest_name)
 
                 if isinstance(dest, PlateSlicer):
@@ -2421,6 +2447,46 @@ class PlateSlicer(Slicer):
     def __init__(self, plate, item):
         self.plate = plate
         super().__init__(plate.wells, plate.row_names, plate.column_names, item)
+
+    def _get_slice_string(self, item):
+        assert isinstance(item, tuple)
+        left, right = item
+        if left.start is None and left.stop is None and right.start is None and right.stop is None:
+            return ':'
+        if left.start is None:
+            left = slice(0, left.stop)
+        if left.stop is None:
+            left = slice(left.start, len(self.plate.row_names))
+        if right.start is None:
+            right = slice(0, right.stop)
+        if right.stop is None:
+            right = slice(right.start, len(self.plate.column_names))
+        if left.stop == left.start + 1 and right.stop == right.start + 1:
+            return f"'{self.plate.row_names[left.start]}:{self.plate.column_names[right.start]}'"
+        else:
+            if left.start == 0 and left.stop == len(self.plate.row_names):
+                left = ':'
+            else:
+                left = f"'{self.plate.row_names[left.start]}':'{self.plate.row_names[left.stop - 1]}'"
+            if right.start == 0 and right.stop == len(self.plate.column_names):
+                right = ':'
+            else:
+                right = f"'{self.plate.column_names[right.start]}':'{self.plate.column_names[right.stop - 1]}'"
+            if right == ':':
+                return left
+            else:
+                return f"{left}, {right}"
+
+    def __repr__(self):
+        if isinstance(self.slices, list):
+            result = f"[{', '.join([self._get_slice_string(item) for item in self.slices])}]"
+        else:
+            result = self._get_slice_string(self.slices)
+        return f"{self.plate.name}[{result}]"
+
+    @property
+    def name(self):
+        return self.__repr__()
 
     @property
     def array(self):
