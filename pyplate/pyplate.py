@@ -110,7 +110,7 @@ class Unit:
         raise ValueError("Invalid unit {base_unit}.")
 
     @staticmethod
-    def parse_concentration(concentration):
+    def parse_concentration(concentration) -> Tuple[float, str, str]:
         """
         Parses concentration string to (value, numerator, denominator).
         Args:
@@ -315,7 +315,7 @@ class Unit:
         return round(result, config.internal_precision)
 
     @staticmethod
-    def convert_from_storage_to_standard_format(what, quantity: float):
+    def convert_from_storage_to_standard_format(what: Substance | Container, quantity: float) -> Tuple[float, str]:
         """
         Converts a quantity of a substance or container to a standard format.
         Example: (water, 1e6) -> (18.015, 'mL'), (NaCl, 1e6) -> (58.443, 'g')
@@ -362,7 +362,7 @@ class Unit:
         return quantity, unit
 
     @staticmethod
-    def get_human_readable_unit(value: float, unit: str):
+    def get_human_readable_unit(value: float, unit: str) -> Tuple[float, str]:
         """
         Returns a more human-readable value and unit.
 
@@ -394,7 +394,8 @@ class Unit:
         return value, {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
 
     @staticmethod
-    def calculate_concentration_ratio(solute: Substance, concentration: str, solvent: Substance):
+    def calculate_concentration_ratio(solute: Substance, concentration: str, solvent: Substance) \
+            -> Tuple[float, str, str]:
         """
         Helper function for dealing with concentrations.
 
@@ -446,7 +447,8 @@ class Unit:
         return ratio, numerator, denominator
 
     @staticmethod
-    def calculate_concentration_ratio_moles(solute: Substance, quantity: str, solvent: Substance):
+    def calculate_concentration_ratio_moles(solute: Substance, quantity: str, solvent: Substance) \
+            -> Tuple[float, str, str]:
         q, q_unit = Unit.parse_quantity(quantity)
         if q_unit not in ('g', 'L', 'mol'):
             raise ValueError("Invalid unit in quantity.")
@@ -573,7 +575,7 @@ class Substance:
         return substance
 
     @staticmethod
-    def enzyme(name: str, molecule=None):
+    def enzyme(name: str, molecule=None) -> Substance:
         """
         Creates an enzyme.
 
@@ -589,19 +591,19 @@ class Substance:
 
         return Substance(name, Substance.ENZYME, molecule)
 
-    def is_solid(self):
+    def is_solid(self) -> bool:
         """
         Return true if `Substance` is a solid.
         """
         return self._type == Substance.SOLID
 
-    def is_liquid(self):
+    def is_liquid(self) -> bool:
         """
         Return true if `Substance` is a liquid.
         """
         return self._type == Substance.LIQUID
 
-    def is_enzyme(self):
+    def is_enzyme(self) -> bool:
         """
         Return true if `Substance` is an enzyme.
         """
@@ -706,7 +708,7 @@ class Container:
         self.volume = round(self.volume + volume_to_add, config.internal_precision)
         self.contents[source] = round(self.contents.get(source, 0) + amount_to_add, config.internal_precision)
 
-    def _transfer(self, source_container: Container, quantity: str):
+    def _transfer(self, source_container: Container, quantity: str) -> Tuple[Container, Container]:
         """
         Move quantity ('10 mL', '5 mg') from container to self.
 
@@ -774,7 +776,7 @@ class Container:
         source_container.volume = round(source_container.volume, config.internal_precision)
         return source_container, to
 
-    def _transfer_slice(self, source_slice: Plate or PlateSlicer, quantity: str):
+    def _transfer_slice(self, source_slice: Plate | PlateSlicer, quantity: str) -> Tuple[Plate, Container]:
         """
         Move quantity ('10 mL', '5 mg') from each well in a slice to self.
 
@@ -820,11 +822,20 @@ class Container:
             f"{max_volume} mL of ({contents})"
 
     @cache
-    def has_liquid(self):
+    def has_liquid(self) -> bool:
         """
         Returns: True if any substance in the container is a liquid.
         """
         return any(substance.is_liquid() for substance in self.contents)
+
+    @cache
+    def substances(self):
+        """
+
+        Returns: A set of substances present in the container.
+
+        """
+        return set(self.contents.keys())
 
     def _add(self, source: Substance, quantity: str) -> Container:
         """
@@ -842,7 +853,8 @@ class Container:
         return destination
 
     @staticmethod
-    def transfer(source: Container | Plate | PlateSlicer, destination: Container, quantity: str):
+    def transfer(source: Container | Plate | PlateSlicer, destination: Container, quantity: str) \
+            -> Tuple[Container | Plate | PlateSlicer, Container]:
         """
         Move quantity ('10 mL', '5 mg') from source to destination container,
         returning copies of the objects with amounts adjusted accordingly.
@@ -863,7 +875,7 @@ class Container:
             return destination._transfer_slice(source, quantity)
         raise TypeError("Invalid source type.")
 
-    def get_concentration(self, solute, units='M'):
+    def get_concentration(self, solute: Substance, units: str = 'M') -> float:
         """
         Get the concentration of solute in the current solution.
 
@@ -892,7 +904,7 @@ class Container:
         return round(numerator / denominator / mult, config.external_precision)
 
     @staticmethod
-    def create_solution(solute, solvent, name=None, **kwargs):
+    def create_solution(solute: Substance, solvent: Substance, name: str = None, **kwargs) -> Container:
         """
         Create a solution.
 
@@ -985,7 +997,8 @@ class Container:
 
     @staticmethod
     def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance,
-                             quantity: str, name=None):
+                             quantity: str, name=None) -> Tuple[Container, Container]:
+        # TODO: consider case of different solvent
         """
         Create a diluted solution from an existing solution.
 
@@ -1054,7 +1067,7 @@ class Container:
 
         return residual, solution.fill_to(solvent, quantity)
 
-    def remove(self, what: (Substance | int) = Substance.LIQUID):
+    def remove(self, what: (Substance | int) = Substance.LIQUID) -> Container:
         """
         Removes substances from `Container`
 
@@ -1068,8 +1081,7 @@ class Container:
         new_container.contents = {substance: value for substance, value in self.contents.items()
                                   if what not in (substance._type, substance)}
         new_container.volume = sum(Unit.convert_from(substance, value, 'U' if substance.is_enzyme() else
-        config.moles_prefix, config.volume_prefix) for
-                                   substance, value in new_container.contents.items())
+            config.moles_prefix, config.volume_prefix) for substance, value in new_container.contents.items())
         new_container.instructions = self.instructions
         classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid', Substance.ENZYME: 'enzyme'}
         if what in classes:
@@ -1078,7 +1090,7 @@ class Container:
             new_container.instructions += f"Remove all {what.name}s."
         return new_container
 
-    def dilute(self, solute: Substance, concentration: str, solvent: Substance, name=None):
+    def dilute(self, solute: Substance, concentration: str, solvent: Substance, name=None) -> Container:
         """
         Dilutes `solute` in solution to `concentration`.
 
@@ -1139,70 +1151,7 @@ class Container:
         result.instructions += f"Dilute with {needed_volume} {unit} of {solvent.name}."
         return result
 
-    def dilute_mols(self, solute: Substance, quantity_in_moles: float, solvent: Substance, volume: float, name=None):
-        """
-        Dilutes `solute` to achieve the desired quantity in moles and volume.
-
-        Args:
-            solute: Substance to be diluted.
-            quantity_in_moles: Desired quantity of the solute in moles.
-            solvent: Substance to dilute with.
-            volume: Desired volume of the solution in liters.
-            name: Optional name for the new container.
-
-        Returns: A new container containing a solution with the desired quantity of `solute` and volume.
-        """
-        if not isinstance(solute, Substance):
-            raise TypeError("Solute must be a Substance.")
-        if not isinstance(quantity_in_moles, (int, float)):
-            raise TypeError("Quantity in moles must be a number.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a substance.")
-        if not isinstance(volume, (int, float)):
-            raise TypeError("Volume must be a number.")
-        if name and not isinstance(name, str):
-            raise TypeError("New name must be a str.")
-        if solute not in self.contents:
-            raise ValueError(f"Container does not contain {solute.name}.")
-
-        new_ratio, numerator, denominator = \
-            Unit.calculate_concentration_ratio_moles(solute, f"{quantity_in_moles} mol", solvent)
-        if numerator == 'U':
-            if not solute.is_enzyme():
-                raise TypeError("Solute must be an enzyme.")
-
-        current_ratio = self.contents[solute] / sum(
-            self.contents[substance] for substance in self.contents if not substance.is_enzyme())
-
-        if new_ratio <= 0:
-            raise ValueError("Solution is impossible to create.")
-
-        if abs(new_ratio - current_ratio) <= 1e-6:
-            return deepcopy(self)
-
-        if new_ratio > current_ratio:
-            raise ValueError("Desired concentration is higher than current concentration.")
-
-        current_umoles = Unit.convert_from_storage(self.contents[solvent], 'umol')
-        required_umoles = Unit.convert_from_storage(self.contents[solute], 'umol') / new_ratio - current_umoles
-        new_volume = self.volume + Unit.convert(solvent, f"{required_umoles} umol", config.volume_prefix)
-
-        if new_volume > self.max_volume:
-            raise ValueError("Dilute solution will not fit in the container.")
-
-        if name:
-            # Note: this copies the container twice
-            destination = deepcopy(self)
-            destination.name = name
-        else:
-            destination = self
-        result = destination._add(solvent, f"{required_umoles} umol")
-        needed_volume, unit = Unit.get_human_readable_unit(Unit.convert(solvent, f"{required_umoles} umol", 'umol'),
-                                                           'L')
-        result.instructions += f"Dilute with {needed_volume} {unit} of {solvent.name}."
-        return result
-
-    def fill_to(self, solvent: Substance, quantity: str):
+    def fill_to(self, solvent: Substance, quantity: str) -> Container:
         """
         Fills container with `solvent` up to `quantity`.
 
@@ -1345,7 +1294,7 @@ class Plate:
         # Arguments are type checked in PlateSlicer.volumes
         return self[:].volumes(substance=substance, unit=unit)
 
-    def substances(self):
+    def substances(self) -> set[Substance]:
         """
 
         Returns: A set of substances present in the slice.
@@ -1366,7 +1315,8 @@ class Plate:
         # Arguments are type checked in PlateSlicer.moles
         return self[:].moles(substance=substance, unit=unit)
 
-    def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None):
+    def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None) \
+            -> pandas.io.formats.style.Styler:
         """
 
         Arguments:
@@ -1380,7 +1330,7 @@ class Plate:
         # Types are checked in PlateSlicer.dataframe
         return self[:].dataframe(substance=substance, unit=unit, cmap=cmap)
 
-    def volume(self, unit: str = 'uL'):
+    def volume(self, unit: str = 'uL') -> float:
         """
         Arguments:
             unit: unit to return volumes in.
@@ -1390,7 +1340,8 @@ class Plate:
         return self.volumes(unit=unit).sum()
 
     @staticmethod
-    def transfer(source: Container | Plate | PlateSlicer, destination: Plate | PlateSlicer, quantity: str):
+    def transfer(source: Container | Plate | PlateSlicer, destination: Plate | PlateSlicer, quantity: str) \
+            -> Tuple[Container | Plate | PlateSlicer, Plate]:
         """
         Move quantity ('10 mL', '5 mg') from source to destination,
         returning copies of the objects with amounts adjusted accordingly.
@@ -1410,7 +1361,7 @@ class Plate:
         # noinspection PyProtectedMember
         return PlateSlicer._transfer(source, destination, quantity)
 
-    def remove(self, what=Substance.LIQUID):
+    def remove(self, what=Substance.LIQUID) -> Plate:
         """
         Removes substances from `Plate`
 
@@ -1439,69 +1390,13 @@ class Plate:
 class RecipeStep:
     def __init__(self, operator, frm, to, *operands):
         self.objects_used = set()
+        self.substances_used = set()
         self.operator = operator
         self.frm: list[Container | PlateSlicer | Plate | None] = [frm]
         self.to: list[Container | PlateSlicer | Plate] = [to]
         self.trash = {}
         self.operands = operands
         self.instructions = ""
-
-    def visualize(self, what, mode, unit, substance='all', cmap=None):
-        """
-
-        Provide visualization of what happened during the step.
-
-        Args:
-            what: 'source', 'destination', or 'both'
-            mode: 'delta', or 'final'
-            unit: Unit we are interested in. ('mmol', 'uL', 'mg')
-            substance: Substance we are interested in. ('all', 'water', 'ATP')
-            cmap: Colormap to use. Defaults to default_colormap from config.
-
-        Returns: A dataframe with the requested information or a list of dataframes if what is 'both'.
-        """
-
-        def helper(elem):
-            """ Returns volume of elem. """
-            if substance == 'all':
-                total = 0
-                for subs, amount in elem.contents.items():
-                    if subs.is_enzyme():
-                        total += Unit.convert(subs, f"{amount} U", unit)
-                    else:
-                        total += Unit.convert(subs, f"{amount} {config.moles_prefix}", unit)
-                return total
-            assert isinstance(substance, Substance)
-            if substance in elem.contents:
-                quantity = f"{elem.contents[substance]} {config.moles_prefix if not substance.is_enzyme() else 'U'}"
-                return Unit.convert(substance, quantity, unit)
-            return 0
-
-        if what == 'both':
-            return [self.visualize('source', mode, unit), self.visualize('destination', mode, unit)]
-        if what == 'source':
-            what = self.frm
-        elif what == 'destination':
-            what = self.to
-        else:
-            raise ValueError("What must be source, destination, or both.")
-
-        assert mode == 'delta' or mode == 'final'
-
-        if not isinstance(what[0], Plate):
-            return None
-        data = numpy.vectorize(helper, cache=True, otypes='d')(what[1].wells)
-        if mode == 'delta':
-            data -= numpy.vectorize(helper, cache=True, otypes='d')(what[0].wells)
-            if cmap is None:
-                cmap = config.default_diverging_colormap
-        if cmap is None:
-            cmap = config.default_colormap
-        dataframe = pandas.DataFrame(data, columns=what[0].column_names, index=what[0].row_names)
-        extreme = max(abs(numpy.min(data)), abs(numpy.max(data)))
-        return dataframe.style.format('{:.3f}').background_gradient(cmap, vmin=-extreme,
-                                                                    vmax=extreme).set_caption(
-            (substance.name if isinstance(substance, Substance) else substance) + f"  ({unit})")
 
 
 class Recipe:
@@ -1520,7 +1415,7 @@ class Recipe:
     """
 
     def __init__(self):
-        self.results = {}
+        self.results: dict[str, Container | Plate | PlateSlicer] = {}
         self.all_volume_tracking: dict[Container | PlateSlicer | Plate, dict] = {}
         self.dispensing_volume_tracking: dict[Container | PlateSlicer, dict] = {}
         self.all_substance_tracking: dict[Substance, float] = defaultdict(float)
@@ -1532,7 +1427,7 @@ class Recipe:
         self.locked = False
         self.used = set()
 
-    def start_stage(self, name: str):
+    def start_stage(self, name: str) -> None:
         """
         Start a new stage in the recipe.
 
@@ -1549,7 +1444,7 @@ class Recipe:
         self.current_stage = name
         self.current_stage_start = len(self.steps)
 
-    def end_stage(self, name: str):
+    def end_stage(self, name: str) -> None:
         """
         End the current stage in the recipe.
 
@@ -1636,12 +1531,14 @@ class Recipe:
                     raise ValueError(f"An object with the name: \"{arg.name}\" is already in use.")
             elif isinstance(arg, Iterable):
                 unpacked = list(arg)
-                if not all(isinstance(elem, (Container, Plate)) for elem in unpacked):
+                if not all(isinstance(elem, (Container, Plate, PlateSlicer)) for elem in unpacked):
                     raise TypeError("Invalid type in iterable.")
                 self.uses(*unpacked)
+            else:
+                raise TypeError("Invalid type.")
         return self
 
-    def transfer(self, source: Container, destination: Container | Plate | PlateSlicer, quantity: str):
+    def transfer(self, source: Container, destination: Container | Plate | PlateSlicer, quantity: str) -> None:
         """
         Adds a step to the recipe which will move quantity from source to destination.
         Note that all Substances in the source will be transferred in proportion to their respective ratios.
@@ -1667,7 +1564,7 @@ class Recipe:
         self.steps.append(RecipeStep('transfer', source, destination, quantity))
 
     def create_container(self, name: str, max_volume: str = 'inf L',
-                         initial_contents: Iterable[tuple[Substance, str]] | None = None):
+                         initial_contents: Iterable[tuple[Substance, str]] | None = None) -> Container:
 
         """
         Adds a step to the recipe which creates a container.
@@ -1703,7 +1600,7 @@ class Recipe:
 
         return new_container
 
-    def create_solution(self, solute, solvent, name=None, **kwargs):
+    def create_solution(self, solute, solvent, name=None, **kwargs) -> Container:
         """
         Adds a step to the recipe which creates a solution.
 
@@ -1748,7 +1645,7 @@ class Recipe:
         return new_container
 
     def create_solution_from(self, source: Container, solute: Substance, concentration: str, solvent: Substance,
-                             quantity: str, name=None):
+                             quantity: str, name=None) -> Container:
         """
         Adds a step to create a diluted solution from an existing solution.
 
@@ -1795,7 +1692,7 @@ class Recipe:
 
         return new_container
 
-    def remove(self, destination: Container | Plate | PlateSlicer, what=Substance.LIQUID):
+    def remove(self, destination: Container | Plate | PlateSlicer, what=Substance.LIQUID) -> None:
         """
         Adds a step to removes substances from destination.
 
@@ -1816,7 +1713,7 @@ class Recipe:
         self.steps.append(RecipeStep('remove', None, destination, what))
 
     def dilute(self, destination: Container, solute: Substance,
-               concentration: str, solvent: Substance, new_name=None):
+               concentration: str, solvent: Substance, new_name=None) -> None:
         """
         Adds a step to dilute `solute` in `destination` to `concentration`.
 
@@ -1853,7 +1750,7 @@ class Recipe:
 
         self.steps.append(RecipeStep('dilute', None, destination, solute, concentration, solvent, new_name))
 
-    def fill_to(self, destination: Container, solvent: Substance, quantity: str):
+    def fill_to(self, destination: Container, solvent: Substance, quantity: str) -> None:
         """
         Adds a step to fill `destination` container/plate/slice with `solvent` up to `quantity`.
 
@@ -1878,7 +1775,7 @@ class Recipe:
 
         self.steps.append(RecipeStep('fill_to', None, destination, solvent, quantity))
 
-    def bake(self):
+    def bake(self) -> dict[str, Container | Plate]:
         """
         Completes steps stored in recipe.
         Checks validity of each step and ensures all declared objects have been used.
@@ -1913,6 +1810,7 @@ class Recipe:
                 step.to[0] = self.results[dest.name]
                 self.used.add(dest.name)
                 self.results[dest.name] = Container(dest.name, max_volume, initial_contents)
+                step.substances_used = self.results[dest.name].substances()
                 step.to.append(self.results[dest.name])
                 step.instructions = f"Create container {dest.name} with initial contents: {initial_contents}."
                 if isinstance(self.results[dest_name], PlateSlicer):
@@ -1950,6 +1848,8 @@ class Recipe:
                 else:
                     source = self.results[source_name]
                     step.frm[0] = source
+
+                step.substances_used = source.substances()
 
                 if isinstance(dest, PlateSlicer):
                     dest = deepcopy(dest)
@@ -2003,6 +1903,7 @@ class Recipe:
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
                 self.results[dest_name] = Container.create_solution(solute, solvent, dest_name, **kwargs)
+                step.substances_used = self.results[dest_name].substances()
                 step.to.append(self.results[dest_name])
                 if isinstance(self.results[dest_name], PlateSlicer):
                     for index, well in np.ndenumerate(self.results[dest_name].array):
@@ -2031,6 +1932,7 @@ class Recipe:
                 source = self.results[source_name]
                 self.results[source_name], self.results[dest_name] = \
                     Container.create_solution_from(source, solute, concentration, solvent, quantity, dest.name)
+                step.substances_used = self.results[dest_name].substances()
                 step.frm.append(self.results[source_name])
                 step.to.append(self.results[dest_name])
                 if isinstance(self.results[dest_name], Container):
@@ -2085,6 +1987,9 @@ class Recipe:
                     self._update_volume_dict(self.results[dest_name], "dispensing", "out",
                                              f'{volume_difference} {config.default_volume_unit}')
                 step.to.append(self.results[dest_name])
+                # substances_used is everything that is in step.to[0] but not in step.to[1]
+                step.substances_used = set.difference(step.to[0].substances(), step.to[1].substances())
+                step.trash = {substance: step.to[0].contents[substance] for substance in step.substances_used}
             elif operator == 'dilute':
                 dest = step.to[0]
                 dest_name = dest.name
@@ -2094,6 +1999,7 @@ class Recipe:
                 self.used.add(dest_name)
                 step.instructions = f"Dilute {solute.name} in {dest_name} to {concentration} with {solvent.name}."
                 self.results[dest_name] = self.results[dest_name].dilute(solute, concentration, solvent, new_name)
+                step.substances_used.add(solvent)
                 step.to.append(self.results[dest_name])
                 if isinstance(self.results[dest_name], PlateSlicer):
                     for index, well in np.ndenumerate(self.results[dest_name].array):
@@ -2148,6 +2054,8 @@ class Recipe:
         if len(self.used) != len(self.results):
             raise ValueError("Something declared as used wasn't used.")
         self.locked = True
+        # All the PlateSlicers should have been resolved into Plates by now
+        assert all(isinstance(elem, (Container, Plate)) for elem in self.results.values())
         return self.results
 
     def _dry_bake(self, step_list: list[RecipeStep], tracking_dict: dict[Substance, float], dest_containers: list[str]):
@@ -2249,6 +2157,7 @@ class Recipe:
             timeframe: 'before' or 'during'. Before refers to the initial state of the containers aka recipe "prep", and
             during refers to
             unit: Unit to return amount in.
+            destinations: Containers or plates to check. Defaults to "plates".
 
         Returns: Amount of substance used in the recipe.
 
@@ -2341,8 +2250,9 @@ class Recipe:
         output_dict['out'] = round(Unit.convert_from_storage(output_dict['out'], unit), config.external_precision)
         return output_dict
 
-    def visualize(self, what: Plate, mode: str, when: (int | str), unit: str,
-                  substance: (str | Substance) = 'all', cmap: str = None):
+    def visualize(self, what: Plate, mode: str, unit: str, when: (int | str) = 'all',
+                  substance: (str | Substance) = 'all', cmap: str = None) \
+            -> pandas.io.formats.style.Styler:
         """
 
         Provide visualization of what happened during the step.
@@ -2412,7 +2322,6 @@ class Recipe:
         if start is None or end is None:
             raise ValueError("Plate not used in the desired step(s).")
 
-        df = None
         if mode == 'delta':
             before_data = None
             if what.name == self.steps[start].frm[0].name:
@@ -2494,7 +2403,7 @@ class PlateSlicer(Slicer):
         return self.plate.wells
 
     @array.setter
-    def array(self, array):
+    def array(self, array: numpy.ndarray):
         self.plate.wells = array
 
     def get_dataframe(self):
@@ -2502,14 +2411,7 @@ class PlateSlicer(Slicer):
                                 index=self.plate.row_names).iloc[self.slices]
 
     @staticmethod
-    def _add(frm, to, quantity):
-        to = copy(to)
-        to.plate = deepcopy(to.plate)
-        to.apply(lambda elem: elem._add(frm, quantity))
-        return to.plate
-
-    @staticmethod
-    def _transfer(frm, to, quantity):
+    def _transfer(frm: Container | PlateSlicer, to: PlateSlicer, quantity):
         if isinstance(frm, Container):
             to = copy(to)
             to.plate = deepcopy(to.plate)
@@ -2630,7 +2532,6 @@ class PlateSlicer(Slicer):
                 substance_unit = 'U' if substance.is_enzyme() else config.moles_prefix
                 return Unit.convert_from(substance, elem.contents.get(substance, 0), substance_unit, unit)
 
-        values = numpy.vectorize(helper, cache=True, otypes='d')(self.get())
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         df = self.get_dataframe().apply(numpy.vectorize(helper, cache=True, otypes='d'))
         vmin, vmax = df.min().min(), df.max().max()
@@ -2681,14 +2582,14 @@ class PlateSlicer(Slicer):
 
         return numpy.vectorize(helper, cache=True, otypes='d')(self.get())
 
-    def substances(self):
+    def substances(self) -> set[Substance]:
         """
 
         Returns: A set of substances present in the plate.
 
         """
-        substances_arr = numpy.vectorize(lambda elem: elem.contents.keys(), cache=True)(self.get())
-        return set.union(*map(set, substances_arr.flatten()))
+        substances_arr = numpy.vectorize(lambda elem: set(elem.contents.keys()), cache=True)(self.get())
+        return set.union(*substances_arr.flatten())
 
     def moles(self, substance: (Substance | Iterable[Substance]), unit: str = 'mol') -> numpy.ndarray:
         """
@@ -2720,7 +2621,7 @@ class PlateSlicer(Slicer):
 
         return numpy.vectorize(helper, cache=True, otypes='d')(self.get())
 
-    def remove(self, what=Substance.LIQUID):
+    def remove(self, what: (Substance | int) = Substance.LIQUID):
         """
         Removes substances from slice
 
@@ -2734,7 +2635,7 @@ class PlateSlicer(Slicer):
         self.apply(lambda elem: elem.remove(what))
         return self.plate
 
-    def fill_to(self, solvent, quantity):
+    def fill_to(self, solvent: Substance, quantity: str):
         """
         Fills all wells in slice with `solvent` up to `quantity`.
 
