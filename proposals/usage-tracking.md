@@ -15,8 +15,8 @@ recipe = Recipe()
 dest_container = Container('dest_container', initial_contents=None)
 recipe.uses(dest_container)
 
-recipe.start_stage('stage 1')
 stock_solution = recipe.create_solution(solute=sodium_sulfate, solvent=water, concentration='0.5 M', total_quantity='50 mL')
+recipe.start_stage('stage 1')
 recipe.transfer(stock_solution, dest_container, '10 mL')
 recipe.end_stage('stage 1')
 
@@ -60,16 +60,22 @@ Default units for substances are determined by their type:
 Let us consider the minimal recipe:
 
 **The recipe begins:**
-- The recipe defines that it is using the `dest_container` Container
-
-#### Stage 1:  
-> Contents of containers at the start of Stage 1:  
+> Contents of containers at the start of the recipe:
 > ```python
 > dest_container: {water: "0 mmol", sodium_sulfate: "0 mmol"}
 > stock_solution: {water: "0 mmol", sodium_sulfate: "0 mmol"}
 >          trash: {water: "0 mmol", sodium_sulfate: "0 mmol"} 
 > ```
-1. The `stock_solution` container is created by creating 50 mL of a 0.5 M solution of `water` and `sodium_sulfate`
+1. The recipe defines that it is using the `dest_container` Container
+2. The `stock_solution` container is created by creating 50 mL of a 0.5 M solution of `water` and `sodium_sulfate`
+
+#### Stage 1:  
+> Contents of containers at the start of Stage 1:  
+> ```python
+> dest_container: {water: "2578 mmol", sodium_sulfate: "25 mmol"}
+> stock_solution: {water: "0 mmol", sodium_sulfate: "0 mmol"}
+>          trash: {water: "0 mmol", sodium_sulfate: "0 mmol"} 
+> ```
 2. 10 mL of the solution in `stock_solution` is transferred into `dest_container`. 
 > Contents of containers at the end of Stage 1:
 > ```python
@@ -114,12 +120,13 @@ Let us consider the minimal recipe:
 > If we look at the delta for `trash`, we see `515 mmol` of water. Thus, we sum the quantities and return `515 mmol`.
 
 
-> How much sodium sulfate was used during `Stage 1`if `stock_solution` is our only destination?
+> How much sodium sulfate was used during `Stage 1`if `stock_solution` is our only destination? Note that this is not a
+> logical call as an error will be raised.
 > ```python
-> recipe.amount_used(substance=water, timeframe='Stage 1', unit='mmol', destinations=[dest_container])
+> recipe.amount_used(substance=sodium_sulfate, timeframe='Stage 1', unit='mmol', destinations=[stock_container])
 > ```
 > We compare the amount of `sodium_sulfate` in `stock_solution` at the start and end of `Stage 1`, and find that the
-> delta between the two is `25 mmol`, which we then return.
+> delta between the two is `-5 mmol`, however, we cannot "use" a negative amount, and an error is raised.
 ## Container-level Tracking
 
 You may want to keep track of the flows of a given solution. i.e. How much of a container's content has gone out of
@@ -129,28 +136,27 @@ Timeframes are specified using recipe stages as in substance-level tracking.
 
 ### Method signature
 ```python
-def get_container_flows(self, container: Container | Plate, timeframe: str = 'all', unit: str | None = None)
+def get_container_flows(self, container: Container | Plate, timeframe: str = 'all', unit='uL': str | None = None)
 ```
 - `container`: The container to get flows for
 - `timeframe`: The timeframe over which the deltas of the destinations should be compared
 - `unit`: The unit to return flows in
 
-### Default Units
-Default units for substances are determined by their type:
-- solids: `g`
-- liquids: `mL`
-- enzyme: `U`
-
 ### Example 
 #### The recipe begins:
-- The recipe defines that it is using the dest_container Container
-#### Stage 1:
 > Flows of containers at the start of Stage 1:
 > ```python
 > dest_container: {in: "0 mL", out: "0 mL"}
 > stock_solution: {in: "0 mL", out: "0 mL"}
 > ```
-1. The `stock_solution` container is created by creating 50 mL of a 0.5 M solution of `water` and `sodium_sulfate`
+1. The recipe defines that it is using the dest_container Container
+2. The `stock_solution` container is created by creating 50 mL of a 0.5 M solution of `water` and `sodium_sulfate`
+#### Stage 1:
+> Flows of containers at the start of Stage 1:
+> ```python
+> dest_container: {in: "0 mL", out: "0 mL"}
+> stock_solution: {in: "50 mL", out: "0 mL"}
+> ```
 2. 10 mL of the solution in `stock_solution` is transferred into `dest_container`.
 > Contents of containers at the end of Stage 1:
 > ```python
