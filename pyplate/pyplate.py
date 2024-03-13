@@ -25,7 +25,7 @@ All classes in this package are friends and use private methods of other classes
 
 All internal computations are rounded to config.internal_precision to maintain sanity.
     Rounding errors quickly compound.
-All values returned to the user are rounded to config.external_precision for ease of use.
+All values returned to the user are rounded to config.precisions for ease of use.
 """
 
 # Allow typing reference while still building classes
@@ -352,11 +352,10 @@ class Unit:
         while quantity < 1 and multiplier > 1e-6:
             quantity *= 1e3
             multiplier /= 1e3
-        quantity = round(quantity, config.external_precision)
-        unit = {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
-        if round(quantity, config.external_precision) == 0:
-            quantity = 0
 
+        unit = {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
+
+        quantity = round(quantity, config.internal_precision)
         return quantity, unit
 
     @staticmethod
@@ -538,7 +537,7 @@ class Substance:
 
         substance = Substance(name, Substance.SOLID, molecule)
         substance.mol_weight = mol_weight
-        substance.density = config.solid_density
+        substance.density = config.default_density
         return substance
 
     @staticmethod
@@ -588,7 +587,9 @@ class Substance:
         if not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
-        return Substance(name, Substance.ENZYME, molecule)
+        substance = Substance(name, Substance.ENZYME, molecule)
+        substance.density = config.default_density
+        return substance
 
     def is_solid(self) -> bool:
         """
@@ -806,14 +807,16 @@ class Container:
         return source_slice.plate, to
 
     def __repr__(self):
+        # TODO: Make this more readable/beautiful
         contents = []
         for substance, value in sorted(self.contents.items(), key=lambda elem: (elem[0]._type, -elem[1])):
             if substance.is_enzyme():
                 contents.append(f"{substance}: {value} U")
             else:
                 value, unit = Unit.get_human_readable_unit(Unit.convert_from_storage(value, 'mol'), 'mmol')
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
                 contents.append(
-                    f"{substance}: {round(value, config.external_precision)} {unit}")
+                    f"{substance}: {round(value, precision)} {unit}")
 
         max_volume = ('/' + str(Unit.convert_from_storage(self.max_volume, 'mL'))) \
             if self.max_volume != float('inf') else ''
@@ -900,7 +903,7 @@ class Container:
                 Unit.convert(substance, f"{amount} {config.moles_prefix}", units[1]) for substance, amount in
                 self.contents.items())
 
-        return round(numerator / denominator / mult, config.external_precision)
+        return round(numerator / denominator / mult, config.internal_precision)
 
     @staticmethod
     def create_solution(solute: Substance, solvent: Substance, name: str = None, **kwargs) -> Container:

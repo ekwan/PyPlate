@@ -67,6 +67,7 @@ html_theme_options = {
     'navbar_site_name': "Contents",
     'navbar_links': [
         ("README", "index"),
+        ("Users Guide", "users_guide"),
         ("API", "api"),
         ("Docstrings", "pyplate"),
         ("Extra Docs", "extras"),
