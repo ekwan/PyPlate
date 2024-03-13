@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import yaml
 
+
 # import pyplate
 
 class Config:
@@ -9,7 +10,7 @@ class Config:
         file_path = None
         environ_path = Path(os.environ.get('PYPLATE_CONFIG', ''))
         if environ_path.is_dir():
-            environ_path = environ_path / "pyplate.yaml"
+            environ_path.joinpath("pyplate.yaml")
         for path in [environ_path, Path("pyplate.yaml"), Path("../pyplate.yaml"), Path.home() / "pyplate.yaml"]:
             if path.is_file():
                 file_path = path

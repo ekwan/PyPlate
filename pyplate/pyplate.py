@@ -400,6 +400,7 @@ class Unit:
         Returns: ratio of moles or Activity Units per mole storage unit ('umol', etc.).
 
         """
+        # Formulas used here are found in solution_formulas.rst
         c, numerator, denominator = Unit.parse_concentration(concentration)
         if numerator not in ('g', 'L', 'mol', 'U'):
             raise ValueError("Invalid unit in numerator.")
