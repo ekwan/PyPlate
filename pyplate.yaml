@@ -1,17 +1,24 @@
 # How many digits of precision to maintain in internal calculations
 internal_precision: 10
 # How many digits of precision to return to the user
-external_precision: 3
-# How to store volumes internally
-# 1e-6 means we will store volumes as microliters
+precisions:
+  default: 3
+  uL: 1
+  umol: 1
+# How to store volumes and moles internally
+# uL means we will store volumes as microliters
 volume_storage: uL
-# 1e-6 means we will store moles as micromoles
+# umol means we will store moles as micromoles
 moles_storage: umol
-# density in g/mL
-solid_density: 1
+# density in g/mL or U/mL. Can be set to float('inf') to give solids and enzymes zero volume.
+default_density: 1
 # units for %w/v
 default_weight_volume_units: g/mL
+
+# default units to be returned to the user
 default_moles_unit: mol
 default_volume_unit: uL
+
+# default colormap to be used in visualizations
 default_colormap: Purples
 default_diverging_colormap: PuOr

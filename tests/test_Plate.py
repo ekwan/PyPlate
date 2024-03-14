@@ -50,11 +50,13 @@ def test_volume_and_volumes(salt, water, dmso, empty_plate):
 
     """
     epsilon = 1e-3
-    with pytest.raises(TypeError, match="Substance is not a valid type"):
+    with pytest.raises(TypeError, match="Substance must be a Substance"):
         empty_plate.volumes('1')
 
     zeros = numpy.zeros(empty_plate.wells.shape)
     uL = numpy.ones(empty_plate.wells.shape)
+    config.precisions['uL'] = 3
+    # set precision to 3 decimal places for 'uL' for testing
 
     salt_volume = round(Unit.convert(salt, '5 umol', 'uL'), 20)
     assert empty_plate.volume() == 0
@@ -91,7 +93,7 @@ def test_moles(salt, water, empty_plate):
     Test moles() for a plate.
 
     """
-    with pytest.raises(TypeError, match="Substance is not a valid type"):
+    with pytest.raises(TypeError, match="Substance must be a Substance"):
         empty_plate.moles('1')
 
     zeros = numpy.zeros(empty_plate.wells.shape)
