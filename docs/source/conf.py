@@ -73,7 +73,7 @@ html_theme_options = {
         ("Extra Docs", "extras"),
         ("GitHub", "https://github.com/ekwan/PyPlate", True),
     ],
-    'bootswatch_theme': "cyborg",
+    'bootswatch_theme': "cerulean",
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
