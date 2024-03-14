@@ -20,7 +20,7 @@ def test_create_solution(salt, water, triethylamine, dmso, sodium_sulfate, lipas
     for numerator, denominator, quantity_unit in product(units, repeat=3):
         for solute in solutes:
             for solvent in solvents:
-                if numerator == 'mL' and solute.is_solid() and config.solid_density == float('inf'):
+                if numerator == 'mL' and solute.is_solid() and config.default_density == float('inf'):
                     continue
                 con = Container.create_solution(solute, solvent, concentration=f"0.001 {numerator}/{denominator}",
                                                 total_quantity=f"10 {quantity_unit}")
