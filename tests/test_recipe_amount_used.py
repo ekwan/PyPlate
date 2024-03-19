@@ -5,14 +5,14 @@ from pyplate.pyplate import Recipe, Container, Plate
 import pytest
 
 
-def test_amount_used(salt_water, salt):
+def test_amount_used(water, salt):
     container = Container('container')
-    substance = salt
+    salt_water = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
     recipe = Recipe()
     recipe.uses(salt_water, container)
     recipe.transfer(salt_water, container, '10 mL')
     recipe.bake()
-    assert recipe.amount_used(substance=salt, timeframe='all', unit='mmol') == 50.0
+    assert recipe.amount_used(substance=salt, timeframe='all', unit='mmol', destinations=[container]) == 10.0
 
 
 def test_recipe_tracking_before(water):
