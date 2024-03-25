@@ -5,6 +5,7 @@ precisions:
   default: 3
   uL: 1
   umol: 1
+  mg: 2
 # How to store volumes and moles internally
 # uL means we will store volumes as microliters
 volume_storage: uL
