@@ -41,7 +41,7 @@ Timeframes are specified using recipe stages.
 
 ### Method signature
 ```python
-def amount_used(self, substance: Substance, timeframe: str = 'all', unit: str = None, 
+def substance_used(self, substance: Substance, timeframe: str = 'all', unit: str = None, 
                 destinations: Iterable[Container | Plate] | str = "plates")
 ```
 - `substance`: The substance to measure  
@@ -105,7 +105,7 @@ Let us consider the minimal recipe:
 ### Example calls:
 > How much sodium sulfate was used during the whole recipe if `dest_container` is our only destination?
 > ```python
-> recipe.amount_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[dest_container])
+> recipe.substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[dest_container])
 > ```
 > We compare the amount of `sodium_sulfate` in `dest_container` at the start of end of the recipe, and find that the
 > delta between the two is `5 mmol`, which we then return.
@@ -113,7 +113,7 @@ Let us consider the minimal recipe:
 
 > How much water was used during the whole recipe if `dest_container` is our only destination?
 > ```python
-> recipe.amount_used(substance=water, timeframe='all', unit='mmol', destinations=[dest_container])
+> recipe.substance_used(substance=water, timeframe='all', unit='mmol', destinations=[dest_container])
 > ```
 > We compare the amount of `sodium_sulfate` in `dest_container` at the start of end of the recipe, and find that the
 > delta between the two is `0 mmol`. However, `trash` is always an implicit destination that stores removed substances.
@@ -123,7 +123,7 @@ Let us consider the minimal recipe:
 > How much sodium sulfate was used during `Stage 1`if `stock_solution` is our only destination? Note that this is not a
 > logical call as an error will be raised.
 > ```python
-> recipe.amount_used(substance=sodium_sulfate, timeframe='Stage 1', unit='mmol', destinations=[stock_container])
+> recipe.substance_used(substance=sodium_sulfate, timeframe='Stage 1', unit='mmol', destinations=[stock_container])
 > ```
 > We compare the amount of `sodium_sulfate` in `stock_solution` at the start and end of `Stage 1`, and find that the
 > delta between the two is `-5 mmol`, however, we cannot "use" a negative amount, and an error is raised.
