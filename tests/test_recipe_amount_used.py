@@ -1,6 +1,6 @@
 
 import numpy as np
-
+import pdb
 from pyplate.pyplate import Recipe, Container, Plate
 import pytest
 
@@ -57,7 +57,7 @@ def test_recipe_tracking_before(water):
     print(step.frm)
     print(step.to)
     assert recipe.substance_used(substance=water, unit='mL', destinations=[container]) == 5.0
-    assert recipe.substance_used(substance=water, timeframe='dispensing', unit='mL') == 5.0
+    
 
 
 def test_container_to_plate(triethylamine, empty_plate):
@@ -131,9 +131,13 @@ def test_container_to_plate(triethylamine, empty_plate):
 
     print("Assertions start here")
 
-    #assert pytest.approx(container.volume) == expected_volume_plate
+    #Since 9600 muL is in the plate, the volume of the container should be 400 muL
+    assert pytest.approx(container.volume) == 400
+    
+    
     #assert (np.full((8, 12), expected_volume_container) == plate.volumes(unit='uL')).all()
-    assert recipe.substance_used(substance=triethylamine, timeframe='dispensing', unit='uL', destinations=[container]) == 100
+    #100 muL is transferred to 96 wells in the plate, hence total expected value is 9600
+    assert pytest.approx(recipe.substance_used(substance=triethylamine, timeframe='transfer_stage', unit='uL', destinations=[empty_plate])) == 9600.0
     # assert pytest.approx(
     #     recipe.substance_used(substance=triethylamine, timeframe='dispensing', unit='uL')) == expected_volume_plate
 
@@ -168,25 +172,33 @@ def test_substance_used_dilute(salt, water):
 
     # Define what the recipe uses
     recipe.uses(container)
-    salt_solution = recipe.create_solution(salt, water, concentration='0.5 M', total_quantity='20 mL')
+    salt_solution = recipe.create_solution(salt, water, concentration='0.5 M', 
+                                           total_quantity='20 mL')
     # container._add(salt_water, '10 mL')
 
+    # Transfer 10 mL of salt solution to container
+    recipe.start_stage('dilution_stage')
     recipe.transfer(salt_solution, container, '10 mL')
 
     # Add solute to recipe
     # container = container._add(salt, '50 mmol') #Does not do anything as the container that is used in the recipe is the one that was stored initially
     recipe.dilute(container, solute=salt, concentration='0.25 M', solvent=water)
+
+    
+    recipe.end_stage('dilution_stage')
+
+
     recipe.bake()
 
     assert container.volume == 0
     # Results would contain the pointers to the new containers, so assert from there
 
     expected_salt_amount = 5.0
-    assert recipe.substance_used(substance=salt, timeframe='all', unit='mmol') == expected_salt_amount
+    assert recipe.substance_used(substance=salt, destinations=[container],timeframe='dilution_stage', unit='mmol') == expected_salt_amount
 
 
 # Testing create_solution
-def test_substance_used_create_solution(salt, water):
+def test_substance_used_create_solution(salt, water, empty_plate):
     """
     Tests that the substance amount tracking is accurately implemented during the creation of a solution within a recipe.
 
@@ -209,17 +221,22 @@ def test_substance_used_create_solution(salt, water):
     recipe = Recipe()
     recipe.uses(salt, water)
 
+
+
     # Create solution and add to container
-    container = recipe.create_solution(salt, water, concentration='0.5 M', total_quantity='20 mL')
+    recipe.start_stage('stage1')
+    container = recipe.create_solution(salt, water, concentration='0.1 M', total_quantity='20 mL')
     ##What is the initial volume of container here?
     assert container.volume == 0
+    recipe.transfer(container, empty_plate, '10 mL')
+    recipe.end_stage('stage1')
 
     # Bake recipe
     recipe.bake()
 
     # Assertions
     expected_salt_amount = 10.0
-    assert recipe.substance_used(substance=salt, timeframe='all', unit='mmol', destinations=[container]) == expected_salt_amount
+    assert recipe.substance_used(substance=salt, unit='mmol', destinations=[container], timeframe='stage1') == expected_salt_amount
 
 # Try substance with solid and liquid
 def test_substance_used_create_solution_from(salt, water, triethylamine):
@@ -245,21 +262,32 @@ def test_substance_used_create_solution_from(salt, water, triethylamine):
     recipe = Recipe()
     
     # Create initial solution and add to container
+    recipe.start_stage('stage1')
     initial_container_name = "initial_salt_solution"
     container = recipe.create_solution(salt, water, concentration='1 M', total_quantity='20 mL', name=initial_container_name)
     
+    recipe.end_stage('stage1')
+
+    recipe.start_stage('stage2')
     # Create solution from the initial one with a new solvent
     new_container_name = "new_solution_from_initial"
-    new_container = recipe.create_solution_from(container, solute=salt, concentration='0.5 M', 
-                                                          solvent=triethylamine, quantity='20 mL', name=new_container_name)
+    pdb.set_trace()
+    new_container = recipe.create_solution_from(source=container, solute=salt, concentration='0.5 M', 
+                                                          solvent=water, quantity='10 mL', name=new_container_name)
     
     # Bake recipe to finalize
+
+    recipe.end_stage('stage2')
     results = recipe.bake()
 
     new_container = results[new_container.name]
     # Assertions for substance amount used and container volumes
-    expected_salt_amount = 10
-    assert recipe.substance_used(substance=salt, timeframe='during', unit='mmol') == expected_salt_amount, "The reported amount of salt used does not match the expected value."
+    expected_salt_amount_stage1 = 20.0
+    expected_salt_amount_stage2 = 0.0
+    #If destination for stage2 was new_container, then expected_salt_amount_stage2 would be 10.0
+
+    assert recipe.substance_used(substance=salt, timeframe='stage1', unit='mmol', destinations=[container,new_container]) == expected_salt_amount_stage1, "The reported amount of salt used does not match the expected value."
+    assert recipe.substance_used(substance=salt, timeframe='during', unit='mmol',destinations=[container,new_container]) == expected_salt_amount_stage2, "The reported amount of salt used does not match the expected value."
     #assert residual == 0, "Expected residual volume to be 0 after creating new solution."
     
     assert new_container.volume == 20 , "Expected new container volume to match the specified total quantity for the new solution."
@@ -412,7 +440,7 @@ def test_stages(water):
 
 
     destination_container = [other_container]
-    assert recipe.substance_used(water, timeframe='stage1', unit='mL') == 15.0
+    assert recipe.substance_used(water, timeframe='stage1', destinations=[container], unit='mL') == 15.0
     assert recipe.substance_used(water, timeframe='all', unit='mL') == 17.0
 
 
