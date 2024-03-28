@@ -658,17 +658,20 @@ class Container:
             contents = []
             for substance, quantity in self.contents.items():
                 quantity, unit = Unit.convert_from_storage_to_standard_format(substance, quantity)
-                contents.append(f"{quantity} {unit} of {substance.name}")
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                contents.append(f"{round(quantity, precision)} {unit} of {substance.name}")
             self.instructions = f"Add {', '.join(contents)}"
             if self.max_volume != float('inf'):
                 max_volume, unit = Unit.convert_from_storage_to_standard_format(self, self.max_volume)
-                self.instructions += f" to a {max_volume} {unit} container."
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                self.instructions += f" to a {round(max_volume, precision)} {unit} container."
             else:
                 self.instructions += " to a container."
         else:
             if self.max_volume != float('inf'):
                 max_volume, unit = Unit.convert_from_storage_to_standard_format(self, self.max_volume)
-                self.instructions = f"Create a {max_volume} {unit} container."
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                self.instructions = f"Create a {round(max_volume, precision)} {unit} container."
             else:
                 self.instructions = "Create a container."
 
@@ -765,8 +768,8 @@ class Container:
             mass = sum(Unit.convert(substance, f"{amount} {config.moles_prefix if not substance.is_enzyme() else 'U'}",
                                     "mg") for substance, amount in source_container.contents.items())
             transfer, unit = Unit.get_human_readable_unit(mass * ratio, 'mg')
-
-        to.instructions += f"\nTransfer {transfer} {unit} of {source_container.name} to {to.name}"
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+        to.instructions += f"\nTransfer {round(transfer, precision)} {unit} of {source_container.name} to {to.name}"
         to.volume = round(sum(Unit.convert(substance, f"{amount} {config.moles_prefix}", config.volume_prefix) for
                               substance, amount in to.contents.items()), config.internal_precision)
         if to.volume > to.max_volume:
@@ -993,7 +996,8 @@ class Container:
         contents = []
         for substance, value in result.contents.items():
             value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
-            contents.append(f"{value} {unit} of {substance.name}")
+            precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+            contents.append(f"{round(value, precision)} {unit} of {substance.name}")
         result.instructions = "Add " + ", ".join(contents) + " to a container."
         return result
 
@@ -1063,9 +1067,14 @@ class Container:
         contents = [(*Unit.convert_from_storage_to_standard_format(solution, solution.volume), source.name),
                     (*Unit.convert_from_storage_to_standard_format(solvent, solution.contents[solvent]), solvent.name)]
         max_volume, unit = Unit.convert_from_storage_to_standard_format(solution, solution.max_volume)
+        sub_instructions = []
+        for value, sub_unit, substance in contents:
+            precision = config.precisions[sub_unit] if sub_unit in config.precisions else config.precisions['default']
+            sub_instructions.append(f"{round(value, precision)} {sub_unit} of {substance}")
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         solution.instructions = ("Add "
-                                 + ", ".join(f"{value} {unit} of {substance}" for value, unit, substance in contents)
-                                 + f" to a {max_volume} {unit} container.")
+                                 + ", ".join(sub_instructions)
+                                 + f" to a {round(max_volume, precision)} {unit} container.")
 
         return residual, solution.fill_to(solvent, quantity)
 
@@ -1153,7 +1162,8 @@ class Container:
         needed_umoles = f"{required_umoles} umol"
         result = destination._add(solvent, needed_umoles)
         needed_volume, unit = Unit.get_human_readable_unit(Unit.convert(solvent, needed_umoles, 'umol'), 'L')
-        result.instructions += f"Dilute with {needed_volume} {unit} of {solvent.name}."
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+        result.instructions += f"Dilute with {round(needed_volume, precision)} {unit} of {solvent.name}."
         return result
 
     def fill_to(self, solvent: Substance, quantity: str) -> Container:
@@ -1185,7 +1195,8 @@ class Container:
         result = self._add(solvent, f"{required_quantity} {quantity_unit}")
         required_volume = Unit.convert(solvent, f"{required_quantity} {quantity_unit}", 'L')
         required_volume, unit = Unit.get_human_readable_unit(required_volume, 'L')
-        result.instructions += f"Fill with {required_volume} {unit} of {solvent.name}."
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+        result.instructions += f"Fill with {round(required_volume, precision)} {unit} of {solvent.name}."
         return result
 
 
@@ -1765,7 +1776,7 @@ class Recipe:
                 quantity, = step.operands
 
                 step.instructions = f"""Transfer {quantity} from {str(source) if isinstance(source, PlateSlicer) else
-                source_name} to {dest_name}."""
+                source_name} to {str(dest) if isinstance(dest, PlateSlicer) else dest_name}."""
 
                 self.used.add(source_name)
                 self.used.add(dest_name)
@@ -1871,8 +1882,13 @@ class Recipe:
                 step.frm.append(None)
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
-                step.instructions = f"Dilute {solute.name} in {dest_name} to {concentration} with {solvent.name}."
                 self.results[dest_name] = self.results[dest_name].dilute(solute, concentration, solvent, new_name)
+                amount_added = self.results[dest_name].contents[solvent] - step.to[0].contents.get(solvent, 0)
+                amount_added = Unit.convert_from(solvent, amount_added, config.moles_prefix, 'L')
+                amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                step.instructions = (f"Dilute {solute.name} in {dest_name} to {concentration}" +
+                                     f" by adding {round(amount_added, precision)} {unit} of {solvent.name}.")
                 step.substances_used.add(solvent)
                 step.to.append(self.results[dest_name])
             elif operator == 'fill_to':
@@ -1881,8 +1897,13 @@ class Recipe:
                 solvent, quantity = step.operands
                 step.frm.append(None)
                 step.to[0] = self.results[dest_name]
-                step.instructions = f"Fill {dest.name} with {solvent.name} up to {quantity}."
                 self.used.add(dest_name)
+                amount_added = self.results[dest_name].contents[solvent] - step.to[0].contents.get(solvent, 0)
+                amount_added = Unit.convert_from(solvent, amount_added, config.moles_prefix, 'L')
+                amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                step.instructions = (f"Fill {dest.name} with {solvent.name} up to {quantity}"
+                                     f" by adding {round(amount_added, precision)} {unit}.")
 
                 if isinstance(dest, PlateSlicer):
                     dest = deepcopy(dest)
@@ -2061,6 +2082,10 @@ class Recipe:
         if isinstance(timeframe, str):
             start_index = self.stages[timeframe].start
             end_index = self.stages[timeframe].stop
+            if start_index is None:
+                start_index = 0
+            if end_index is None:
+                end_index = len(self.steps)
         else:
             if timeframe >= len(self.steps):
                 raise ValueError("Invalid step number.")
@@ -2107,6 +2132,7 @@ class Recipe:
             df = data.applymap(numpy.vectorize(helper, cache=True, otypes='d'))
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+        df = df.round(precision)
         vmin, vmax = df.min().min(), df.max().max()
         styler = df.style.format(precision=precision).background_gradient(cmap, vmin=vmin, vmax=vmax)
         return styler
@@ -2314,9 +2340,11 @@ class PlateSlicer(Slicer):
         if unit is None:
             unit = config.default_volume_unit
 
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+
         if substance is None:
             return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, unit), cache=True,
-                                   otypes='d')(self.get())
+                                   otypes='d')(self.get()).round(precision)
 
         if isinstance(substance, Substance):
             substance = [substance]
@@ -2327,7 +2355,6 @@ class PlateSlicer(Slicer):
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
 
-        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
 
         def helper(elem):
             amount = 0
@@ -2340,9 +2367,9 @@ class PlateSlicer(Slicer):
                 for subs in substance:
                     substance_unit = 'U' if subs.is_enzyme() else config.moles_prefix
                     amount += Unit.convert_from(subs, elem.contents.get(subs, 0), substance_unit, unit)
-            return round(amount, precision)
+            return amount
 
-        return numpy.vectorize(helper, cache=True, otypes='d')(self.get())
+        return numpy.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)
 
     def substances(self) -> set[Substance]:
         """
@@ -2379,9 +2406,9 @@ class PlateSlicer(Slicer):
             for subs in substance:
                 if not subs.is_enzyme():
                     amount += Unit.convert_from(subs, elem.contents.get(subs, 0), config.moles_prefix, unit)
-            return round(amount, precision)
+            return amount
 
-        return numpy.vectorize(helper, cache=True, otypes='d')(self.get())
+        return numpy.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)
 
     def remove(self, what: (Substance | int) = Substance.LIQUID):
         """

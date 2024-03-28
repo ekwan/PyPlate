@@ -1,5 +1,9 @@
 # PyPlate
 
+[![PyPI](https://img.shields.io/pypi/v/pyplate-hte)](https://pypi.org/project/pyplate-hte)
+[![Documentation Status](https://readthedocs.org/projects/pyplate-hte/badge/?version=latest)](https://pyplate-hte.readthedocs.io/en/latest/?badge=latest)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/pyplate-hte)](https://pypi.org/project/pyplate-hte)
+
 An open-source Python tool for high-throughput chemistry.
 
 ### Introduction
@@ -49,6 +53,8 @@ recipe.visualize(what=plate, mode='final', unit='uL', timeframe=0)
 ```
 
 ![img.png](images/simple_visualization.png)
+
+Documentation is available at [ReadTheDocs](https://pyplate-hte.readthedocs.io/en/latest/).
 
 ## License
 

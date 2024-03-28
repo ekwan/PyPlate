@@ -8,10 +8,9 @@ import yaml
 class Config:
     def __init__(self):
         file_path = None
-        environ_path = Path(os.environ.get('PYPLATE_CONFIG', ''))
-        if environ_path.is_dir():
-            environ_path.joinpath("pyplate.yaml")
-        for path in [environ_path, Path("pyplate.yaml"), Path("../pyplate.yaml"), Path.home() / "pyplate.yaml"]:
+
+        for path in [Path(os.environ.get('PYPLATE_CONFIG', '')), Path.cwd().joinpath('..'), Path.home()]:
+            path = path.joinpath('pyplate.yaml')
             if path.is_file():
                 file_path = path
                 break

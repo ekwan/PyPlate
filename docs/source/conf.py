@@ -68,8 +68,8 @@ html_theme_options = {
     'navbar_links': [
         ("README", "index"),
         ("Users Guide", "users_guide"),
-        ("API", "api"),
-        ("Docstrings", "pyplate"),
+        ("Reference Guide", "api"),
+        ("API", "pyplate"),
         ("Extra Docs", "extras"),
         ("GitHub", "https://github.com/ekwan/PyPlate", True),
     ],
