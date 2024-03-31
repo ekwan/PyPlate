@@ -307,16 +307,20 @@ class Unit:
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
             result = value * Unit.convert_prefix_to_multiplier(config.volume_prefix[0]) / prefix_value
-        else:  # moles
+        elif unit[-3:] == 'mol':  # moles
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
             result = value * Unit.convert_prefix_to_multiplier(config.moles_prefix[0]) / prefix_value
+        else:
+            raise ValueError("Invalid unit.")
+
         return round(result, config.internal_precision)
 
     @staticmethod
     def convert_from_storage_to_standard_format(what: Substance | Container, quantity: float) -> Tuple[float, str]:
         """
         Converts a quantity of a substance or container to a standard format.
-        Example: (water, 1e6) -> (18.015, 'mL'), (NaCl, 1e6) -> (58.443, 'g')
+        Example: (water, 1e6) -> (18.015, 'mL'), (NaCl, 1e6) -> (58.443, 'g'), (Amylase, 1) -> (1, 'U')
+
         Args:
             what: Substance or Container
             quantity: Quantity in storage format.
@@ -340,6 +344,7 @@ class Unit:
                 quantity *= (Unit.convert_prefix_to_multiplier(config.moles_prefix[0])
                              * what.mol_weight / what.density / 1e3)
             else:
+                # This shouldn't happen.
                 raise TypeError("Invalid type for what.")
         elif isinstance(what, Container):
             # Assume the container contains a liquid
@@ -1002,23 +1007,27 @@ class Container:
         return result
 
     @staticmethod
-    def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance,
-                             quantity: str, name=None) -> Tuple[Container, Container]:
-        # TODO: consider case of different solvent
+    def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance | Container,
+                             quantity: str, name=None) -> (Tuple[Container, Container] |
+                                                           Tuple[Container, Container, Container]):
         """
-        Create a diluted solution from an existing solution.
+        Create a diluted solution from an existing solution or solutions.
 
 
         Arguments:
             source: Solution to dilute.
             solute: What to dissolve.
             concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
-            solvent: What to dissolve with.
+            solvent: What to dissolve with (if it is a Container, it can contain some solute).
             quantity: Desired total quantity. ('3 mL', '10 g')
             name: Optional name for new container.
 
         Returns:
-            Residual from the source container and a new container with desired solution.
+            Residual from the source container (and possibly the solvent container)
+             and a new container with the desired solution.
+
+        Raises:
+            ValueError: If the solution is impossible to create.
         """
 
         if not isinstance(source, Container):
@@ -1027,8 +1036,8 @@ class Container:
             raise TypeError("Solute must be a Substance.")
         if not isinstance(concentration, str):
             raise TypeError("Concentration must be a str.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a Substance.")
+        if not isinstance(solvent, (Substance, Container)):
+            raise TypeError("Solvent must be a Substance or Container.")
         if not isinstance(quantity, str):
             raise TypeError("Quantity must be a str.")
         if name and not isinstance(name, str):
@@ -1039,44 +1048,102 @@ class Container:
             raise ValueError("Quantity must be positive.")
 
         if solute not in source.contents:
-            raise ValueError(f"Container does not contain {solute.name}.")
+            raise ValueError(f"Source container does not contain {solute.name}.")
+
+        if solvent == solute:
+            raise ValueError("Solute and solvent must be different.")
 
         if not name:
             name = f"solution of {solute.name} in {solvent.name}"
 
-        new_ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
-        current_ratio = source.contents[solute] / sum(source.contents[substance] for
-                                                      substance in source.contents if not substance.is_enzyme())
-        if new_ratio <= 0:
+        # x is amount of source solution in mL, y is amount of solvent in mL
+        mass = sum(Unit.convert_from(substance, value, config.moles_prefix, 'g') for substance, value in
+                   source.contents.items())
+        moles = sum(Unit.convert_from(substance, value, config.moles_prefix, 'mol') for substance, value in
+                    source.contents.items())
+        volume = Unit.convert_from_storage(source.volume, 'mL')
+        d_x = mass / volume
+        mw_x = mass / moles
+        m_x = Unit.convert_from_storage(source.contents.get(solute, 0), 'mol') / (volume / 1000)
+
+        if isinstance(solvent, Container):
+            mass = sum(Unit.convert_from(substance, value, config.moles_prefix, 'g') for substance, value in
+                       solvent.contents.items())
+            moles = sum(Unit.convert_from(substance, value, config.moles_prefix, 'mol') for substance, value in
+                        solvent.contents.items())
+            volume = Unit.convert_from_storage(solvent.volume, 'mL')
+            d_y = mass / volume
+            mw_y = mass / moles
+            m_y = Unit.convert_from_storage(solvent.contents.get(solute, 0), 'mol') / (volume / 1000)
+        else:
+            d_y = solvent.density
+            mw_y = solvent.mol_weight
+            m_y = 0  # no solute in solvent
+
+        mw_s = solute.mol_weight
+        d_s = solute.density
+
+        concentration, numerator, denominator = Unit.parse_concentration(concentration)
+        a = numpy.array([[0., 0.], [0., 0.]])
+        b = numpy.array([0., 0.])
+
+        if numerator == 'mol':
+            top = numpy.array([m_x / 1000., m_y / 1000.])
+        elif numerator == 'g':
+            top = numpy.array([m_x * mw_s / 1000., m_y * mw_s / 1000.])
+        elif numerator == 'L':
+            # (mL/1000) * mol/L * g/mol * mL/g = mL / 1000 = L
+            top = numpy.array([m_x * mw_s / (d_s * 1e6), m_y * mw_s / (d_s * 1e6)])
+        else:
+            raise ValueError("Invalid numerator.")
+        if denominator == 'mol':
+            bottom = numpy.array([d_x / mw_x, d_y / mw_y])
+        elif denominator == 'g':
+            bottom = numpy.array([d_x, d_y])
+        elif denominator == 'L':
+            bottom = numpy.array([1 / 1000., 1 / 1000.])
+        else:
+            raise ValueError("Invalid denominator.")
+
+        # concentration = top / bottom -> concentration * bottom - top = 0
+        a[0] = concentration * bottom - top
+
+        quantity_value, quantity_unit = Unit.parse_quantity(quantity)
+
+        if quantity_unit == 'g':
+            a[1] = numpy.array([d_x, d_y])
+        elif quantity_unit == 'L':
+            a[1] = numpy.array([1 / 1000., 1 / 1000.])
+        elif quantity_value == 'mol':
+            a[1] = numpy.array([d_x / mw_x, d_y / mw_y])
+
+        b[1] = quantity_value
+        x, y = numpy.linalg.solve(a, b)
+        if x < 0 or y < 0:
             raise ValueError("Solution is impossible to create.")
 
-        if abs(new_ratio - current_ratio) <= 1e-3:
-            new_ratio = current_ratio
+        if isinstance(solvent, Substance):
+            if y:
+                new_solution = Container(name, initial_contents=[(solvent, f"{y} mL")])
+            else:
+                new_solution = Container(name)
+            if x:
+                source, new_solution = Container.transfer(source, new_solution, f"{x} mL")
+        else:
+            new_solution = Container(name)
+            if x:
+                source, new_solution = Container.transfer(source, new_solution, f"{x} mL")
+            if y:
+                solvent, new_solution = Container.transfer(solvent, new_solution, f"{y} mL")
 
-        if new_ratio > current_ratio:
-            raise ValueError("Desired concentration is higher than current concentration.")
+        precision = config.precisions['mL'] if 'mL' in config.precisions else config.precisions['default']
+        new_solution.instructions = f"Add {round(y, precision)} mL of {solvent.name} to" + \
+                                    f" {round(x, precision)} mL of {source.name}."
 
-        potential_solution = Container.create_solution(solute, solvent, concentration=concentration,
-                                                       total_quantity=quantity)
-        ratio = potential_solution.contents[solute] / source.contents[solute]
-        solution = Container(name, max_volume=f"{source.max_volume} {config.volume_prefix}")
-
-        residual, solution = Container.transfer(source, solution, f"{source.volume * ratio} {config.volume_prefix}")
-        solution = solution.fill_to(solvent, quantity)
-
-        contents = [(*Unit.convert_from_storage_to_standard_format(solution, solution.volume), source.name),
-                    (*Unit.convert_from_storage_to_standard_format(solvent, solution.contents[solvent]), solvent.name)]
-        max_volume, unit = Unit.convert_from_storage_to_standard_format(solution, solution.max_volume)
-        sub_instructions = []
-        for value, sub_unit, substance in contents:
-            precision = config.precisions[sub_unit] if sub_unit in config.precisions else config.precisions['default']
-            sub_instructions.append(f"{round(value, precision)} {sub_unit} of {substance}")
-        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-        solution.instructions = ("Add "
-                                 + ", ".join(sub_instructions)
-                                 + f" to a {round(max_volume, precision)} {unit} container.")
-
-        return residual, solution.fill_to(solvent, quantity)
+        if isinstance(solvent, Substance):
+            return source, new_solution
+        else:
+            return source, solvent, new_solution
 
     def remove(self, what: (Substance | int) = Substance.LIQUID) -> Container:
         """
@@ -2354,7 +2421,6 @@ class PlateSlicer(Slicer):
             raise TypeError("Substance must be a Substance or an Iterable of Substances.")
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
-
 
         def helper(elem):
             amount = 0
