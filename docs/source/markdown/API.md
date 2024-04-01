@@ -66,6 +66,7 @@ The following are set based on preferences read `pyplate.yaml`:
 - `name` (str): Name of this Container
 - `contents` (dict): map from `Substances` to amounts. Amounts are stored in moles for solids or liquids, and activity units for enzymes
 - `max_volume` (float): in storage format (determined by volume_storage from `pyplate.yaml`).
+- `instructions` (str): Instructions for building the solution in this Container.
 
 #### Methods
 
@@ -74,7 +75,7 @@ The following are set based on preferences read `pyplate.yaml`:
 - `remove(what)` -> `Container`:
   - Creates a new Container, removing substances. Defaults to removing all liquids.
 - `dilute(solute, concentration, solvent, new_name)` -> `Container`
-  - Creates a new diluted solution with respect to `solute`
+  - Creates a new diluted solution with respect to `solute`, using the entire contents of the current container.
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
   - Name of new container is optionally set to `new_name`
 - `fill_to(solvent, quantity)` -> `Container`
@@ -96,8 +97,11 @@ The following are set based on preferences read `pyplate.yaml`:
   - name is optional. If none is given, an appropriate name will be applied.
 - `create_solution_from(source, solute, concentration, solvent, quantity, name)` -> `Container`
   - Create a new container with given concentration using the source container as a source for the solute.
-  - An appropriate amount of source solution will be transferred into the new container and an amount of solvent will be added to make up the desired concentration and total quantity.
+  - An appropriate amount of source solution will be transferred into the new container and an amount of solvent will
+  be added to make up the desired concentration and total quantity.
+  - Solvent can be a substance or a container. If a container, it may contain some of the solute.
   - name is optional. If none is given, an appropriate name will be applied. 
+  - A ValueError will be raised if it is impossible to create the desired solution.
 
 ---
 
@@ -164,7 +168,7 @@ Recipe(name): creates a blank Recipe.
 #### Attributes:
 
 name (str): a short description
-uses (list): a list of *Containers* that will be used in this `Recipe`.  
+uses (list): a list of *Containers* that will be used in this `Recipe`.
 
 #### Methods:
 
@@ -192,10 +196,14 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.
   - name is optional. If none is given, an appropriate name will be applied.
   - Returns new container so that it can be used later in the same recipe.
 - `create_solution_from(source, solute, concentration, solvent, quantity, name)` -> `Container`
-  - Adds a step to the recipe which will create a new container with given concentration using the source container as a source for the solute.
-  - An appropriate amount of source solution will be transferred into the new container and an amount of solvent will be added to make up the desired concentration and total quantity.
+  - Adds a step to the recipe which will create a new container with given concentration using the source
+  container as a source for the solute.
+  - An appropriate amount of source solution will be transferred into the new container and an amount of solvent will
+  be added to make up the desired concentration and total quantity.
+  - Solvent can be a substance or a container. If a container, it may contain some of the solute.
   - name is optional. If none is given, an appropriate name will be applied.
   - Returns new container so that it can be used later in the same recipe.
+  - A ValueError will be raised at bake time if it is impossible to create the desired solution.
 - `dilute(destination, solute, concentration, solvent, new_name)` -> `None`
   - Adds a step to create a new container diluted to a certain `concentration` of `solute` from `destination`
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"

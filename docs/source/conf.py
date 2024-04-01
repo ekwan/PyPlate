@@ -69,6 +69,7 @@ html_theme_options = {
         ("README", "index"),
         ("Users Guide", "users_guide"),
         ("Reference Guide", "api"),
+        ("Recipes", "recipes"),
         ("API", "pyplate"),
         ("Extra Docs", "extras"),
         ("GitHub", "https://github.com/ekwan/PyPlate", True),
