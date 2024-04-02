@@ -650,6 +650,7 @@ class Container:
         self.contents: Dict[Substance, float] = {}
         self.volume = 0.0
         self.max_volume = Unit.convert_to_storage(max_volume, 'L')
+        self.experimental_conditions = {}
         if initial_contents:
             if not isinstance(initial_contents, Iterable):
                 raise TypeError("Initial contents must be iterable.")
