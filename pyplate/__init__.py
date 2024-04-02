@@ -2,14 +2,13 @@ from pathlib import Path
 import os
 import yaml
 
-
 # import pyplate
+
 
 class Config:
     def __init__(self):
         file_path = None
-
-        for path in [Path(os.environ.get('PYPLATE_CONFIG', '')), Path.cwd().joinpath('..'), Path.home()]:
+        for path in [Path(os.environ.get('PYPLATE_CONFIG', '')), Path.home(), Path(os.path.dirname(__file__))]:
             path = path.joinpath('pyplate.yaml')
             if path.is_file():
                 file_path = path

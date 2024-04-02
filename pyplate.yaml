@@ -9,9 +9,14 @@ precisions:
 # How to store volumes and moles internally
 # uL means we will store volumes as microliters
 volume_storage: uL
+#volume_storage_unit
+#volume_display_unit
+
+#... moles
+
 # umol means we will store moles as micromoles
 moles_storage: umol
-# density in g/mL or U/mL. Can be set to float('inf') to give solids and enzymes zero volume.
+# density for solids/biologics in g/mL or U/mL. Can be set to float('inf') to give solids and biologics zero volume.
 default_density: 1
 # units for %w/v
 default_weight_volume_units: g/mL
