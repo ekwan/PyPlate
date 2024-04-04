@@ -54,15 +54,15 @@ def test_Container_transfer(water, salt, water_stock, salt_water):
     salt_water_volume = Unit.convert_from_storage(salt_water.volume, 'mL')
     container1, container2 = Container.transfer(salt_water, water_stock, f"{salt_water_volume*0.1} mL")
     # 10 mL of water and 5 mol of salt should have been transferred
-    assert container1.volume == Unit.convert(water, '90 mL', config.volume_prefix)\
-           + Unit.convert(salt, '45 mmol', config.volume_prefix)
-    assert container1.contents[water] == Unit.convert(water, '90 mL', config.moles_prefix)
-    assert container1.contents[salt] == Unit.convert(salt, '45 mmol', config.moles_prefix)
-    assert container2.volume == Unit.convert(water, '20 mL', config.volume_prefix)\
-           + Unit.convert(salt, '5 mmol', config.volume_prefix)
+    assert container1.volume == Unit.convert(water, '90 mL', config.volume_storage_unit) \
+           + Unit.convert(salt, '45 mmol', config.volume_storage_unit)
+    assert container1.contents[water] == Unit.convert(water, '90 mL', config.moles_storage_unit)
+    assert container1.contents[salt] == Unit.convert(salt, '45 mmol', config.moles_storage_unit)
+    assert container2.volume == Unit.convert(water, '20 mL', config.volume_storage_unit)\
+           + Unit.convert(salt, '5 mmol', config.volume_storage_unit)
     assert salt in container2.contents and container2.contents[salt] == \
-           Unit.convert(salt, '5 mmol', config.moles_prefix)
-    assert container2.contents[water] == pytest.approx(Unit.convert(water, '20 mL', config.moles_prefix))
+           Unit.convert(salt, '5 mmol', config.moles_storage_unit)
+    assert container2.contents[water] == pytest.approx(Unit.convert(water, '20 mL', config.moles_storage_unit))
 
     # Original containers should be unchanged.
     assert initial_hashes == (hash(water_stock), hash(salt_water))
@@ -70,7 +70,7 @@ def test_Container_transfer(water, salt, water_stock, salt_water):
     salt_stock = Container('salt stock', initial_contents=[(salt, '10 g')])
     container1, container2 = Container.transfer(salt_stock, salt_water, '1 g')
     assert container2.contents[salt] == \
-           pytest.approx(salt_water.contents[salt] + Unit.convert(salt, '1 g', config.moles_prefix))
+           pytest.approx(salt_water.contents[salt] + Unit.convert(salt, '1 g', config.moles_storage_unit))
 
 
 def test_create_stock_solution(water, salt, salt_water):
@@ -121,7 +121,7 @@ def test__self_add(water):
 
     # Check if the substance was correctly added to the container
     assert water in container.contents
-    assert pytest.approx(container.contents[water]) == Unit.convert(water, '5 mL', config.moles_prefix)
+    assert pytest.approx(container.contents[water]) == Unit.convert(water, '5 mL', config.moles_storage_unit)
     assert pytest.approx(container.volume) == Unit.convert_to_storage(5, 'mL')
 
     # Try to add more substance than the container can hold
@@ -159,15 +159,15 @@ def test__transfer(water):
         # Check if the substance was correctly transferred
         assert water in container2.contents
         assert (pytest.approx(container2.contents[water]) ==
-                Unit.convert(water, f"2 {unit}", config.moles_prefix))
+                Unit.convert(water, f"2 {unit}", config.moles_storage_unit))
         assert (pytest.approx(container2.volume) ==
-                Unit.convert(water, f"2 {unit}", config.volume_prefix))
+                Unit.convert(water, f"2 {unit}", config.volume_storage_unit))
 
         # Check if the volume of the first container was correctly reduced
         assert (pytest.approx(container1.contents[water]) ==
-                Unit.convert(water, f"3 {unit}", config.moles_prefix))
+                Unit.convert(water, f"3 {unit}", config.moles_storage_unit))
         assert (pytest.approx(container1.volume) ==
-                Unit.convert(water, f"3 {unit}", config.volume_prefix))
+                Unit.convert(water, f"3 {unit}", config.volume_storage_unit))
 
     container1 = Container('container1', '10 mL', initial_contents=[(water, '5 mL')])
     container2 = Container('container2', '10 mL')
@@ -220,8 +220,8 @@ def test_create_solution_from(water, salt):
     stock, solution = Container.create_solution_from(stock, salt,'0.5 M', water, '50 mL')
 
     # Should contain 25 mmol of salt and have a total volume of 50 mL
-    assert pytest.approx(Unit.convert(salt, '25 mmol', config.moles_prefix)) == solution.contents[salt]
-    assert pytest.approx(Unit.convert(water, '50 mL', config.volume_prefix)) == solution.volume
+    assert pytest.approx(Unit.convert(salt, '25 mmol', config.moles_storage_unit)) == solution.contents[salt]
+    assert pytest.approx(Unit.convert(water, '50 mL', config.volume_storage_unit)) == solution.volume
     assert pytest.approx(Unit.convert_from_storage(solution.volume, 'mL')) == 50.0
 
     # stock should have a volume of 75 mL and 75 mmol of salt

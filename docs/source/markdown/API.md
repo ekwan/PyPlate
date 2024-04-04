@@ -18,11 +18,13 @@ Note: all quantity, volume, and max_volume parameters are given as strings. For 
 
 The following are set based on preferences read `pyplate.yaml`:
 
-  - Units in which moles and volumes are stored internally. `moles_storage` and `volume_storage`
-  - Density of solids in g/mL. `solid_density`
+  - Units in which moles and volumes are stored internally. `moles_storage_unit` and `volume_storage_unit`
+  - Default units to be returned to the user. `moles_display_unit` and `volume_display_unit`
+  - Density of solids in g/mL. `default_solid_density`
+  - Density of enzymes in U/mL. `default_enzyme_density`
   - Units for '%w/v' concentrations ('g/mL'). `default_weight_volume_units`
   - Default colormap and diverging colormap. `default_colormap` and `default_diverging_colormap`
-  - Default number of digits of precision. `precisions`
+  - Default number of digits of precision for different units. `precisions`
 
 ---
 
@@ -82,6 +84,9 @@ The following are set based on preferences read `pyplate.yaml`:
   - Returns new container filled with `solvent` up to `quantity`.
 - `get_concentration(solute, units)` -> `float`
   - Returns the current concentration of `solute` in `units`.
+- `get_volume(unit)` -> `float`
+  - Returns the current volume of the container in `unit`.
+  - If `unit` is not given, returns in `volume_display_unit` defined in `pyplate.yaml`.
 
 #### Static Methods:
 
@@ -132,15 +137,15 @@ The following are set based on preferences read `pyplate.yaml`:
   - Removes substances from all wells in this plate. Defaults to removing all liquids.
 - `substances()` -> `set[Substance]`
   - Returns a set of all substances used in all the wells in the plate
-- `volumes(substance, unit)` -> `numpy.ndarray`
+- `get_volumes(substance, unit)` -> `numpy.ndarray`
   - Returns a `numpy` array of used volumes
   - If substance is given, volumes will be restricted to volumes of substance
-  - If unit is given, volumes will be given in unit, otherwise in `default_volume_unit` defined in `pyplate.yaml`
-- `moles(substance, unit)` -> `numpy.ndarray`
+  - If unit is given, volumes will be given in unit, otherwise in `volume_display_unit` defined in `pyplate.yaml`
+- `get_moles(substance, unit)` -> `numpy.ndarray`
   - Returns a `numpy` array of moles of given substance
-  - If unit is given, moles will be return in unit, otherwise in `default_moles_unit` defined in `pyplate.yaml`
+  - If unit is given, moles will be return in unit, otherwise in `moles_display_unit` defined in `pyplate.yaml`
 - `dataframe(substance, unit, cmap)` -> `Styler`
-  - Returns a shaded dataframe of volumes in each well
+  - Returns a shaded dataframe of volumes or moles in each well
   - If substance is given, only amounts of that substance will be returned.
   - cmap defaults to `default_colormap` defined in `pyplate.yaml`
 

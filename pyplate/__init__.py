@@ -24,14 +24,20 @@ class Config:
             raise RuntimeError("Config file could not be read.") from exc
 
         self.internal_precision = yaml_config['internal_precision']
-        self.moles_prefix = yaml_config['moles_storage']
-        assert self.moles_prefix[1:] == 'mol'
-        self.volume_prefix = yaml_config['volume_storage']
-        assert self.volume_prefix[1:] == 'L'
-        self.default_density = float(yaml_config['default_density'])
+        self.moles_storage_unit = yaml_config['moles_storage_unit']
+        assert self.moles_storage_unit[-3:] == 'mol'
+        self.moles_display_unit = yaml_config['moles_display_unit']
+        assert self.moles_display_unit[-3:] == 'mol'
+        self.volume_storage_unit = yaml_config['volume_storage_unit']
+        assert self.volume_storage_unit[-1] == 'L'
+        self.volume_display_unit = yaml_config['volume_display_unit']
+        assert self.volume_display_unit[-1] == 'L'
+
+        self.default_solid_density = float(yaml_config['default_solid_density'])
+        self.default_enzyme_density = float(yaml_config['default_enzyme_density'])
         self.default_weight_volume_units = yaml_config['default_weight_volume_units']
-        self.default_moles_unit = yaml_config['default_moles_unit']
-        self.default_volume_unit = yaml_config['default_volume_unit']
+
+
         self.default_colormap = yaml_config['default_colormap']
         self.default_diverging_colormap = yaml_config['default_diverging_colormap']
         self.precisions = yaml_config['precisions']

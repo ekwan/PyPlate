@@ -33,7 +33,7 @@ for sub_plate, volume in {plate[1, 1]: 1.0, plate['A', 2]: 2.0, plate[1, 3]: 3.0
     recipe5.transfer(salt_water_oneM, sub_plate, f"{volume} uL")
 plate, salt_water_oneM = recipe5.bake()
 
-print(plate.volumes())
+print(plate.get_volumes())
 print(plate.substances())
 print(salt_water_halfM)
 print(salt_water_oneM)
