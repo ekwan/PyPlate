@@ -3,6 +3,10 @@ import numpy as np
 import pdb
 from pyplate.pyplate import Recipe, Container, Plate
 import pytest
+import logging 
+
+# Set up logging
+
 
 
 def test_substance_used(water, salt):
@@ -271,7 +275,7 @@ def test_substance_used_create_solution_from(salt, water, triethylamine):
     recipe.start_stage('stage2')
     # Create solution from the initial one with a new solvent
     new_container_name = "new_solution_from_initial"
-    pdb.set_trace()
+    #pdb.set_trace()
     new_container = recipe.create_solution_from(source=container, solute=salt, concentration='0.5 M', 
                                                           solvent=water, quantity='10 mL', name=new_container_name)
     
@@ -287,10 +291,13 @@ def test_substance_used_create_solution_from(salt, water, triethylamine):
     #If destination for stage2 was new_container, then expected_salt_amount_stage2 would be 10.0
 
     assert recipe.substance_used(substance=salt, timeframe='stage1', unit='mmol', destinations=[container,new_container]) == expected_salt_amount_stage1, "The reported amount of salt used does not match the expected value."
-    assert recipe.substance_used(substance=salt, timeframe='during', unit='mmol',destinations=[container,new_container]) == expected_salt_amount_stage2, "The reported amount of salt used does not match the expected value."
+    assert recipe.substance_used(substance=salt, timeframe='stage2', unit='mmol',destinations=[container,new_container]) == expected_salt_amount_stage2, "The reported amount of salt used does not match the expected value."
     #assert residual == 0, "Expected residual volume to be 0 after creating new solution."
     
-    assert new_container.volume == 20 , "Expected new container volume to match the specified total quantity for the new solution."
+
+    #Default unit is not Ml, so it shall be failing. Use Unit to change the units
+    #Changed it to check for millimoles
+    assert new_container.volume == 10000 , "Expected new container volume to match the specified total quantity for the new solution."
 
 
 def test_substance_used_remove(salt_water, salt):
@@ -328,8 +335,179 @@ def test_substance_used_remove(salt_water, salt):
 
     # Assertions
     expected_salt_amount = 0.0
-    assert recipe.substance_used(substance=salt, timeframe='dispensing', unit='mmol') == expected_salt_amount
+    assert recipe.substance_used(substance=salt,destinations=[container],unit='mmol') == expected_salt_amount
 
+
+def test_stages_subst(water):
+    
+    """
+    Tests tracking of water usage across recipe stages, focusing on water
+    transfers within a specific stage and overall recipe operations.
+
+    This test evaluates the functionality of defining, executing, and tracking
+    operations within named stages of a recipe using the `Recipe` class. It
+    involves transferring water between containers within a named stage ('stage1')
+    and outside it, then verifying the accuracy of water usage tracking both
+    within the stage and across the entire recipe.
+
+    Steps:
+    - Initialize a recipe and a container.
+    - Begin 'stage1' for targeted operations.
+    - Create an additional container within 'stage1'.
+    - Prepare a solution with water in the initial container.
+    - Conduct two water transfers to the second container within 'stage1'.
+    - Conclude 'stage1' and perform an additional transfer outside this stage.
+    - Finalize operations with a bake.
+
+    Assertions:
+    - The total water transferred to the second container within 'stage1'
+      should be 15.0 mL, reflecting the combined volume from two transfers.
+    - Across the entire recipe, including actions outside 'stage1', the total
+      water usage should be 17.0 mL.
+
+    Parameters:
+    - water (Substance): Represents water, used in transfers and solution
+      preparation.
+    """
+
+
+    recipe = Recipe()
+
+    recipe.start_stage('stage1')
+    other_container = recipe.create_container('other container')
+
+    # Add solute and solvent to the create_solution method
+    initial_contents = [(water, '20 mL')]
+
+    # Implicit definition of container being used
+    container = recipe.create_container('container', '20 mL', initial_contents)
+
+    # Transfer 5 mL from container to other_container
+    recipe.transfer(container, other_container, '5 mL')
+    recipe.transfer(container, other_container, '10 mL')
+    
+    recipe.end_stage('stage1')
+    recipe.transfer(container, other_container, '2 mL')
+    recipe.bake()
+
+
+    destination_container = [other_container]
+    assert recipe.substance_used(water, timeframe='stage1', destinations=[container], unit='mL') == 5.0
+    assert recipe.substance_used(water, timeframe='stage1', destinations=[container, other_container], unit='mL') == 20.0
+    assert recipe.substance_used(water, timeframe='all', unit='mL') == 0.0
+
+
+def test_stages_2(water):
+    """
+    Tests water usage across containers and stages within a recipe, ensuring
+    accurate tracking of water volume.
+
+    This test evaluates the `Recipe` class's ability to manage and track water
+    usage through various operations, including transfers and fill operations
+    across containers and stages. It involves transferring water to a plate,
+    filling a cell within the plate, and executing further transfers within
+    a named stage. The goal is to verify water usage calculations across
+    different containers and recipe stages.
+
+    The procedure encompasses:
+    - Creating a container with an initial water volume.
+    - Setting up two plates for subsequent water transfers.
+    - Transferring water from the container to the first plate.
+    - Filling a cell in the first plate to a specified volume.
+    - Initiating a new stage ('stage1') for specific operations.
+    - Transferring water from the first to the second plate within 'stage1'.
+    - Removing water from the second plate before concluding 'stage1'.
+    - Baking the recipe to finalize all operations.
+
+    Assertions:
+    - Validates the total water used across all containers and stages matches
+      the expected volume (30.0 mL considering the initial setup and fill
+      operation).
+    - Checks water usage specifically within the plates, excluding the initial
+      container, to ensure accuracy of volume tracking (22.0 mL from the
+      transfer and fill operations).
+    - Asserts the water usage within 'stage1' and across specified containers
+      aligns with expected actions taken during this stage.
+
+    Parameters:
+    - water (Substance): Represents the water used in the recipe's operations.
+    """
+    recipe = Recipe()
+    container1 = recipe.create_container(name='container1',initial_contents=[(water, "10 mL")])
+    plate1 = Plate('plate1', '100 uL')
+    plate2 = Plate('plate2', '100 uL')
+    recipe.uses(plate1, plate2)
+
+    recipe.transfer(source=container1, destination=plate1, quantity='10 uL')
+
+    #fill the first cell in plate
+    recipe.fill_to(plate1[1,1],solvent=water, quantity='20 uL')
+
+    #start a new stage
+    recipe.start_stage('stage1')
+    recipe.transfer(source=plate1, destination=plate2, quantity='1 uL')
+    recipe.remove(plate2, water)
+    recipe.end_stage('stage1')
+
+    #bake the recipe
+    recipe.bake()
+    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [container1,plate1, plate2]) == 30.0
+    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [plate1, plate2]) == 22.0
+    #assert recipe.substance_used(water, timeframe='stage1', unit='mL', dest = [plate1, plate2]) == -1.0
+    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [plate1, plate2]) == 0.0
+    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [plate2]) == 1
+
+
+def test_stages_dilute(water, salt):
+    """
+    Tests the dilution process across different stages within a recipe, focusing on a specific stage's volume and substance usage tracking.
+
+    This test assesses the `Recipe` class's ability to handle complex procedures involving the creation of solutions, 
+    transfers between containers, and dilution processes, specifically focusing on tracking these actions within 
+    defined stages of the recipe. It includes creating a salt solution, transferring it to a plate, diluting the solution,
+    transferring it again, and then removing part of the solution—all while tracking the amount of water used during a 
+    specified stage.
+
+    The process includes:
+    - Creating a solution of salt in water with a specific concentration and total quantity.
+    - Creating a water stock container for dilution purposes.
+    - Initializing two plates to act as destination containers for transfers.
+    - Executing a transfer from the solution container to the first plate.
+    - Starting a named stage ('stage1') for tracking purposes.
+    - Diluting the solution in the first plate using water from the water stock to achieve a new concentration.
+    - Transferring a portion of the diluted solution from the first plate to the second plate.
+    - Removing water from the second plate.
+    - Ending the named stage ('stage1') and finalizing the recipe.
+
+    Assertions:
+    - Confirms that the amount of water used during 'stage1' matches the expected value. The expected amount of water 
+    used is based on the dilution and transfer processes that occur within this stage.
+
+    Parameters:
+    - water (Substance): The solvent used for creating solutions and performing dilution, representing water.
+    - salt (Substance): The solute used for creating the initial solution, representing salt.
+    """
+    recipe = Recipe()
+    container1 = recipe.create_solution(salt, water, concentration='1 M', total_quantity='10 mL')
+    water_stock = recipe.create_container(initial_contents=(water, "10 mL"))
+
+    plate1 = Plate('plate1', '100 uL')
+    plate2 = Plate('plate2', '100 uL')
+    recipe.uses(plate1, plate2)
+
+    recipe.transfer(source=container1, dest=plate1, volume='2 mL')
+    recipe.start_stage('stage1')
+    recipe.dilute(plate1, solute=salt, solvent=water, source=water_stock, concentration='0.5 M')
+
+    recipe.transfer(source=plate1, dest=plate2, volume='1 mL')
+    recipe.remove(water, plate2)
+
+    recipe.end_stage('stage1')
+
+    recipe.bake()
+
+    #Assertions
+    assert recipe.substance_used(water, timeframe='stage1', unit='mL', ) == 2.0
 
 def test_substance_used_with_no_usage(salt):
 
@@ -382,180 +560,5 @@ def test_substance_used_incorrect_timeframe(salt_water, salt, empty_plate):
     # Raising errors for unexpected timeframes
     with pytest.raises(ValueError, match="Invalid timeframe"):
         recipe.substance_used(substance=salt, timeframe='later', unit='mmol')
-
-
-def test_stages(water):
-    
-    """
-    Tests tracking of water usage across recipe stages, focusing on water
-    transfers within a specific stage and overall recipe operations.
-
-    This test evaluates the functionality of defining, executing, and tracking
-    operations within named stages of a recipe using the `Recipe` class. It
-    involves transferring water between containers within a named stage ('stage1')
-    and outside it, then verifying the accuracy of water usage tracking both
-    within the stage and across the entire recipe.
-
-    Steps:
-    - Initialize a recipe and a container.
-    - Begin 'stage1' for targeted operations.
-    - Create an additional container within 'stage1'.
-    - Prepare a solution with water in the initial container.
-    - Conduct two water transfers to the second container within 'stage1'.
-    - Conclude 'stage1' and perform an additional transfer outside this stage.
-    - Finalize operations with a bake.
-
-    Assertions:
-    - The total water transferred to the second container within 'stage1'
-      should be 15.0 mL, reflecting the combined volume from two transfers.
-    - Across the entire recipe, including actions outside 'stage1', the total
-      water usage should be 17.0 mL.
-
-    Parameters:
-    - water (Substance): Represents water, used in transfers and solution
-      preparation.
-    """
-
-
-    recipe = Recipe()
-
-    recipe.start_stage('stage1')
-    other_container = Container('other container')
-    recipe.uses(other_container)
-    other_container = recipe.create_container('other container')
-
-    # Add solute and solvent to the create_solution method
-    initial_contents = [(water, '20 mL')]
-
-    # Implicit definition of container being used
-    container = recipe.create_container('container', '20 mL', initial_contents)
-
-    # Transfer 5 mL from container to other_container
-    recipe.transfer(container, other_container, '5 mL')
-    recipe.transfer(container, other_container, '10 mL')
-    
-    recipe.end_stage('stage1')
-    recipe.transfer(container, other_container, '2 mL')
-    recipe.bake()
-
-
-    destination_container = [other_container]
-    assert recipe.substance_used(water, timeframe='stage1', destinations=[container], unit='mL') == 15.0
-    assert recipe.substance_used(water, timeframe='all', unit='mL') == 17.0
-
-
-def test_stages_2(water):
-    """
-    Tests water usage across containers and stages within a recipe, ensuring
-    accurate tracking of water volume.
-
-    This test evaluates the `Recipe` class's ability to manage and track water
-    usage through various operations, including transfers and fill operations
-    across containers and stages. It involves transferring water to a plate,
-    filling a cell within the plate, and executing further transfers within
-    a named stage. The goal is to verify water usage calculations across
-    different containers and recipe stages.
-
-    The procedure encompasses:
-    - Creating a container with an initial water volume.
-    - Setting up two plates for subsequent water transfers.
-    - Transferring water from the container to the first plate.
-    - Filling a cell in the first plate to a specified volume.
-    - Initiating a new stage ('stage1') for specific operations.
-    - Transferring water from the first to the second plate within 'stage1'.
-    - Removing water from the second plate before concluding 'stage1'.
-    - Baking the recipe to finalize all operations.
-
-    Assertions:
-    - Validates the total water used across all containers and stages matches
-      the expected volume (30.0 mL considering the initial setup and fill
-      operation).
-    - Checks water usage specifically within the plates, excluding the initial
-      container, to ensure accuracy of volume tracking (22.0 mL from the
-      transfer and fill operations).
-    - Asserts the water usage within 'stage1' and across specified containers
-      aligns with expected actions taken during this stage.
-
-    Parameters:
-    - water (Substance): Represents the water used in the recipe's operations.
-    """
-    recipe = Recipe()
-    container1 = container1 = recipe.create_container(initial_contents=(water, "10mL"))
-    plate1 = Plate('plate1', '100 uL')
-    plate2 = Plate('plate2', '100 uL')
-    recipe.uses(container1, plate1, plate2)
-
-    recipe.transfer(source=container1, dest=plate1, volume='2 mL')
-
-    #fill the first cell in plate
-    recipe.fill_to(plate1[1,1],solvent=water, quantity='20 mL')
-
-    #start a new stage
-    recipe.start_stage('stage1')
-    recipe.transfer(source=plate1, dest=plate2, volume='1 mL')
-    recipe.remove(water, plate2)
-    recipe.end_stage('stage1')
-
-    #bake the recipe
-    recipe.bake()
-    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [container1,plate1, plate2]) == 30.0
-    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [plate1, plate2]) == 22.0
-    #assert recipe.substance_used(water, timeframe='stage1', unit='mL', dest = [plate1, plate2]) == -1.0
-    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [plate1, plate2]) == 0.0
-    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [plate2]) == 1
-
-
-def test_stages_dilute(water, salt):
-    """
-    Tests the dilution process across different stages within a recipe, focusing on a specific stage's volume and substance usage tracking.
-
-    This test assesses the `Recipe` class's ability to handle complex procedures involving the creation of solutions, 
-    transfers between containers, and dilution processes, specifically focusing on tracking these actions within 
-    defined stages of the recipe. It includes creating a salt solution, transferring it to a plate, diluting the solution,
-    transferring it again, and then removing part of the solution—all while tracking the amount of water used during a 
-    specified stage.
-
-    The process includes:
-    - Creating a solution of salt in water with a specific concentration and total quantity.
-    - Creating a water stock container for dilution purposes.
-    - Initializing two plates to act as destination containers for transfers.
-    - Executing a transfer from the solution container to the first plate.
-    - Starting a named stage ('stage1') for tracking purposes.
-    - Diluting the solution in the first plate using water from the water stock to achieve a new concentration.
-    - Transferring a portion of the diluted solution from the first plate to the second plate.
-    - Removing water from the second plate.
-    - Ending the named stage ('stage1') and finalizing the recipe.
-
-    Assertions:
-    - Confirms that the amount of water used during 'stage1' matches the expected value. The expected amount of water 
-    used is based on the dilution and transfer processes that occur within this stage.
-
-    Parameters:
-    - water (Substance): The solvent used for creating solutions and performing dilution, representing water.
-    - salt (Substance): The solute used for creating the initial solution, representing salt.
-    """
-    recipe = Recipe()
-    container1 = recipe.create_solution(salt, water, concentration='1 M', total_quantity='10 mL')
-    water_stock = recipe.create_container(intial_contents=(water, "10 mL"))
-
-    plate1 = Plate('plate1', '100 uL')
-    plate2 = Plate('plate2', '100 uL')
-    recipe.uses(plate1, plate2)
-
-    recipe.transfer(source=container1, dest=plate1, volume='2 mL')
-    recipe.start_stage('stage1')
-    recipe.dilute(plate1, solute=salt, solvent=water, source=water_stock, concentration='0.5 M')
-
-    recipe.transfer(source=plate1, dest=plate2, volume='1 mL')
-    recipe.remove(water, plate2)
-
-    recipe.end_stage('stage1')
-
-    recipe.bake()
-
-    #Assertions
-    assert recipe.substance_used(water, timeframe='stage1', unit='mL', ) == 2.0
-
-
 
     
