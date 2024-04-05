@@ -3,8 +3,16 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-README
+PyPlate
 ======
-
 .. mdinclude:: markdown/README.md
+
+.. toctree::
+   :maxdepth: 2
+
+   api
+   pyplate
+   recipes
+   users_guide
+   extras
 
