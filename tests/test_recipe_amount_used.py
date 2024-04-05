@@ -509,6 +509,9 @@ def test_stages_dilute(water, salt):
     #Assertions
     assert recipe.substance_used(water, timeframe='stage1', unit='mL', ) == 2.0
 
+
+
+
 def test_substance_used_with_no_usage(salt):
 
     """
@@ -562,3 +565,4 @@ def test_substance_used_incorrect_timeframe(salt_water, salt, empty_plate):
         recipe.substance_used(substance=salt, timeframe='later', unit='mmol')
 
     
+
