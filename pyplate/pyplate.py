@@ -1073,9 +1073,9 @@ class Container:
             name = f"solution of {solute.name} in {solvent.name}"
 
         # x is amount of source solution in mL, y is amount of solvent in mL
-        mass = sum(Unit.convert_from(substance, value, config.moles_prefix, 'g') for substance, value in
+        mass = sum(Unit.convert_from(substance, value, config.moles_storage_unit, 'g') for substance, value in
                    source.contents.items())
-        moles = sum(Unit.convert_from(substance, value, config.moles_prefix, 'mol') for substance, value in
+        moles = sum(Unit.convert_from(substance, value, config.moles_storage_unit, 'mol') for substance, value in
                     source.contents.items())
         volume = Unit.convert_from_storage(source.volume, 'mL')
         d_x = mass / volume
@@ -1083,9 +1083,9 @@ class Container:
         m_x = Unit.convert_from_storage(source.contents.get(solute, 0), 'mol') / (volume / 1000)
 
         if isinstance(solvent, Container):
-            mass = sum(Unit.convert_from(substance, value, config.moles_prefix, 'g') for substance, value in
+            mass = sum(Unit.convert_from(substance, value, config.moles_storage_unit, 'g') for substance, value in
                        solvent.contents.items())
-            moles = sum(Unit.convert_from(substance, value, config.moles_prefix, 'mol') for substance, value in
+            moles = sum(Unit.convert_from(substance, value, config.moles_storage_unit, 'mol') for substance, value in
                         solvent.contents.items())
             volume = Unit.convert_from_storage(solvent.volume, 'mL')
             d_y = mass / volume
