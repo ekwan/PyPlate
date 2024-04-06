@@ -5,3 +5,4 @@ Extra documentation
    :titlesonly:
 
    solution_formulas.rst
+   unit.rst
