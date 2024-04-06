@@ -20,7 +20,7 @@ def test_dilute(salt, sodium_sulfate, triethylamine, water, dmso):
                 con = Container.create_solution(solute, solvent, concentration=f"0.001 {numerator}/{denominator}",
                                                 total_quantity=f"10 {quantity_unit}")
                 con2 = con.dilute(solute, f'0.0005 {numerator}/{denominator}', solvent)
-                new_concentration = Unit.convert(solute, f"{con2.contents[solute]} {config.moles_prefix}", numerator) / \
-                                    sum(Unit.convert(substance, f"{value} {config.moles_prefix}", denominator)
+                new_concentration = Unit.convert(solute, f"{con2.contents[solute]} {config.moles_storage_unit}", numerator) / \
+                                    sum(Unit.convert(substance, f"{value} {config.moles_storage_unit}", denominator)
                                         for substance, value in con2.contents.items())
                 assert new_concentration == pytest.approx(0.0005)

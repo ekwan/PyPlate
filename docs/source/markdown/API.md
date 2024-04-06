@@ -18,11 +18,13 @@ Note: all quantity, volume, and max_volume parameters are given as strings. For 
 
 The following are set based on preferences read `pyplate.yaml`:
 
-  - Units in which moles and volumes are stored internally. `moles_storage` and `volume_storage`
-  - Density of solids in g/mL. `solid_density`
+  - Units in which moles and volumes are stored internally. `moles_storage_unit` and `volume_storage_unit`
+  - Default units to be returned to the user. `moles_display_unit` and `volume_display_unit`
+  - Density of solids in g/mL. `default_solid_density`
+  - Density of enzymes in U/mL. `default_enzyme_density`
   - Units for '%w/v' concentrations ('g/mL'). `default_weight_volume_units`
   - Default colormap and diverging colormap. `default_colormap` and `default_diverging_colormap`
-  - Default number of digits of precision. `precisions`
+  - Default number of digits of precision for different units. `precisions`
 
 ---
 
@@ -66,6 +68,7 @@ The following are set based on preferences read `pyplate.yaml`:
 - `name` (str): Name of this Container
 - `contents` (dict): map from `Substances` to amounts. Amounts are stored in moles for solids or liquids, and activity units for enzymes
 - `max_volume` (float): in storage format (determined by volume_storage from `pyplate.yaml`).
+- `instructions` (str): Instructions for building the solution in this Container.
 
 #### Methods
 
@@ -74,13 +77,16 @@ The following are set based on preferences read `pyplate.yaml`:
 - `remove(what)` -> `Container`:
   - Creates a new Container, removing substances. Defaults to removing all liquids.
 - `dilute(solute, concentration, solvent, new_name)` -> `Container`
-  - Creates a new diluted solution with respect to `solute`
+  - Creates a new diluted solution with respect to `solute`, using the entire contents of the current container.
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"
   - Name of new container is optionally set to `new_name`
 - `fill_to(solvent, quantity)` -> `Container`
   - Returns new container filled with `solvent` up to `quantity`.
 - `get_concentration(solute, units)` -> `float`
   - Returns the current concentration of `solute` in `units`.
+- `get_volume(unit)` -> `float`
+  - Returns the current volume of the container in `unit`.
+  - If `unit` is not given, returns in `volume_display_unit` defined in `pyplate.yaml`.
 
 #### Static Methods:
 
@@ -96,8 +102,11 @@ The following are set based on preferences read `pyplate.yaml`:
   - name is optional. If none is given, an appropriate name will be applied.
 - `create_solution_from(source, solute, concentration, solvent, quantity, name)` -> `Container`
   - Create a new container with given concentration using the source container as a source for the solute.
-  - An appropriate amount of source solution will be transferred into the new container and an amount of solvent will be added to make up the desired concentration and total quantity.
+  - An appropriate amount of source solution will be transferred into the new container and an amount of solvent will
+  be added to make up the desired concentration and total quantity.
+  - Solvent can be a substance or a container. If a container, it may contain some of the solute.
   - name is optional. If none is given, an appropriate name will be applied. 
+  - A ValueError will be raised if it is impossible to create the desired solution.
 
 ---
 
@@ -128,15 +137,15 @@ The following are set based on preferences read `pyplate.yaml`:
   - Removes substances from all wells in this plate. Defaults to removing all liquids.
 - `substances()` -> `set[Substance]`
   - Returns a set of all substances used in all the wells in the plate
-- `volumes(substance, unit)` -> `numpy.ndarray`
+- `get_volumes(substance, unit)` -> `numpy.ndarray`
   - Returns a `numpy` array of used volumes
   - If substance is given, volumes will be restricted to volumes of substance
-  - If unit is given, volumes will be given in unit, otherwise in `default_volume_unit` defined in `pyplate.yaml`
-- `moles(substance, unit)` -> `numpy.ndarray`
+  - If unit is given, volumes will be given in unit, otherwise in `volume_display_unit` defined in `pyplate.yaml`
+- `get_moles(substance, unit)` -> `numpy.ndarray`
   - Returns a `numpy` array of moles of given substance
-  - If unit is given, moles will be return in unit, otherwise in `default_moles_unit` defined in `pyplate.yaml`
+  - If unit is given, moles will be return in unit, otherwise in `moles_display_unit` defined in `pyplate.yaml`
 - `dataframe(substance, unit, cmap)` -> `Styler`
-  - Returns a shaded dataframe of volumes in each well
+  - Returns a shaded dataframe of volumes or moles in each well
   - If substance is given, only amounts of that substance will be returned.
   - cmap defaults to `default_colormap` defined in `pyplate.yaml`
 
@@ -164,7 +173,7 @@ Recipe(name): creates a blank Recipe.
 #### Attributes:
 
 name (str): a short description
-uses (list): a list of *Containers* that will be used in this `Recipe`.  
+uses (list): a list of *Containers* that will be used in this `Recipe`.
 
 #### Methods:
 
@@ -192,10 +201,14 @@ uses (list): a list of *Containers* that will be used in this `Recipe`.
   - name is optional. If none is given, an appropriate name will be applied.
   - Returns new container so that it can be used later in the same recipe.
 - `create_solution_from(source, solute, concentration, solvent, quantity, name)` -> `Container`
-  - Adds a step to the recipe which will create a new container with given concentration using the source container as a source for the solute.
-  - An appropriate amount of source solution will be transferred into the new container and an amount of solvent will be added to make up the desired concentration and total quantity.
+  - Adds a step to the recipe which will create a new container with given concentration using the source
+  container as a source for the solute.
+  - An appropriate amount of source solution will be transferred into the new container and an amount of solvent will
+  be added to make up the desired concentration and total quantity.
+  - Solvent can be a substance or a container. If a container, it may contain some of the solute.
   - name is optional. If none is given, an appropriate name will be applied.
   - Returns new container so that it can be used later in the same recipe.
+  - A ValueError will be raised at bake time if it is impossible to create the desired solution.
 - `dilute(destination, solute, concentration, solvent, new_name)` -> `None`
   - Adds a step to create a new container diluted to a certain `concentration` of `solute` from `destination`
   - Concentration can be any of "0.1 M", "0.1 m", "0.1 g/mL", "0.01 umol/10 uL", "5 %v/v", "5 %w/v", "5 %w/w"

@@ -279,10 +279,10 @@ class Unit:
 
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
-            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.volume_prefix[0])
+            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.volume_storage_unit[0])
         else:  # moles
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
-            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.moles_prefix[0])
+            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0])
         return round(result, config.internal_precision)
 
     @staticmethod
@@ -306,13 +306,10 @@ class Unit:
 
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
-            result = value * Unit.convert_prefix_to_multiplier(config.volume_prefix[0]) / prefix_value
-        elif unit[-3:] == 'mol':  # moles
+            result = value * Unit.convert_prefix_to_multiplier(config.volume_storage_unit[0]) / prefix_value
+        else:  # moles
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
-            result = value * Unit.convert_prefix_to_multiplier(config.moles_prefix[0]) / prefix_value
-        else:
-            raise ValueError("Invalid unit.")
-
+            result = value * Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0]) / prefix_value
         return round(result, config.internal_precision)
 
     @staticmethod
@@ -335,13 +332,13 @@ class Unit:
                 unit = 'g'
                 # convert moles to grams
                 # molecular weight is in g/mol
-                quantity *= Unit.convert_prefix_to_multiplier(config.moles_prefix[0]) * what.mol_weight
+                quantity *= Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0]) * what.mol_weight
             elif what.is_liquid():
                 unit = 'L'
                 # convert moles to liters
                 # molecular weight is in g/mol
                 # density is in g/mL
-                quantity *= (Unit.convert_prefix_to_multiplier(config.moles_prefix[0])
+                quantity *= (Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0])
                              * what.mol_weight / what.density / 1e3)
             else:
                 # This shouldn't happen.
@@ -349,7 +346,7 @@ class Unit:
         elif isinstance(what, Container):
             # Assume the container contains a liquid
             unit = 'L'
-            quantity *= Unit.convert_prefix_to_multiplier(config.volume_prefix[0])
+            quantity *= Unit.convert_prefix_to_multiplier(config.volume_storage_unit[0])
         else:
             raise TypeError("Invalid type for what.")
 
@@ -542,7 +539,7 @@ class Substance:
 
         substance = Substance(name, Substance.SOLID, molecule)
         substance.mol_weight = mol_weight
-        substance.density = config.default_density
+        substance.density = config.default_solid_density
         return substance
 
     @staticmethod
@@ -593,7 +590,7 @@ class Substance:
             raise TypeError("Name must be a str.")
 
         substance = Substance(name, Substance.ENZYME, molecule)
-        substance.density = config.default_density
+        substance.density = config.default_enzyme_density
         return substance
 
     def is_solid(self) -> bool:
@@ -710,8 +707,8 @@ class Container:
             volume_to_add = 0
             amount_to_add = Unit.convert(source, quantity, 'U')
         else:
-            volume_to_add = Unit.convert(source, quantity, config.volume_prefix)
-            amount_to_add = Unit.convert(source, quantity, config.moles_prefix)
+            volume_to_add = Unit.convert(source, quantity, config.volume_storage_unit)
+            amount_to_add = Unit.convert(source, quantity, config.moles_storage_unit)
         if self.volume + volume_to_add > self.max_volume:
             raise ValueError("Exceeded maximum volume")
         self.volume = round(self.volume + volume_to_add, config.internal_precision)
@@ -744,7 +741,7 @@ class Container:
 
         elif unit == 'g':
             mass_to_transfer = round(quantity_to_transfer, config.internal_precision)
-            total_mass = sum(Unit.convert(substance, f"{amount} {config.moles_prefix}", "g") for
+            total_mass = sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", "g") for
                              substance, amount in source_container.contents.items())
             ratio = mass_to_transfer / total_mass
         elif unit == 'mol':
@@ -771,16 +768,16 @@ class Container:
             transfer, unit = Unit.get_human_readable_unit(transfer, 'L')
         else:
             # total mass in source container times ratio
-            mass = sum(Unit.convert(substance, f"{amount} {config.moles_prefix if not substance.is_enzyme() else 'U'}",
+            mass = sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit if not substance.is_enzyme() else 'U'}",
                                     "mg") for substance, amount in source_container.contents.items())
             transfer, unit = Unit.get_human_readable_unit(mass * ratio, 'mg')
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         to.instructions += f"\nTransfer {round(transfer, precision)} {unit} of {source_container.name} to {to.name}"
-        to.volume = round(sum(Unit.convert(substance, f"{amount} {config.moles_prefix}", config.volume_prefix) for
+        to.volume = round(sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit) for
                               substance, amount in to.contents.items()), config.internal_precision)
         if to.volume > to.max_volume:
             raise ValueError(f"Exceeded maximum volume in {to.name}.")
-        source_container.volume = sum(Unit.convert(substance, f"{amount} {config.moles_prefix}", config.volume_prefix)
+        source_container.volume = sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
                                       for substance, amount in source_container.contents.items())
         source_container.volume = round(source_container.volume, config.internal_precision)
         return source_container, to
@@ -904,15 +901,33 @@ class Container:
 
         mult, *units = Unit.parse_concentration('1 ' + units)
 
-        numerator = Unit.convert(solute, f"{self.contents.get(solute, 0)} {config.moles_prefix}", units[0])
+        numerator = Unit.convert(solute, f"{self.contents.get(solute, 0)} {config.moles_storage_unit}", units[0])
         if units[1].endswith('L'):
             denominator = Unit.convert_from_storage(self.volume, units[1])
         else:
             denominator = sum(
-                Unit.convert(substance, f"{amount} {config.moles_prefix}", units[1]) for substance, amount in
+                Unit.convert(substance, f"{amount} {config.moles_storage_unit}", units[1]) for substance, amount in
                 self.contents.items())
 
         return round(numerator / denominator / mult, config.internal_precision)
+
+    def get_volume(self, unit: str = None) -> float:
+        """
+        Get the volume of the container.
+
+        Args:
+            unit: Unit to return volume in. Defaults to volume_display_unit from config.
+
+        Returns: Volume of the container.
+
+        """
+        if unit is None:
+            unit = config.volume_display_unit
+
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+
+        return Unit.convert_from_storage(self.volume, unit)
 
     @staticmethod
     def create_solution(solute: Substance, solvent: Substance, name: str = None, **kwargs) -> Container:
@@ -968,7 +983,7 @@ class Container:
             if numerator == 'U':
                 if not solute.is_enzyme():
                     raise TypeError("Solute must be an enzyme.")
-                solvent_quantity = Unit.convert(solvent, f"{quantity} {quantity_unit}", config.moles_prefix)
+                solvent_quantity = Unit.convert(solvent, f"{quantity} {quantity_unit}", config.moles_storage_unit)
                 units = ratio * solvent_quantity
                 return Container(name,
                                  initial_contents=((solute, f"{units} U"), (solvent, f"{quantity} {quantity_unit}")))
@@ -1161,8 +1176,8 @@ class Container:
                                   if what not in (substance._type, substance)}
         new_container.volume = 0
         for substance, value in new_container.contents.items():
-            substance_unit = 'U' if substance.is_enzyme() else config.moles_prefix
-            new_container.volume += Unit.convert_from(substance, value, substance_unit, config.volume_prefix)
+            substance_unit = 'U' if substance.is_enzyme() else config.moles_storage_unit
+            new_container.volume += Unit.convert_from(substance, value, substance_unit, config.volume_storage_unit)
 
         new_container.instructions = self.instructions
         classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid', Substance.ENZYME: 'enzyme'}
@@ -1216,7 +1231,7 @@ class Container:
 
         current_umoles = Unit.convert_from_storage(self.contents.get(solvent, 0), 'umol')
         required_umoles = Unit.convert_from_storage(self.contents[solute], 'umol') / new_ratio - current_umoles
-        new_volume = self.volume + Unit.convert(solvent, f"{required_umoles} umol", config.volume_prefix)
+        new_volume = self.volume + Unit.convert(solvent, f"{required_umoles} umol", config.volume_storage_unit)
 
         if new_volume > self.max_volume:
             raise ValueError("Dilute solution will not fit in container.")
@@ -1256,7 +1271,7 @@ class Container:
         if quantity_unit not in ('L', 'g', 'mol'):
             raise ValueError("We can only fill to mass or volume.")
 
-        current_quantity = sum(Unit.convert(substance, f"{value} {config.moles_prefix}", quantity_unit)
+        current_quantity = sum(Unit.convert(substance, f"{value} {config.moles_storage_unit}", quantity_unit)
                                for substance, value in self.contents.items() if not substance.is_enzyme())
 
         required_quantity = quantity - current_quantity
@@ -1363,7 +1378,7 @@ class Plate:
     def __repr__(self):
         return f"Plate: {self.name}"
 
-    def volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> numpy.ndarray:
+    def get_volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> numpy.ndarray:
         """
 
         Arguments:
@@ -1376,7 +1391,7 @@ class Plate:
         """
 
         # Arguments are type checked in PlateSlicer.volumes
-        return self[:].volumes(substance=substance, unit=unit)
+        return self[:].get_volumes(substance=substance, unit=unit)
 
     def substances(self) -> set[Substance]:
         """
@@ -1386,7 +1401,7 @@ class Plate:
         """
         return self[:].substances()
 
-    def moles(self, substance: (Substance | Iterable[Substance]), unit: str = None) -> numpy.ndarray:
+    def get_moles(self, substance: (Substance | Iterable[Substance]), unit: str = None) -> numpy.ndarray:
         """
 
         Arguments:
@@ -1397,7 +1412,7 @@ class Plate:
         """
 
         # Arguments are type checked in PlateSlicer.moles
-        return self[:].moles(substance=substance, unit=unit)
+        return self[:].get_moles(substance=substance, unit=unit)
 
     def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None) \
             -> pandas.io.formats.style.Styler:
@@ -1414,14 +1429,14 @@ class Plate:
         # Types are checked in PlateSlicer.dataframe
         return self[:].dataframe(substance=substance, unit=unit, cmap=cmap)
 
-    def volume(self, unit: str = 'uL') -> float:
+    def get_volume(self, unit: str = 'uL') -> float:
         """
         Arguments:
             unit: unit to return volumes in.
 
         Returns: total volume stored in slice in uL.
         """
-        return self.volumes(unit=unit).sum()
+        return self.get_volumes(unit=unit).sum()
 
     @staticmethod
     def transfer(source: Container | Plate | PlateSlicer, destination: Plate | PlateSlicer, quantity: str) \
@@ -1709,7 +1724,7 @@ class Recipe:
         if new_ratio <= 0:
             raise ValueError("Solution is impossible to create.")
 
-        new_container = Container(name, max_volume=f"{source.max_volume} {config.volume_prefix}")
+        new_container = Container(name, max_volume=f"{source.max_volume} {config.volume_storage_unit}")
         self.uses(new_container)
         self.steps.append(RecipeStep('solution_from', source, new_container, solute, concentration, solvent, quantity))
 
@@ -1952,7 +1967,7 @@ class Recipe:
                 self.used.add(dest_name)
                 self.results[dest_name] = self.results[dest_name].dilute(solute, concentration, solvent, new_name)
                 amount_added = self.results[dest_name].contents[solvent] - step.to[0].contents.get(solvent, 0)
-                amount_added = Unit.convert_from(solvent, amount_added, config.moles_prefix, 'L')
+                amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'L')
                 amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
                 precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
                 step.instructions = (f"Dilute {solute.name} in {dest_name} to {concentration}" +
@@ -1967,7 +1982,7 @@ class Recipe:
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
                 amount_added = self.results[dest_name].contents[solvent] - step.to[0].contents.get(solvent, 0)
-                amount_added = Unit.convert_from(solvent, amount_added, config.moles_prefix, 'L')
+                amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'L')
                 amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
                 precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
                 step.instructions = (f"Fill {dest.name} with {solvent.name} up to {quantity}"
@@ -2006,9 +2021,9 @@ class Recipe:
 
         """
         if unit is None:
-            unit = 'U' if substance.is_enzyme() else config.default_moles_unit
+            unit = 'U' if substance.is_enzyme() else config.moles_display_unit
 
-        from_unit = 'U' if substance.is_enzyme() else config.moles_prefix
+        from_unit = 'U' if substance.is_enzyme() else config.moles_storage_unit
 
         dest_names = set()
         if destinations == "plates":
@@ -2070,10 +2085,10 @@ class Recipe:
 
         def helper(entry):
             substance, quantity = entry
-            return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_prefix, unit)
+            return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_storage_unit, unit)
 
         if unit is None:
-            unit = config.default_volume_unit
+            unit = config.volume_display_unit
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
         if not isinstance(container, Container):
@@ -2140,11 +2155,11 @@ class Recipe:
             if substance == 'all':
                 amount = 0
                 for subst, quantity in elem.contents.items():
-                    substance_unit = 'U' if subst.is_enzyme() else config.moles_prefix
+                    substance_unit = 'U' if subst.is_enzyme() else config.moles_storage_unit
                     amount += Unit.convert_from(subst, quantity, substance_unit, unit)
                 return amount
             else:
-                substance_unit = 'U' if substance.is_enzyme() else config.moles_prefix
+                substance_unit = 'U' if substance.is_enzyme() else config.moles_storage_unit
                 return Unit.convert_from(substance, elem.contents.get(substance, 0), substance_unit, unit)
 
         if isinstance(timeframe, str):
@@ -2375,17 +2390,17 @@ class PlateSlicer(Slicer):
             if substance == 'all':
                 amount = 0
                 for subst, quantity in elem.contents.items():
-                    substance_unit = 'U' if subst.is_enzyme() else config.moles_prefix
+                    substance_unit = 'U' if subst.is_enzyme() else config.moles_storage_unit
                     amount += Unit.convert_from(subst, quantity, substance_unit, unit)
                 return amount
             elif isinstance(substance, Iterable):
                 amount = 0
                 for subst in substance:
-                    substance_unit = 'U' if subst.is_enzyme() else config.moles_prefix
+                    substance_unit = 'U' if subst.is_enzyme() else config.moles_storage_unit
                     amount += Unit.convert_from(subst, elem.contents.get(subst, 0), substance_unit, unit)
                 return amount
             else:
-                substance_unit = 'U' if substance.is_enzyme() else config.moles_prefix
+                substance_unit = 'U' if substance.is_enzyme() else config.moles_storage_unit
                 return Unit.convert_from(substance, elem.contents.get(substance, 0), substance_unit, unit)
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
@@ -2394,7 +2409,7 @@ class PlateSlicer(Slicer):
         styler = df.style.format(precision=precision).background_gradient(cmap, vmin=vmin, vmax=vmax)
         return styler
 
-    def volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> numpy.ndarray:
+    def get_volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> numpy.ndarray:
         """
 
         Arguments:
@@ -2406,13 +2421,13 @@ class PlateSlicer(Slicer):
 
         """
         if unit is None:
-            unit = config.default_volume_unit
+            unit = config.volume_display_unit
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
 
         if substance is None:
-            return numpy.vectorize(lambda elem: Unit.convert_from_storage(elem.volume, unit), cache=True,
-                                   otypes='d')(self.get()).round(precision)
+            return numpy.vectorize(lambda elem: elem.get_volume(unit),
+                                   cache=True, otypes='d')(self.get()).round(precision)
 
         if isinstance(substance, Substance):
             substance = [substance]
@@ -2428,11 +2443,11 @@ class PlateSlicer(Slicer):
             """ Returns volume of elem. """
             if substance is None:
                 for subs, quantity in elem.contents.items():
-                    substance_unit = 'U' if subs.is_enzyme() else config.moles_prefix
+                    substance_unit = 'U' if subs.is_enzyme() else config.moles_storage_unit
                     amount += Unit.convert_from(subs, quantity, substance_unit, unit)
             else:
                 for subs in substance:
-                    substance_unit = 'U' if subs.is_enzyme() else config.moles_prefix
+                    substance_unit = 'U' if subs.is_enzyme() else config.moles_storage_unit
                     amount += Unit.convert_from(subs, elem.contents.get(subs, 0), substance_unit, unit)
             return amount
 
@@ -2447,7 +2462,7 @@ class PlateSlicer(Slicer):
         substances_arr = numpy.vectorize(lambda elem: set(elem.contents.keys()), cache=True)(self.get())
         return set.union(*substances_arr.flatten())
 
-    def moles(self, substance: (Substance | Iterable[Substance]), unit: str = 'mol') -> numpy.ndarray:
+    def get_moles(self, substance: (Substance | Iterable[Substance]), unit: str = 'mol') -> numpy.ndarray:
         """
         Arguments:
             unit: unit to return moles in. ('mol', 'mmol', 'umol', etc.)
@@ -2459,7 +2474,7 @@ class PlateSlicer(Slicer):
         if isinstance(substance, Substance):
             substance = [substance]
         if unit is None:
-            unit = config.default_moles_unit
+            unit = config.moles_display_unit
 
         if not isinstance(substance, Iterable) or not all(isinstance(x, Substance) for x in substance):
             raise TypeError(f"Substance must be a Substance or an Iterable of Substances.")
@@ -2472,7 +2487,7 @@ class PlateSlicer(Slicer):
             amount = 0
             for subs in substance:
                 if not subs.is_enzyme():
-                    amount += Unit.convert_from(subs, elem.contents.get(subs, 0), config.moles_prefix, unit)
+                    amount += Unit.convert_from(subs, elem.contents.get(subs, 0), config.moles_storage_unit, unit)
             return amount
 
         return numpy.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)

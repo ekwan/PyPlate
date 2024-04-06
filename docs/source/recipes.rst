@@ -12,4 +12,3 @@ Recipes demonstrating common use cases of *PyPlate*.
    recipe_01
    recipe_02
    recipe_03
-   recipe_05
