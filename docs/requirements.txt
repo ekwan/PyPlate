@@ -1,6 +1,6 @@
 m2r2==0.3.3.post2
 Sphinx==7.2.6
-sphinx-bootstrap-theme==0.8.1
+sphinx-rtd-theme==2.0.0
 numpy>=1.23.5
 pyyaml>=6.0.1
 pandas==1.5.3
