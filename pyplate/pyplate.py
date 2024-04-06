@@ -1487,7 +1487,9 @@ class Plate:
 
 
 class RecipeStep:
-    def __init__(self, operator, frm, to, *operands):
+    def __init__(self, recipe: Recipe, operator: str, frm: Container | PlateSlicer | Plate,
+                 to: Container | PlateSlicer | Plate, *operands):
+        self.recipe = recipe
         self.objects_used = set()
         self.substances_used = set()
         self.operator = operator
@@ -1496,6 +1498,23 @@ class RecipeStep:
         self.trash = {}
         self.operands = operands
         self.instructions = ""
+
+    def visualize(self, what: Plate, mode: str, unit: str, substance: (str | Substance) = 'all', cmap: str = None) \
+            -> pandas.io.formats.style.Styler:
+        """
+
+        Provide visualization of what happened during this step.
+
+        Args:
+            what: Plate we are interested in.
+            mode: 'delta', or 'final'
+            unit: Unit we are interested in. ('mmol', 'uL', 'mg')
+            substance: Substance we are interested in. ('all', water, ATP)
+            cmap: Colormap to use. Defaults to default_colormap from config.
+
+        Returns: A dataframe with the requested information.
+        """
+        return self.recipe.visualize(what, mode, unit, self, substance, cmap)
 
 
 class Recipe:
@@ -1576,7 +1595,7 @@ class Recipe:
                 raise TypeError("Invalid type.")
         return self
 
-    def transfer(self, source: Container, destination: Container | Plate | PlateSlicer, quantity: str) -> None:
+    def transfer(self, source: Container | Plate | PlateSlicer, destination: Container | Plate | PlateSlicer, quantity: str) -> None:
         """
         Adds a step to the recipe which will move quantity from source to destination.
         Note that all Substances in the source will be transferred in proportion to their respective ratios.
@@ -1599,7 +1618,7 @@ class Recipe:
             source = source[:]
         if isinstance(destination, Plate):
             destination = destination[:]
-        self.steps.append(RecipeStep('transfer', source, destination, quantity))
+        self.steps.append(RecipeStep(self, 'transfer', source, destination, quantity))
 
     def create_container(self, name: str, max_volume: str = 'inf L',
                          initial_contents: Iterable[tuple[Substance, str]] | None = None) -> Container:
@@ -1634,7 +1653,7 @@ class Recipe:
                     raise TypeError("Quantity must be a str. ('10 mL')")
         new_container = Container(name, max_volume)
         self.uses(new_container)
-        self.steps.append(RecipeStep('create_container', None, new_container, max_volume, initial_contents))
+        self.steps.append(RecipeStep(self, 'create_container', None, new_container, max_volume, initial_contents))
 
         return new_container
 
@@ -1678,7 +1697,7 @@ class Recipe:
 
         new_container = Container(name)
         self.uses(new_container)
-        self.steps.append(RecipeStep('solution', None, new_container, solute, solvent, kwargs))
+        self.steps.append(RecipeStep(self, 'solution', None, new_container, solute, solvent, kwargs))
 
         return new_container
 
@@ -1726,7 +1745,8 @@ class Recipe:
 
         new_container = Container(name, max_volume=f"{source.max_volume} {config.volume_storage_unit}")
         self.uses(new_container)
-        self.steps.append(RecipeStep('solution_from', source, new_container, solute, concentration, solvent, quantity))
+        self.steps.append(
+            RecipeStep(self, 'solution_from', source, new_container, solute, concentration, solvent, quantity))
 
         return new_container
 
@@ -1748,7 +1768,7 @@ class Recipe:
         else:
             raise TypeError(f"Invalid destination type: {type(destination)}")
 
-        self.steps.append(RecipeStep('remove', None, destination, what))
+        self.steps.append(RecipeStep(self, 'remove', None, destination, what))
 
     def dilute(self, destination: Container, solute: Substance,
                concentration: str, solvent: Substance, new_name=None) -> None:
@@ -1786,9 +1806,9 @@ class Recipe:
             # TODO: Support this.
             raise ValueError("Not currently supported.")
 
-        self.steps.append(RecipeStep('dilute', None, destination, solute, concentration, solvent, new_name))
+        self.steps.append(RecipeStep(self, 'dilute', None, destination, solute, concentration, solvent, new_name))
 
-    def fill_to(self, destination: Container, solvent: Substance, quantity: str) -> None:
+    def fill_to(self, destination: Container | PlateSlicer | Plate, solvent: Substance, quantity: str) -> None:
         """
         Adds a step to fill `destination` container/plate/slice with `solvent` up to `quantity`.
 
@@ -1811,7 +1831,7 @@ class Recipe:
         if not isinstance(quantity, str):
             raise TypeError("Quantity must be a str.")
 
-        self.steps.append(RecipeStep('fill_to', None, destination, solvent, quantity))
+        self.steps.append(RecipeStep(self, 'fill_to', None, destination, solvent, quantity))
 
     def bake(self) -> dict[str, Container | Plate]:
         """
@@ -1957,7 +1977,12 @@ class Recipe:
                 step.to.append(self.results[dest_name])
                 # substances_used is everything that is in step.to[0] but not in step.to[1]
                 step.substances_used = set.difference(step.to[0].substances(), step.to[1].substances())
-                step.trash = {substance: step.to[0].contents[substance] for substance in step.substances_used}
+                if isinstance(dest, Container):
+                    step.trash = {substance: step.to[0].contents[substance] for substance in step.substances_used}
+                else:  # Plate
+                    for well in step.to[0].wells.flatten():
+                        for substance in step.substances_used:
+                            step.trash[substance] = step.trash.get(substance, 0.) + well.contents[substance]
             elif operator == 'dilute':
                 dest = step.to[0]
                 dest_name = dest.name
@@ -1981,12 +2006,81 @@ class Recipe:
                 step.frm.append(None)
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
-                amount_added = self.results[dest_name].contents[solvent] - step.to[0].contents.get(solvent, 0)
-                amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'L')
-                amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
-                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-                step.instructions = (f"Fill {dest.name} with {solvent.name} up to {quantity}"
-                                     f" by adding {round(amount_added, precision)} {unit}.")
+                self.results[dest_name] = step.to[0].fill_to(solvent, quantity)
+                step.to.append(self.results[dest_name])
+                if isinstance(dest, Container):
+                    amount_added = self.results[dest_name].contents[solvent] - step.to[0].contents.get(solvent, 0)
+                    amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'L')
+                    amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
+                    precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                    step.instructions = (f"Fill {dest.name} with {solvent.name} up to {quantity}"
+                                         f" by adding {round(amount_added, precision)} {unit}.")
+                else:  # PlateSlicer
+                    def collapse(wells, plate):
+                        result = []
+                        row_run = col_run = None
+                        start_well = end_well = wells[0]
+                        for well in wells[1:]:
+                            if row_run is not None:
+                                if well[0] == row_run and well[1] == end_well[1] + 1:
+                                    end_well = well
+                                else:
+                                    row_run = None
+                                    result.append(
+                                        f"{plate.row_names[start_well[0]]}{plate.column_names[start_well[1]]}:"
+                                        f"{plate.row_names[end_well[0]]}{plate.column_names[end_well[1]]}")
+                                    start_well = end_well = well
+                            elif col_run is not None:
+                                if well[1] == col_run and well[0] == end_well[0] + 1:
+                                    end_well = well
+                                else:
+                                    col_run = None
+                                    result.append(
+                                        f"{plate.row_names[start_well[0]]}{plate.column_names[start_well[1]]}:"
+                                        f"{plate.row_names[end_well[0]]}{plate.column_names[end_well[1]]}")
+                                    start_well = end_well = well
+                            elif well[0] == end_well[0] and well[1] == end_well[1] + 1:
+                                end_well = well
+                                row_run = well[0]
+                            elif well[1] == end_well[1] and well[0] == end_well[0] + 1:
+                                end_well = well
+                                col_run = well[1]
+                            else:
+                                result.append(f"{plate.row_names[start_well[0]]}{plate.column_names[start_well[1]]}")
+                                start_well = end_well = well
+                        if row_run is not None or col_run is not None:
+                            result.append(f"{plate.row_names[start_well[0]]}{plate.column_names[start_well[1]]}:"
+                                          f"{plate.row_names[end_well[0]]}{plate.column_names[end_well[1]]}")
+                        if start_well == end_well:
+                            result.append(f"{plate.row_names[start_well[0]]}{plate.column_names[start_well[1]]}")
+                        return result
+
+                    amounts = dict()
+                    plate = step.to[0]
+                    for row in range(plate.n_rows):
+                        for col in range(plate.n_columns):
+                            amount_added = self.results[dest_name].wells[row, col].contents[solvent] - \
+                                           plate.wells[row, col].contents.get(solvent, 0)
+                            amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'uL')
+                            amounts[(row, col)] = round(amount_added, config.internal_precision)
+                    max_amount = max(amounts.values())
+                    _, unit = Unit.get_human_readable_unit(max_amount / 1e6, 'L')
+                    multiplier = 1e-6 / Unit.convert_prefix_to_multiplier(unit[:-1])
+                    precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                    amounts_transpose = dict()
+                    for address, amount in amounts.items():
+                        amount = round(amount * multiplier, precision)
+                        if amount == 0.:
+                            continue
+                        if amount not in amounts_transpose:
+                            amounts_transpose[amount] = []
+                        amounts_transpose[amount].append(address)
+                    step.instructions = f"Fill {dest.name} with {solvent.name} up to {quantity} by adding: "
+                    amount_strings = []
+                    for amount, addresses in amounts_transpose.items():
+                        addresses = collapse(addresses, plate)
+                        amount_strings.append(f"{amount} {unit} to [{', '.join(addresses)}]")
+                    step.instructions += ', '.join(amount_strings) + "."
 
                 if isinstance(dest, PlateSlicer):
                     dest = deepcopy(dest)
@@ -2039,7 +2133,7 @@ class Recipe:
         delta = 0
 
         if timeframe not in self.stages.keys():
-            raise ValueError("Invalid Timeframe")
+            raise ValueError("Invalid timeframe")
 
         stage_steps = self.steps[self.stages[timeframe]]
         for step in stage_steps:
@@ -2116,7 +2210,7 @@ class Recipe:
 
         return flows
 
-    def visualize(self, what: Plate, mode: str, unit: str, timeframe: (int | str) = 'all',
+    def visualize(self, what: Plate, mode: str, unit: str, timeframe: (int | str | RecipeStep) = 'all',
                   substance: (str | Substance) = 'all', cmap: str = None) \
             -> pandas.io.formats.style.Styler:
         """
@@ -2137,7 +2231,7 @@ class Recipe:
             raise TypeError("What must be a Plate.")
         if mode not in ['delta', 'final']:
             raise ValueError("Invalid mode.")
-        if not isinstance(timeframe, (int, str)):
+        if not isinstance(timeframe, (int, str, RecipeStep)):
             raise TypeError("When must be an int or str.")
         if isinstance(timeframe, str) and timeframe not in self.stages:
             raise ValueError("Invalid stage.")
@@ -2162,7 +2256,9 @@ class Recipe:
                 substance_unit = 'U' if substance.is_enzyme() else config.moles_storage_unit
                 return Unit.convert_from(substance, elem.contents.get(substance, 0), substance_unit, unit)
 
-        if isinstance(timeframe, str):
+        if isinstance(timeframe, RecipeStep):
+            start_index = end_index = self.steps.index(timeframe)
+        elif isinstance(timeframe, str):
             start_index = self.stages[timeframe].start
             end_index = self.stages[timeframe].stop
             if start_index is None:
