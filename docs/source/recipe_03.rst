@@ -34,9 +34,9 @@ The following examples use these objects:
     Zn = Substance.solid(name='Zinc', mol_weight=65.39)
 
 
-"""""""
+""""""""""""""""""""""""
 Creating a simple Recipe
-"""""""
+""""""""""""""""""""""""
 
 ::
 
@@ -64,9 +64,9 @@ Creating a simple Recipe
     # "Create container water_stock with initial contents: [(H2O (LIQUID), '100 mL')]."
     # "Transfer 10 uL from water_stock to plate[:]."
 
-"""""""
+"""""""""""""""""""""""""""""""""""""""
 Creating a full permutation in a recipe
-"""""""
+"""""""""""""""""""""""""""""""""""""""
 
 - Each row of the plate will contain a different Ni and P ligand combination.
 - Each column of the plate will contain a different solvent and salt combination.

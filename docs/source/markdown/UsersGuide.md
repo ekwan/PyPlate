@@ -1,3 +1,5 @@
+# User's Guide
+
 ### Substances
 
 A `Substance` is a solid, liquid, or enzyme:

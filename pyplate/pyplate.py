@@ -1850,7 +1850,6 @@ class Recipe:
         if self.current_stage != 'all':
             self.end_stage(self.current_stage)
 
-        # for operation, *rest in self.steps:
         for step in self.steps:
             # Keep track of what was used in each step
             for elem in step.frm + step.to:

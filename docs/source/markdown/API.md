@@ -1,4 +1,4 @@
-# PyPlate
+# PyPlate Design
 
 Welcome to the design document for *PyPlate*.  Here, we lay out the intended purpose, conceptual basis, and expected behavior of the program.
 
