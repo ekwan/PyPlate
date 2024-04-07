@@ -1529,7 +1529,8 @@ class Recipe:
         locked (boolean): Is the recipe locked from changes?
         steps (list): A list of steps to be completed upon bake() bring called.
         used (list): A list of Containers and Plates to be used in the recipe.
-        results (list): A dictionary used in bake to return the mutated objects.
+        results (dict): A dictionary used in bake to return the mutated objects.
+        stages (dict): A dictionary of stages in the recipe.
     """
 
     def __init__(self):

@@ -12,6 +12,5 @@
    markdown/API
    pyplate
    recipes
-   markdown/UsersGuide
    extras
 
