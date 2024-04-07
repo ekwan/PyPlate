@@ -1244,9 +1244,9 @@ class Container:
             destination = self
         needed_umoles = f"{required_umoles} umol"
         result = destination._add(solvent, needed_umoles)
-        needed_volume, unit = Unit.get_human_readable_unit(Unit.convert(solvent, needed_umoles, 'umol'), 'L')
+        needed_volume, unit = Unit.get_human_readable_unit(Unit.convert(solvent, needed_umoles, 'L'), 'L')
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-        result.instructions += f"Dilute with {round(needed_volume, precision)} {unit} of {solvent.name}."
+        result.instructions += f"\nDilute with {round(needed_volume, precision)} {unit} of {solvent.name}."
         return result
 
     def fill_to(self, solvent: Substance, quantity: str) -> Container:
@@ -1279,7 +1279,7 @@ class Container:
         required_volume = Unit.convert(solvent, f"{required_quantity} {quantity_unit}", 'L')
         required_volume, unit = Unit.get_human_readable_unit(required_volume, 'L')
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-        result.instructions += f"Fill with {round(required_volume, precision)} {unit} of {solvent.name}."
+        result.instructions += f"\nFill with {round(required_volume, precision)} {unit} of {solvent.name}."
         return result
 
 
