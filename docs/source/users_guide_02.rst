@@ -1,4 +1,4 @@
-.. _recipe_02:
+.. _users_guide_02:
 
 =======================
 Working with Containers
@@ -7,6 +7,7 @@ Working with Containers
 The following examples use these Substances:
 
 ::
+
     from pyplate import Substance, Container, Plate
     salt = Substance.Solid(name='NaCl', mol_weight=58.44)
     water = Substance.Liquid(name='H2O', mol_weight=18.01528, density=1.0)

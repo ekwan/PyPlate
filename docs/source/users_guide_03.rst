@@ -1,4 +1,4 @@
-.. _recipe_03:
+.. _users_guide_03:
 
 ====================
 Working with Recipes

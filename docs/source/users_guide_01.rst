@@ -1,4 +1,4 @@
-.. _recipe_01:
+.. _users_guide_01:
 
 Creating PyPlate Objects
 ========================
