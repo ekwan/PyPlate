@@ -12,12 +12,37 @@ The following examples use these ``Substance``\ s:
     sodium_sulfate = Substance.solid(name='sodium_sulfate', mol_weight=142.04)
     triethylamine = Substance.liquid(name='triethylamine', mol_weight=101.19, density=0.726)
 
+
+Concentrations
+""""""""""""""
+
+Concentration can be define in molarity, molality, or in ratio of units:
+
+Examples:
+
+.. hlist::
+    :columns: 3
+
+    - '0.1 M'
+    - '0.1 m'
+    - '0.1 g/mL'
+    - '0.01 umol/10 uL'
+    - '5 %v/v'
+    - '5 %w/v'
+    - '5 %w/w'
+
+.. note:: For '%w/v', the units are defined as ``default_weight_volume_units`` in the configuration file.
+    (The default is 'g/mL')
+
 Creating solutions
 """"""""""""""""""
 
 Create a 1M solution of salt water::
 
-    salt_water = Container.create_solution(solute=salt, solvent=water, concentration='1 M', total_quantity='100 mL')
+    salt_water = Container.create_solution(solute=salt, solvent=water, concentration='1 mol/L', total_quantity='100 mL')
+
+
+.. Rework create_solution so concentration='1 g/mL' works.
 
 >>> print(salt_water.instructions)
 Add 5.844 g of NaCl, 94.156 mL of H2O to a container.

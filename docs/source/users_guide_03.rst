@@ -1,40 +1,10 @@
 .. _users_guide_03:
 
-====================
 Working with Recipes
 ====================
 
-The following examples use these objects:
+The following examples use these :ref:`objects <used_objects>`.
 
-::
-
-    from pyplate import Substance, Container, Plate, Recipe
-
-    salt = Substance.solid(name='NaCl', mol_weight=58.44)
-    water = Substance.liquid(name='H2O', mol_weight=18.01528, density=1.0)
-    sodium_sulfate = Substance.solid(name='sodium_sulfate', mol_weight=142.04)
-    triethylamine = Substance.liquid(name='triethylamine', mol_weight=101.19, density=0.726)
-    dimethylformamide = Substance.liquid(name='dimethylformamide', mol_weight=73.095, density=0.944)
-    methanol = Substance.liquid(name='methanol', mol_weight=32.04, density=0.791)
-    solvents = [water, triethylamine, dimethylformamide, methanol]
-    dtbbpy = Substance.solid(name='dtbbpy', mol_weight=268.404)
-    dbrbpy = Substance.solid(name='dbrbpy', mol_weight=313.98)
-    ttbtpy = Substance.solid(name='ttbtpy', mol_weight=401.598)
-    iminophosph = Substance.solid(name='iminophosph', mol_weight=380.391)
-    n_ligands = [dtbbpy, dbrbpy, ttbtpy, iminophosph]
-    dppp = Substance.solid(name='dppp', mol_weight=412.453)
-    dppb = Substance.solid(name='dppb', mol_weight=426.48)
-    p_ligands = [dppp, dppb]
-    LiCl = Substance.solid(name='Lithium Chloride', mol_weight=42.394)
-    pfl = Substance.solid(name='Potassium Fluoride', mol_weight=58.096)
-    PBr = Substance.solid(name='Potassium Bromide', mol_weight=119.002)
-    salts = [LiCl, pfl, PBr]
-    Ni_catalyst = Substance.solid(name='Nickel(II) bromide ethylene glycol dimethyl ether complex', mol_weight=308.623)
-    Pd_catalyst = Substance.solid(name='Bis(acetonitrile)dichloropalladium(II)', mol_weight=259.432)
-    Zn = Substance.solid(name='Zinc', mol_weight=65.39)
-
-
-""""""""""""""""""""""""
 Creating a simple Recipe
 """"""""""""""""""""""""
 
@@ -64,7 +34,6 @@ Creating a simple Recipe
     # "Create container water_stock with initial contents: [(H2O (LIQUID), '100 mL')]."
     # "Transfer 10 uL from water_stock to plate[:]."
 
-"""""""""""""""""""""""""""""""""""""""
 Creating a full permutation in a recipe
 """""""""""""""""""""""""""""""""""""""
 
@@ -72,6 +41,11 @@ Creating a full permutation in a recipe
 - Each column of the plate will contain a different solvent and salt combination.
 
 ::
+
+    solvents = [water, triethylamine, dimethylformamide, methanol]
+    n_ligands = [dtbbpy, dbrbpy, ttbtpy, iminophosph]
+    p_ligands = [dppp, dppb]
+    salts = [LiCl, pfl, PBr]
 
     plate = Plate('plate', max_volume_per_well='60 uL')
 
@@ -144,3 +118,31 @@ Creating a full permutation in a recipe
     #  [30. 30. 30. 30. 30. 30. 30. 30. 30. 30. 30. 30.]
     #  [30. 30. 30. 30. 30. 30. 30. 30. 30. 30. 30. 30.]
     #  [30. 30. 30. 30. 30. 30. 30. 30. 30. 30. 30. 30.]]
+
+.. _used_objects:
+
+Objects used in examples
+""""""""""""""""""""""""
+
+::
+
+    from pyplate import Substance, Container, Plate, Recipe
+
+    salt = Substance.solid(name='NaCl', mol_weight=58.44)
+    water = Substance.liquid(name='H2O', mol_weight=18.01528, density=1.0)
+    sodium_sulfate = Substance.solid(name='sodium_sulfate', mol_weight=142.04)
+    triethylamine = Substance.liquid(name='triethylamine', mol_weight=101.19, density=0.726)
+    dimethylformamide = Substance.liquid(name='dimethylformamide', mol_weight=73.095, density=0.944)
+    methanol = Substance.liquid(name='methanol', mol_weight=32.04, density=0.791)
+    dtbbpy = Substance.solid(name='dtbbpy', mol_weight=268.404)
+    dbrbpy = Substance.solid(name='dbrbpy', mol_weight=313.98)
+    ttbtpy = Substance.solid(name='ttbtpy', mol_weight=401.598)
+    iminophosph = Substance.solid(name='iminophosph', mol_weight=380.391)
+    dppp = Substance.solid(name='dppp', mol_weight=412.453)
+    dppb = Substance.solid(name='dppb', mol_weight=426.48)
+    LiCl = Substance.solid(name='Lithium Chloride', mol_weight=42.394)
+    pfl = Substance.solid(name='Potassium Fluoride', mol_weight=58.096)
+    PBr = Substance.solid(name='Potassium Bromide', mol_weight=119.002)
+    Ni_catalyst = Substance.solid(name='Nickel(II) bromide ethylene glycol dimethyl ether complex', mol_weight=308.623)
+    Pd_catalyst = Substance.solid(name='Bis(acetonitrile)dichloropalladium(II)', mol_weight=259.432)
+    Zn = Substance.solid(name='Zinc', mol_weight=65.39)
