@@ -968,52 +968,85 @@ class Container:
         if not name:
             name = f"solution of {solute.name} in {solvent.name}"
 
-        if 'concentration' in kwargs and 'total_quantity' in kwargs:
-            concentration = kwargs['concentration']
-            total_quantity = kwargs['total_quantity']
-            quantity, quantity_unit = Unit.parse_quantity(total_quantity)
-            if quantity <= 0:
-                raise ValueError("Quantity must be positive.")
+        concentration = kwargs.get('concentration', None)
+        quantity = kwargs.get('quantity', None)
+        total_quantity = kwargs.get('total_quantity', None)
 
-            ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
+        if concentration is not None and quantity is not None:
+            # Calculate total quantity
+            ratio, numerator, denominator = Unit.parse_concentration(concentration)
+            amount = Unit.convert(solute, quantity, numerator)
+            total_quantity = f"{amount / ratio} {denominator}"
+        elif quantity is not None and total_quantity is not None:
+            # Calculate concentration
+            quantity_value, quantity_unit = Unit.parse_quantity(quantity)
+            total_quantity_value, total_quantity_unit = Unit.parse_quantity(total_quantity)
+            ratio, numerator, denominator = quantity_value/total_quantity_value, quantity_unit, total_quantity_unit
+        elif concentration is not None and total_quantity is not None:
+            ratio, numerator, denominator = Unit.parse_concentration(concentration)
+        else:
+            raise RuntimeError("Invalid combination of arguments.")
 
-            if ratio <= 0:
-                raise ValueError("Solution is impossible to create.")
+        # We now have total_quantity and the concentration.
+        # x is solute quantity in moles, y is solvent quantity in mL
+        a = numpy.array([[0., 0.], [0., 0.]])
+        b = numpy.array([0., 0.])
 
-            if numerator == 'U':
-                if not solute.is_enzyme():
-                    raise TypeError("Solute must be an enzyme.")
-                solvent_quantity = Unit.convert(solvent, f"{quantity} {quantity_unit}", config.moles_storage_unit)
-                units = ratio * solvent_quantity
-                return Container(name,
-                                 initial_contents=((solute, f"{units} U"), (solvent, f"{quantity} {quantity_unit}")))
+        if numerator == 'g':
+            # Convert x moles to grams
+            top = numpy.array([solute.mol_weight, 0.])
+        elif numerator == 'L':
+            # Convert x moles to L
+            top = numpy.array([solute.mol_weight / solute.density / 1000., 0.])
+        elif numerator == 'mol':
+            top = numpy.array([1., 0.])
+        elif numerator == 'U':
+            top = numpy.array([1. if solute.is_enzyme() else 0., 0.])
+        else:
+            raise ValueError("Invalid unit in numerator.")
 
-            if quantity_unit == 'g':
-                ratio *= solute.mol_weight / solvent.mol_weight
-            elif quantity_unit == 'mol':
-                pass
-            elif quantity_unit == 'L':
-                ratio *= (solute.mol_weight / solute.density) / (solvent.mol_weight / solvent.density)
-            else:
-                raise ValueError("Invalid quantity unit.")
+        if denominator == 'g':
+            # Convert x moles and y mL to grams
+            bottom = numpy.array([solute.mol_weight, solvent.density])
+        elif denominator == 'L':
+            # Convert x moles an y mL to L
+            bottom = numpy.array([solute.mol_weight / solute.density / 1000., 1 / 1000.])
+        elif denominator == 'mol':
+            # Convert x moles and y mL to moles
+            bottom = numpy.array([1, solvent.density / solvent.mol_weight])
+        elif denominator == 'U':
+            # Convert x moles and y mL to U
+            bottom = numpy.array([1. if solute.is_enzyme() else 0., 1. if solvent.is_enzyme() else 0.])
+        else:
+            raise ValueError("Invalid unit in denominator.")
 
-            # x is quantity of solute in moles, y is quantity of solvent in moles
+        if ratio is None or bottom is None or top is None:
+            raise TypeError("Invalid values.")
+        a[0] = ratio * bottom - top
 
-            y = quantity / (1 + ratio)
-            x = quantity - y
+        total_quantity_value, total_quantity_unit = Unit.parse_quantity(total_quantity)
 
-            assert x >= 0 and y >= 0
-            solution = Container(name,
-                                 initial_contents=((solute, f"{x} {quantity_unit}"), (solvent, f"{y} {quantity_unit}")))
-            return solution
-        if 'quantity' in kwargs and 'total_quantity' in kwargs:
-            result = Container(name, initial_contents=[(solute, kwargs['quantity'])])
-            result = result.fill_to(solvent, kwargs['total_quantity'])
-        else:  # 'quantity' and 'concentration'
-            concentration = Unit.calculate_concentration_ratio(solute, kwargs['concentration'], solvent)
-            quantity = Unit.convert(solute, kwargs['quantity'], concentration[1])
-            result = Container(name, initial_contents=[(solute, kwargs['quantity'])])
-            result._self_add(solvent, f"{quantity / concentration[0]} {concentration[1]}")
+        if total_quantity_unit == 'g':
+            # Convert x moles and y mL to grams
+            a[1] = numpy.array([solute.mol_weight, solvent.density])
+        elif total_quantity_unit == 'L':
+            # Convert x moles and y mL to L
+            a[1] = numpy.array([solute.mol_weight / solute.density / 1000., 1 / 1000.])
+        elif total_quantity_unit == 'mol':
+            # Convert x moles and y mL to moles
+            a[1] = numpy.array([1, solvent.density / solvent.mol_weight])
+        elif total_quantity_unit == 'U':
+            # Convert x moles and y mL to U
+            a[1] = numpy.array([1. if solute.is_enzyme() else 0., 1. if solvent.is_enzyme() else 0.])
+
+        b[1] = total_quantity_value
+
+        x, y = numpy.linalg.solve(a, b)
+
+        if x < 0 or y < 0:
+            raise ValueError("Solution is impossible to create.")
+
+        result = Container(name, initial_contents=[(solute, f"{x} mol"), (solvent, f"{y} mL")])
         contents = []
         for substance, value in result.contents.items():
             value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
@@ -1021,6 +1054,62 @@ class Container:
             contents.append(f"{round(value, precision)} {unit} of {substance.name}")
         result.instructions = "Add " + ", ".join(contents) + " to a container."
         return result
+
+
+
+        # if 'concentration' in kwargs and 'total_quantity' in kwargs:
+        #     concentration = kwargs['concentration']
+        #     total_quantity = kwargs['total_quantity']
+        #     quantity, quantity_unit = Unit.parse_quantity(total_quantity)
+        #     if quantity <= 0:
+        #         raise ValueError("Quantity must be positive.")
+        #
+        #     ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
+        #
+        #     if ratio <= 0:
+        #         raise ValueError("Solution is impossible to create.")
+        #
+        #     if numerator == 'U':
+        #         if not solute.is_enzyme():
+        #             raise TypeError("Solute must be an enzyme.")
+        #         solvent_quantity = Unit.convert(solvent, f"{quantity} {quantity_unit}", config.moles_storage_unit)
+        #         units = ratio * solvent_quantity
+        #         return Container(name,
+        #                          initial_contents=((solute, f"{units} U"), (solvent, f"{quantity} {quantity_unit}")))
+        #
+        #     if quantity_unit == 'g':
+        #         ratio *= solute.mol_weight / solvent.mol_weight
+        #     elif quantity_unit == 'mol':
+        #         pass
+        #     elif quantity_unit == 'L':
+        #         ratio *= (solute.mol_weight / solute.density) / (solvent.mol_weight / solvent.density)
+        #     else:
+        #         raise ValueError("Invalid quantity unit.")
+        #
+        #     # x is quantity of solute in moles, y is quantity of solvent in moles
+        #
+        #     y = quantity / (1 + ratio)
+        #     x = quantity - y
+        #
+        #     assert x >= 0 and y >= 0
+        #     solution = Container(name,
+        #                          initial_contents=((solute, f"{x} {quantity_unit}"), (solvent, f"{y} {quantity_unit}")))
+        #     return solution
+        # if 'quantity' in kwargs and 'total_quantity' in kwargs:
+        #     result = Container(name, initial_contents=[(solute, kwargs['quantity'])])
+        #     result = result.fill_to(solvent, kwargs['total_quantity'])
+        # else:  # 'quantity' and 'concentration'
+        #     concentration = Unit.calculate_concentration_ratio(solute, kwargs['concentration'], solvent)
+        #     quantity = Unit.convert(solute, kwargs['quantity'], concentration[1])
+        #     result = Container(name, initial_contents=[(solute, kwargs['quantity'])])
+        #     result._self_add(solvent, f"{quantity / concentration[0]} {concentration[1]}")
+        # contents = []
+        # for substance, value in result.contents.items():
+        #     value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
+        #     precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+        #     contents.append(f"{round(value, precision)} {unit} of {substance.name}")
+        # result.instructions = "Add " + ", ".join(contents) + " to a container."
+        # return result
 
     @staticmethod
     def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance | Container,

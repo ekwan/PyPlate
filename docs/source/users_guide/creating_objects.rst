@@ -1,20 +1,12 @@
-.. _users_guide_01:
+.. _creating_objects:
 
 Creating PyPlate Objects
 ========================
 
-These recipes demonstrates how to create PyPlate objects. PyPlate objects are the
+These examples demonstrates how to create PyPlate objects. PyPlate objects are the
 building blocks of Recipes.
 
 ``from pyplate import Substance, Container, Plate`` imports the main classes.
-
-Specifying Units
-""""""""""""""""
-
-* Units are specified as strings with a number and a unit abbreviation. (‘1 mmol’, ‘10.2 g’, ‘10 uL’, …)
-* The basic units of pyplate are moles, grams, liters, and activity units. (‘mol’, ‘g’, ‘L’, ‘U’)
-* Any time units are required, metric prefixes may be specified. (‘mg’, ‘umol’, ‘dL’, …)
-
 
 Creating Substances
 """""""""""""""""""

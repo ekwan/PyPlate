@@ -6,8 +6,8 @@
    :maxdepth: 2
    :hidden:
 
-   markdown/API
+   introduction
    pyplate
    users_guide
-   extras
+   developers_guide
 

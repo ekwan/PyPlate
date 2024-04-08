@@ -1,4 +1,4 @@
-.. _users_guide_05:
+.. _usage_tracking:
 
 Usage Tracking
 ==============

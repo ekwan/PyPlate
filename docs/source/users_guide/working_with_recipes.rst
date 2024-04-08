@@ -1,7 +1,13 @@
-.. _users_guide_03:
+.. _working_with_recipes:
 
 Working with Recipes
 ====================
+If you have a complicated series of operations to perform, you can combine them into a ``Recipe``.
+- ``Recipes``\ s allow you to "compile" steps to ensure that experimental steps are self-consistent.
+- .. Explain uses
+- .. Explain bake
+- .. Explain return type
+- .. Explain instructions
 
 The following examples use these :ref:`objects <used_objects>`.
 
@@ -36,6 +42,8 @@ Creating a simple Recipe
 
 Creating a full permutation in a recipe
 """""""""""""""""""""""""""""""""""""""
+
+
 
 - Each row of the plate will contain a different Ni and P ligand combination.
 - Each column of the plate will contain a different solvent and salt combination.
