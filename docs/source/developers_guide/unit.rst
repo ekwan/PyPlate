@@ -1,5 +1,5 @@
-Unit Class
-==========
+Unit Conversion Utilities
+=========================
 
 The `Unit` class provides several convenience functions for developers of PyPlate.
 

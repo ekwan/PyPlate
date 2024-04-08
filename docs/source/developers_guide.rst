@@ -4,6 +4,7 @@ Developer's Guide
 """""""""""""""""
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
 
     developers_guide/unit
+    developers_guide/private_classes.rst

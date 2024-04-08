@@ -45,8 +45,6 @@ config = Config()
 
 class Unit:
     """
-    @private
-
     Provides unit conversion utility functions.
     """
 
@@ -1576,6 +1574,9 @@ class Plate:
 
 
 class RecipeStep:
+    """
+    Stores information about a single step in a recipe.
+    """
     def __init__(self, recipe: Recipe, operator: str, frm: Container | PlateSlicer | Plate,
                  to: Container | PlateSlicer | Plate, *operands):
         self.recipe = recipe
@@ -2407,8 +2408,9 @@ class Recipe:
 
 
 class PlateSlicer(Slicer):
-    """ @private """
-
+    """
+    Represents a slice of a Plate.
+    """
     def __init__(self, plate, item):
         self.plate = plate
         super().__init__(plate.wells, plate.row_names, plate.column_names, item)
