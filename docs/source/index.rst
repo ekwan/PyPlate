@@ -3,11 +3,11 @@
 .. mdinclude:: markdown/README.md
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :hidden:
 
+   self
    introduction
    pyplate
    users_guide
    developers_guide
-

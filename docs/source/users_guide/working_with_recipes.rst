@@ -3,11 +3,13 @@
 Working with Recipes
 ====================
 If you have a complicated series of operations to perform, you can combine them into a ``Recipe``.
+
 - ``Recipes``\ s allow you to "compile" steps to ensure that experimental steps are self-consistent.
-- .. Explain uses
-- .. Explain bake
-- .. Explain return type
-- .. Explain instructions
+- Containers and plates must be declared in the recipe before they can be used.
+- The recipe can be "baked" to execute the steps and return the resulting objects.
+- The final state of the ``Plate`` and ``Container`` objects in the recipe are returned from bake as a dictionary of object names to objects.
+- After bake, the recipe contains a list of steps.
+    - Each step has instructions that can be printed.
 
 The following examples use these :ref:`objects <used_objects>`.
 
@@ -21,7 +23,7 @@ Creating a simple Recipe
     recipe = Recipe()
     recipe.uses(plate)
 
-    water_stock = recipe.create_container(name='water_stock', initial_contents=[(water, '100 mL')])
+    water_stock = recipe.create_container(name='water stock', initial_contents=[(water, '100 mL')])
     # Dispense 10 uL of water into each well of the plate.
     recipe.transfer(source=water_stock, destination=plate, quantity='10 uL')
 
@@ -29,9 +31,15 @@ Creating a simple Recipe
     # resulting objects after the recipe has been baked.
     results = recipe.bake()
 
+    # results == {'plate': <Plate>, 'water stock': <Container>}
+
+    water_stock = results['water stock']
+    plate = results['plate']
+
     # 960 uL of water has been dispensed from the water_stock container.
-    print(results['water_stock'])
-    # "Container (water_stock) (99.04 mL of (['H2O (LIQUID): 5.498 mol'])"
+    # The water_stock container now contains 99.04 mL of water.
+    print(water_stock.get_volume())
+    # 99.04
 
     # Each step of the recipe has instructions that can be printed.
     for step in recipe.steps:
