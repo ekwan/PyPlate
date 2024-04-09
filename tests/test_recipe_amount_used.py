@@ -198,7 +198,7 @@ def test_substance_used_dilute(salt, water):
     # Results would contain the pointers to the new containers, so assert from there
 
     expected_salt_amount = 5.0
-    assert recipe.substance_used(substance=salt, destinations=[container],timeframe='dilution_stage', unit='mmol') == expected_salt_amount
+    assert recipe.substance_used(subsstance=salt, destinations=[container],timeframe='dilution_stage', unit='mmol') == expected_salt_amount
 
 
 # Testing create_solution
