@@ -36,10 +36,11 @@ All experiments are divided into a *design* phase and an *implementation* phase.
 from pyplate import Substance, Container, Plate, Recipe
 
 triethylamine = Substance.liquid(name="triethylamine", mol_weight=101.19, density=0.726)
-DMSO = Substance.liquid(name="DMSO", mol_weight=78.13, density=1.1004)
+water = Substance.liquid(name="water", mol_weight=18.015, density=1.0)
 
-triethylamine_50mM = Container.create_solution(solute=triethylamine, solvent=DMSO, concentration='50 mM',
+triethylamine_50mM = Container.create_solution(solute=triethylamine, solvent=water, concentration='50 mM',
                                                total_quantity='10 mL')
+
 plate = Plate(name='plate', max_volume_per_well='50 uL')
 
 recipe = Recipe().uses(triethylamine_50mM, plate)
@@ -59,4 +60,5 @@ Documentation is available at [ReadTheDocs](https://pyplate-hte.readthedocs.io/e
 ## License
 
 Licensed under the Apache License, Version 2.0 (the "License")
+
 You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0

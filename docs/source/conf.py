@@ -12,7 +12,6 @@
 #
 import os
 import sys
-import sphinx_bootstrap_theme
 
 sys.path.insert(0, os.path.abspath(os.path.join('..', '..')))
 
@@ -24,7 +23,7 @@ copyright = '2024, Eugene Kwan and James Marvin'
 author = 'Eugene Kwan and James Marvin'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = '0.4.1'
 
 # -- General configuration ---------------------------------------------------
 
@@ -60,23 +59,13 @@ exclude_patterns = []
 # a list of builtin themes.
 #
 html_theme = 'sphinx_rtd_theme'
-html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
-
-# html_theme_options = {
-#     'navbar_title': "PyPlate",
-#     'navbar_site_name': "Contents",
-#     'navbar_links': [
-#         ("README", "index"),
-#         ("Users Guide", "users_guide"),
-#         ("Reference Guide", "api"),
-#         ("API", "pyplate"),
-#         ("Extra Docs", "extras"),
-#         ("GitHub", "https://github.com/ekwan/PyPlate", True),
-#     ],
-#     'bootswatch_theme': "cerulean",
-# }
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+html_css_files = ['custom.css']
+
+add_module_names = False
+html_show_sourcelink = False
+

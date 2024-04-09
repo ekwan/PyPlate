@@ -202,7 +202,7 @@ def test_substance_used_dilute(salt, water):
 
 
 # Testing create_solution
-def test_substance_used_create_solution(salt, water, empty_plate):
+def test_substance_used_create_solution(salt, water):
     """
     Tests that the substance amount tracking is accurately implemented during the creation of a solution within a recipe.
 
@@ -221,25 +221,30 @@ def test_substance_used_create_solution(salt, water, empty_plate):
 
     """
 
+    plate = Plate(name='plate', max_volume_per_well='20 mL')
     # Create recipe
     recipe = Recipe()
-    recipe.uses(salt, water)
+    # Recipe.uses only takes Containers and Plates
+    # recipe.uses(salt, water)
+    recipe.uses(plate)
 
 
 
     # Create solution and add to container
     recipe.start_stage('stage1')
-    container = recipe.create_solution(salt, water, concentration='0.1 M', total_quantity='20 mL')
+    container = recipe.create_solution(salt, water, concentration='0.1 M', total_quantity='1 L')
     ##What is the initial volume of container here?
     assert container.volume == 0
-    recipe.transfer(container, empty_plate, '10 mL')
+    recipe.transfer(container, plate, '10 mL')
     recipe.end_stage('stage1')
 
     # Bake recipe
     recipe.bake()
 
     # Assertions
-    expected_salt_amount = 10.0
+    # Container starts with 100 mmol of salt. 1 mmol is dispensed to each of 96 wells in the plate.
+    # A net of 4 mmol is "used" into the container
+    expected_salt_amount = 4.0
     assert recipe.substance_used(substance=salt, unit='mmol', destinations=[container], timeframe='stage1') == expected_salt_amount
 
 # Try substance with solid and liquid
@@ -334,7 +339,8 @@ def test_substance_used_remove(salt_water, salt):
     recipe.bake()
 
     # Assertions
-    expected_salt_amount = 0.0
+    # All of 50 mmol is removed
+    expected_salt_amount = 50.0
     assert recipe.substance_used(substance=salt,destinations=[container],unit='mmol') == expected_salt_amount
 
 
@@ -441,7 +447,7 @@ def test_stages_2(water):
     recipe.transfer(source=container1, destination=plate1, quantity='10 uL')
 
     #fill the first cell in plate
-    recipe.fill_to(plate1[1,1],solvent=water, quantity='20 uL')
+    recipe.fill_to(plate1[1,1], solvent=water, quantity='20 uL')
 
     #start a new stage
     recipe.start_stage('stage1')
@@ -451,11 +457,11 @@ def test_stages_2(water):
 
     #bake the recipe
     recipe.bake()
-    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [container1,plate1, plate2]) == 30.0
-    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [plate1, plate2]) == 22.0
+    assert recipe.substance_used(water, timeframe='all', unit='mL', destinations = [container1, plate1, plate2]) == 30.0
+    assert recipe.substance_used(water, timeframe='all', unit='mL', destinations = [plate1, plate2]) == 22.0
     #assert recipe.substance_used(water, timeframe='stage1', unit='mL', dest = [plate1, plate2]) == -1.0
-    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [plate1, plate2]) == 0.0
-    assert recipe.substance_used(water, timeframe='all', unit='mL', dest = [plate2]) == 1
+    assert recipe.substance_used(water, timeframe='all', unit='mL', destinations = [plate1, plate2]) == 0.0
+    assert recipe.substance_used(water, timeframe='all', unit='mL', destinations = [plate2]) == 1
 
 
 def test_stages_dilute(water, salt):
@@ -489,18 +495,19 @@ def test_stages_dilute(water, salt):
     """
     recipe = Recipe()
     container1 = recipe.create_solution(salt, water, concentration='1 M', total_quantity='10 mL')
-    water_stock = recipe.create_container(initial_contents=(water, "10 mL"))
+    water_stock = recipe.create_container(name='water_stock', initial_contents=[(water, "10 mL")])
 
     plate1 = Plate('plate1', '100 uL')
     plate2 = Plate('plate2', '100 uL')
     recipe.uses(plate1, plate2)
 
-    recipe.transfer(source=container1, dest=plate1, volume='2 mL')
+    recipe.transfer(source=container1, destination=plate1, quantity='2 mL')
     recipe.start_stage('stage1')
-    recipe.dilute(plate1, solute=salt, solvent=water, source=water_stock, concentration='0.5 M')
+    # You cannot dilute a plate, only a container
+    # recipe.dilute(plate1, solute=salt, solvent=water, concentration='0.5 M')
 
-    recipe.transfer(source=plate1, dest=plate2, volume='1 mL')
-    recipe.remove(water, plate2)
+    recipe.transfer(source=plate1, destination=plate2, quantity='1 mL')
+    recipe.remove(plate2, water)
 
     recipe.end_stage('stage1')
 

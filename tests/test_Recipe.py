@@ -69,8 +69,8 @@ def test_transfer(salt_water):
     results = recipe.bake()
     new_salt_water = results[salt_water.name]
     container = results[container.name]
-    assert container.volume == Unit.convert_to_storage(10, 'mL')
-    assert salt_water.volume - new_salt_water.volume == Unit.convert_to_storage(10, 'mL')
+    assert container.get_volume(unit='mL') == 10
+    assert salt_water.get_volume(unit='mL') - new_salt_water.get_volume(unit='mL') == 10
 
     # transfer() cannot ba called once the recipe is baked.
     with pytest.raises(RuntimeError, match="This recipe is locked"):
@@ -84,8 +84,8 @@ def test_transfer(salt_water):
     new_salt_water = results[salt_water.name]
     new_plate = results[plate.name]
     # 5 uL transferred to 96 wells and 1 uL to one well.
-    assert salt_water.volume - new_salt_water.volume == pytest.approx(Unit.convert_to_storage(5 * 96 + 1, 'uL'))
-    volumes = new_plate.volumes(unit='uL')
+    assert salt_water.get_volume(unit='uL') - new_salt_water.get_volume(unit='uL') == pytest.approx(5 * 96 + 1)
+    volumes = new_plate.get_volumes(unit='uL')
     # plate[1, 1] should have 6 uL, all others 5 uL
     assert volumes[0, 0] == 6
     assert volumes[0, 1] == 5
@@ -99,8 +99,8 @@ def test_transfer(salt_water):
     container = results[container.name]
     new_plate2 = results[new_plate.name]
     # 2 uL from plate[1, 1] and 1 uL from four wells.
-    assert container.volume == Unit.convert_to_storage(2 + 4, 'uL')
-    assert new_plate.volume('uL') - new_plate2.volume('uL') == 2 + 4
+    assert container.get_volume('uL') == 2 + 4
+    assert new_plate.get_volume('uL') - new_plate2.get_volume('uL') == 2 + 4
 
 
 def test_create_container(water, salt):
@@ -157,5 +157,5 @@ def test_create_container(water, salt):
     container = results[container.name]
     container2 = results[container2.name]
     container3 = results[container3.name]
-    assert Unit.convert_to_storage(10, 'mL') + Unit.convert(salt, '5 mmol', config.volume_prefix) == container3.volume
+    assert 10 + Unit.convert(salt, '5 mmol', 'mL') == container3.get_volume(unit='mL')
     assert container3.contents.get(salt, None) == Unit.convert_to_storage(5, 'mmol')

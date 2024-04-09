@@ -1,21 +1,12 @@
-pyplate package
-===============
+PyPlate API
+===========
 
-Submodules
-----------
+.. currentmodule:: pyplate
+.. autosummary::
+    :toctree: _autosummary
+    :caption: Classes
 
-.. toctree::
-   :titlesonly:
-
-   pyplate_pyplate.rst
-   experiment_design.rst
-   plateslicer.rst
-
-
-Module contents
----------------
-
-.. automodule:: pyplate
-   :members:
-   :undoc-members:
-   :show-inheritance:
+    Substance <Substance>
+    Container <Container>
+    Plate <Plate>
+    Recipe <Recipe>
