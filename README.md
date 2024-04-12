@@ -18,6 +18,8 @@ PyPlate requires Python 3.10 or later.
 
 To view plate visualizations, you will need an interactive Python shell like Jupyter.
 
+Note that a similarly named package `pyplate` also exists on PyPi, it is unrelated to `pyplate-hte`.
+
 ## Quick Start
 
 Here is a simple example that illustrates some of the core features of `PyPlate`:
