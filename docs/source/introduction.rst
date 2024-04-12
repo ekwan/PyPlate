@@ -19,31 +19,37 @@ Features
 Core Classes
 """"""""""""
 
-**Should we add experimental design nouns??**
+``PyPlate`` defines all experiment designs with three key nouns:
 
-*PyPlate* defines all laboratory operations in terms of four key "nouns":
+- ``Factor``: A variable that is under the control of the experimenter
+- ``Experiment``: A particular combination of Factors. Generally implemented in a single well (Container) on a Plate.
+- ``ExperimentalSpace``: The set of all valid Experiments given a set of Factors.
+``PyPlate`` allows related experiments to be grouped together into blocks for the minimization of error.
+
+``PyPlate`` defines all laboratory operations in terms of four key nouns:
 
 - ``Substance``: An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  This means that "water" qualifies, but not "5 mL of water" or "that beaker of water."
-- ``Container``: Stores specified quantities of ``Substance``s in a vessel with an optional maximum volume (e.g., a 10 mL vial).
-- ``Plate``: A rectangular array of ``Container``s (e.g., a particular 96 well plate).
-- ``Recipe``: A list of physically reasonble instructions for transforming one set of ``Container``s or ``Plate``s into another. 
+- ``Container``: Stores specified quantities of ``Substance``\ s in a vessel with an optional maximum volume (e.g., a 10 mL vial).
+- ``Plate``: A rectangular array of ``Container``\ s (e.g., a particular 96 well plate).
+- ``Recipe``: A list of physically reasonable instructions for transforming one set of ``Container``\ s or ``Plate``\ s into another.
 
 .. _note:: *Each class is immutable.*  (An immutable object is one whose fields cannot be changed once it has been constructed.  If a method alters an object, a copy is always returned.)
 
 Canonical Workflow
 """"""""""""""""""
+``PyPlate`` assumes that you have a large set of experiments to plan and execute. Each experiment is a particular choice of experimental parameters (``Factors``) and may be considered to be a point in the ``ExperimentalSpace``. Each experiment is implemented as a series of solid and liquid handling instructions (``Recipe``). These instructions may be specified with or without explicitly defining an ``ExperimentalSpace``.
 
-1. Optionally, define the experimental variables (substrate, solvent, temperature, etc.), the allowable levels per variable, the set of experiments that will be explored, a blocking strategy.
+1. Optionally, define the ``Factors`` (substrate, solvent, temperature, etc.), the allowable levels for each Factor, the ``ExperimentalSpace`` to be explored, and a blocking strategy.
 
 2. Create stock solutions (like substrate stocks) and initialize empty containers (like 96 well plates).
-
-.. note:: By convention, stock solutions should be prepared outside of ``Recipe``\ s (even though ``PyPlate`` allows ``Containers`` to be created inside or outside ``Recipe``\ s.)
 
 3. Create a ``Recipe`` and define all solid or liquid handling instructions in it.
 
 4. Call ``recipe.bake()``.  This method will ensure that all solid and liquid handling instructions are valid. If they are indeed valid, then the updated containers will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
 
 5. Optionally, map ``Container``\ s to particular experiments.
+
+.. note:: By convention, stock solutions should be prepared outside of ``Recipe``\ s (even though ``PyPlate`` allows ``Containers`` to be created inside or outside ``Recipe``\ s.)
 
 Quickstart Example, Explained
 """""""""""""""""""""""""""""
