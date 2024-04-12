@@ -171,42 +171,70 @@ class Unit:
         if not isinstance(from_unit, str) or not isinstance(to_unit, str):
             raise TypeError("Unit must be a str.")
 
-        if from_unit == 'U' and not substance.is_enzyme():
-            raise ValueError("Only enzymes can be measured in activity units. 'U'")
-
         for suffix in ['U', 'L', 'g', 'mol']:
             if from_unit.endswith(suffix):
                 prefix = from_unit[:-len(suffix)]
                 quantity *= Unit.convert_prefix_to_multiplier(prefix)
                 from_unit = suffix
                 break
+        else:  # suffix not found
+            raise ValueError(f"Invalid unit {from_unit}")
+
+        if from_unit == 'U' and not substance.is_enzyme():
+            raise ValueError("Only enzymes can be measured in activity units.")
+
+        for suffix in ['U', 'L', 'g', 'mol']:
+            if to_unit.endswith(suffix):
+                prefix = to_unit[:-len(suffix)]
+                to_unit = suffix
+                break
+        else:  # suffix not found
+            raise ValueError(f"Invalid unit {to_unit}")
 
         result = None
-        if substance.is_enzyme() and not to_unit.endswith('U'):
-            return 0
-        if to_unit.endswith('U'):
-            prefix = to_unit[:-1]
+
+        if to_unit == 'U':
             if not substance.is_enzyme():
                 return 0
-            if not from_unit == 'U':
-                raise ValueError("Enzymes can only be measured in activity units. 'U'")
-            result = quantity
-        elif to_unit.endswith('L'):
-            prefix = to_unit[:-1]
+            elif from_unit == 'mol':
+                return 0
+            elif from_unit == 'L':
+                # L * (1000 mL/L) * (U/mL)
+                result = quantity * 1000. * substance.density
+            elif from_unit == 'g':
+                # g * (U/g)
+                result = quantity * substance.specific_activity
+            elif from_unit == 'U':
+                result = quantity
+        elif to_unit == 'L':
             if from_unit == 'L':
                 result = quantity
             elif from_unit == 'mol':
+                if substance.is_enzyme():
+                    return 0
                 # mol * g/mol / (g/mL)
                 result_in_mL = quantity * substance.mol_weight / substance.density
-                result = result_in_mL / 1000
+                result = result_in_mL / 1000.
             elif from_unit == 'g':
-                # g / (g/mL)
-                result_in_mL = quantity / substance.density
-                result = result_in_mL / 1000
-        elif to_unit.endswith('mol'):
-            prefix = to_unit[:-3]
-            if from_unit == 'L':
-                value_in_mL = quantity * 1000
+                if substance.is_enzyme():
+                    # g * (U/g) / (U/mL) * (1 L / 1000 mL)
+                    result = quantity * substance.specific_activity / substance.density / 1000.
+                else:
+                    # g / (g/mL)
+                    result_in_mL = quantity / substance.density
+                    result = result_in_mL / 1000
+            elif from_unit == 'U':
+                if not substance.is_enzyme():
+                    return 0
+                # U / (U/mL) * (1 L / 1000 mL)
+                result = quantity / substance.density / 1000.
+        elif to_unit == 'mol':
+            if substance.is_enzyme():
+                return 0
+            if from_unit == 'U':
+                return 0
+            elif from_unit == 'L':
+                value_in_mL = quantity * 1000.  # L * mL/L
                 # mL * g/mL / (g/mol)
                 result = value_in_mL * substance.density / substance.mol_weight
             elif from_unit == 'mol':
@@ -214,19 +242,26 @@ class Unit:
             elif from_unit == 'g':
                 # g / (g/mol)
                 result = quantity / substance.mol_weight
-        elif to_unit.endswith('g'):
-            prefix = to_unit[:-1]
-            if from_unit == 'L':
-                value_in_mL = quantity * 1000
-                # mL * g/mL
-                result = value_in_mL * substance.density
+        elif to_unit == 'g':
+            if from_unit == 'U':
+                if not substance.is_enzyme():
+                    return 0
+                # U / (U/g)
+                result = quantity / substance.specific_activity
+            elif from_unit == 'L':
+                if substance.is_enzyme():
+                    # L * (1000 mL/L) * (U/mL) / (U/g)
+                    result = quantity * 1000. * substance.density / substance.specific_activity
+                else:
+                    # L * (1000 mL/L) * g/mL
+                    result = quantity * 1000. * substance.density
             elif from_unit == 'mol':
+                if substance.is_enzyme():
+                    return 0
                 # mol * g/mol
                 result = quantity * substance.mol_weight
             elif from_unit == 'g':
                 result = quantity
-        else:
-            raise ValueError("Only L, U, g, and mol are valid units.")
 
         assert result is not None, f"{substance} {quantity} {from_unit} {to_unit}"
 
@@ -465,6 +500,7 @@ class Substance:
     Attributes:
         name: Name of substance.
         mol_weight: Molecular weight (g/mol).
+        U_per_mass: Activity units per mass if `Substance` is an enzyme (U/g).
         density: Density if `Substance` is a liquid (g/mL).
         concentration: Calculated concentration if `Substance` is a liquid (mol/mL).
         molecule: `cctk.Molecule` if provided.
@@ -489,6 +525,7 @@ class Substance:
         Note: Support for isotopologues will be added in the future.
 
         """
+        self.specific_activity = None  # U/g
         if not isinstance(name, str):
             raise TypeError("Name must be a str.")
         if not isinstance(mol_type, int):
@@ -570,15 +607,17 @@ class Substance:
         substance.mol_weight = mol_weight  # g / mol
         substance.density = density  # g / mL
         substance.concentration = density / mol_weight  # mol / mL
+        substance.U_per_mass = None
         return substance
 
     @staticmethod
-    def enzyme(name: str, molecule=None) -> Substance:
+    def enzyme(name: str, specific_activity: str, molecule=None) -> Substance:
         """
         Creates an enzyme.
 
         Arguments:
             name: Name of enzyme.
+            specific_activity: A ratio of activity units to mass ('10 U/g', '10 U/mg', '.1 mg/U')
             molecule: (optional) A cctk.Molecule
 
         Returns: New substance.
@@ -589,6 +628,15 @@ class Substance:
 
         substance = Substance(name, Substance.ENZYME, molecule)
         substance.density = config.default_enzyme_density
+        value, numerator, denominator = Unit.parse_concentration(specific_activity)
+
+        if numerator == 'U' and denominator == 'g':
+            substance.specific_activity = value
+        elif numerator == 'g' and denominator == 'U':
+            substance.specific_activity = 1 / value
+        else:
+            raise ValueError("Specific activity must be in U/g or g/U.")
+
         return substance
 
     def is_solid(self) -> bool:
@@ -766,17 +814,20 @@ class Container:
             transfer, unit = Unit.get_human_readable_unit(transfer, 'L')
         else:
             # total mass in source container times ratio
-            mass = sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit if not substance.is_enzyme() else 'U'}",
-                                    "mg") for substance, amount in source_container.contents.items())
+            mass = sum(
+                Unit.convert(substance, f"{amount} {config.moles_storage_unit if not substance.is_enzyme() else 'U'}",
+                             "mg") for substance, amount in source_container.contents.items())
             transfer, unit = Unit.get_human_readable_unit(mass * ratio, 'mg')
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         to.instructions += f"\nTransfer {round(transfer, precision)} {unit} of {source_container.name} to {to.name}"
-        to.volume = round(sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit) for
-                              substance, amount in to.contents.items()), config.internal_precision)
+        to.volume = round(
+            sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit) for
+                substance, amount in to.contents.items()), config.internal_precision)
         if to.volume > to.max_volume:
             raise ValueError(f"Exceeded maximum volume in {to.name}.")
-        source_container.volume = sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
-                                      for substance, amount in source_container.contents.items())
+        source_container.volume = sum(
+            Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
+            for substance, amount in source_container.contents.items())
         source_container.volume = round(source_container.volume, config.internal_precision)
         return source_container, to
 
@@ -947,6 +998,8 @@ class Container:
             New container with desired solution.
         """
 
+        # TODO: fix for enzymes
+
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
         if not isinstance(solvent, Substance):
@@ -979,7 +1032,7 @@ class Container:
             # Calculate concentration
             quantity_value, quantity_unit = Unit.parse_quantity(quantity)
             total_quantity_value, total_quantity_unit = Unit.parse_quantity(total_quantity)
-            ratio, numerator, denominator = quantity_value/total_quantity_value, quantity_unit, total_quantity_unit
+            ratio, numerator, denominator = quantity_value / total_quantity_value, quantity_unit, total_quantity_unit
         elif concentration is not None and total_quantity is not None:
             ratio, numerator, denominator = Unit.parse_concentration(concentration)
         else:
@@ -1052,8 +1105,6 @@ class Container:
             contents.append(f"{round(value, precision)} {unit} of {substance.name}")
         result.instructions = "Add " + ", ".join(contents) + " to a container."
         return result
-
-
 
         # if 'concentration' in kwargs and 'total_quantity' in kwargs:
         #     concentration = kwargs['concentration']
@@ -1577,6 +1628,7 @@ class RecipeStep:
     """
     Stores information about a single step in a recipe.
     """
+
     def __init__(self, recipe: Recipe, operator: str, frm: Container | PlateSlicer | Plate,
                  to: Container | PlateSlicer | Plate, *operands):
         self.recipe = recipe
@@ -1686,7 +1738,8 @@ class Recipe:
                 raise TypeError("Invalid type.")
         return self
 
-    def transfer(self, source: Container | Plate | PlateSlicer, destination: Container | Plate | PlateSlicer, quantity: str) -> None:
+    def transfer(self, source: Container | Plate | PlateSlicer, destination: Container | Plate | PlateSlicer,
+                 quantity: str) -> None:
         """
         Adds a step to the recipe which will move quantity from source to destination.
         Note that all Substances in the source will be transferred in proportion to their respective ratios.
@@ -2269,7 +2322,8 @@ class Recipe:
 
         def helper(entry):
             substance, quantity = entry
-            return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_storage_unit, unit)
+            return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_storage_unit,
+                                     unit)
 
         if unit is None:
             unit = config.volume_display_unit
@@ -2411,6 +2465,7 @@ class PlateSlicer(Slicer):
     """
     Represents a slice of a Plate.
     """
+
     def __init__(self, plate, item):
         self.plate = plate
         super().__init__(plate.wells, plate.row_names, plate.column_names, item)

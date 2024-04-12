@@ -36,9 +36,10 @@ def sodium_sulfate() -> Substance:
 def triethylamine() -> Substance:
     return Substance.liquid("triethylamine", mol_weight=101.19, density=0.726)
 
+
 @pytest.fixture
 def lipase() -> Substance:
-    return Substance.enzyme('lipase')
+    return Substance.enzyme(name='lipase', specific_activity='10 U/mg')
 
 
 @pytest.fixture
