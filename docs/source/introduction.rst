@@ -1,8 +1,8 @@
 Introduction
 ============
 
-*PyPlate* defines a set of Python-based semantics for designing and
-implementing high-throughput experiments (HTE).  **PyPlate**
+``PyPlate`` defines a set of Python-based semantics for designing and
+implementing high-throughput experiments (HTE).  ``PyPlate``
 aspires to define a clear, useful, and reproducible ontology for HTE.
 
 Features
@@ -28,9 +28,7 @@ Core Classes
 - ``Plate``: A rectangular array of ``Container``s (e.g., a particular 96 well plate).
 - ``Recipe``: A list of physically reasonble instructions for transforming one set of ``Container``s or ``Plate``s into another. 
 
-**Each class is immutable.**  (An immutable object is one whose fields cannot be
-changed once it has been constructed.  If a method alters an object, a copy is 
-always returned.)
+.. _note:: *Each class is immutable.*  (An immutable object is one whose fields cannot be changed once it has been constructed.  If a method alters an object, a copy is always returned.)
 
 Canonical Workflow
 """"""""""""""""""
@@ -39,14 +37,13 @@ Canonical Workflow
 
 2. Create stock solutions (like substrate stocks) and initialize empty containers (like 96 well plates).
 
-.. note:: By convention, stock solutions should be prepared outside of ``Recipe``s (even though **PyPlate**
-allows ``Containers`` to be created inside or outside ``Recipe``s.
+.. note:: By convention, stock solutions should be prepared outside of ``Recipe``\ s (even though ``PyPlate`` allows ``Containers`` to be created inside or outside ``Recipe``\ s.)
 
 3. Create a ``Recipe`` and define all solid or liquid handling instructions in it.
 
 4. Call ``recipe.bake()``.  This method will ensure that all solid and liquid handling instructions are valid. If they are indeed valid, then the updated containers will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
 
-5. Optionally, map ``Container``s to particular experiments.
+5. Optionally, map ``Container``\ s to particular experiments.
 
 Quickstart Example, Explained
 """""""""""""""""""""""""""""
