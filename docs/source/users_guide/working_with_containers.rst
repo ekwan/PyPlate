@@ -107,6 +107,7 @@ In the previous examples, we made a solution by dissolving a solid into a liquid
 - The target concentration of ``salt`` in the new solution is ``0.5 M``.
 - This requests the diluted solution have a volume of ``10 mL``.
 - This sets the name of the new solution to ``'salt water (0.5 M)'``.
+- Some, but necessarily all, of the source solution ``salt_water1M`` is used.
 - The remainder of ``salt_water1M`` and the new diluted solution ``salt_water500mM`` are returned.
 - If the desired concentration is not possible, a ``ValueError`` is raised.
 

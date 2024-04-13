@@ -61,7 +61,6 @@ Examples ('w' stands for weight, 'v' stands for volume, '%' stands for per hundr
 
 Unit Usage within PyPlate
 """""""""""""""""""""""""
-.. PyPlate uses the `pint <https://pint.readthedocs.io/en/stable/>`_ library to handle units and conversions.
 
 - The fundamental unit for liquids and solids is moles.
 
@@ -70,6 +69,7 @@ Unit Usage within PyPlate
 
 - The fundamental unit for enzymes is enzyme activity units ('U').
 
-  - Enzymes must be defined in terms of activity units per mass.
+  - Enzymes must be defined in terms of activity units per mass. (`specific_activity`)
+  - `specific_activity` can be defined in terms of `U/g` or `g/U`
 
 - Masses and volumes are considered to be strictly additive.

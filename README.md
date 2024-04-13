@@ -52,12 +52,13 @@ recipe.visualize(what=plate, mode='final', unit='uL', timeframe=0)
 
 Online documentation is available at [ReadTheDocs](https://pyplate-hte.readthedocs.io/en/latest/).  To build the documentation locally, please follow these steps:
 
-make -C docs html
+``make -C docs html``
+
 The resulting HTML files will be in `docs/build/html`.
 
 In order to build the documentation successfully, you must install the packages listed in docs/requirements.txt.  You can do this by running:
 
-pip install -r docs/requirements.txt
+``pip install -r docs/requirements.txt``
 
 ## License
 

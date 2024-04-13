@@ -59,10 +59,9 @@ Let's look at the contents after the recipe:
 Let's look at the instructions for each step of the recipe:
 
 >>> for step in recipe.steps:
-        print(step.instructions)
-
-    # "Create container water_stock with initial contents: [(H2O (LIQUID), '100 mL')]."
-    # "Transfer 10 uL from water_stock to plate[:]."
+>>>     print(step.instructions)
+Create container water_stock with initial contents: [(H2O (LIQUID), '100 mL')].
+Transfer 10 uL from water_stock to plate[:].
 
 
 Using Stages
@@ -77,9 +76,8 @@ Let's see a simple example where this is helpful::
     recipe = Recipe()
     recipe.uses(plate)
 
-    recipe.add_stage('stock solution')
+    recipe.start_stage('stock solution')
     water_stock = recipe.create_container(name='water stock', initial_contents=[(water, '100 mL')])
-    salt_water1M = recipe.create_container_from(sourc
     recipe.end_stage('stock solution')
 
     recipe.start_stage('dispensing')
@@ -94,12 +92,39 @@ Let's bake the recipe::
 
 We can query the amount of water "used" during the dispensing stage of the ``Recipe``:
 
->>> print(recipe.get_) .. ask about function name
-
+>>> print(recipe.get_substance_used(substance=water, timeframe='dispensing', unit='mL'))
+0.96
 
 Transfer Between Plates
 """""""""""""""""""""""
 
+Let's create two plates and transfer the contents of one to the other::
+
+    plate1 = Plate('plate1', max_volume_per_well='60 uL')
+    plate2 = Plate('plate2', max_volume_per_well='60 uL')
+
+    recipe = Recipe()
+    recipe.uses(plate1)
+    recipe.uses(plate2)
+
+    water_stock = recipe.create_container(name='water stock', initial_contents=[(water, '100 mL')])
+    recipe.transfer(source=water_stock, destination=plate1, quantity='10 uL')
+    recipe.transfer(source=plate1, destination=plate2, quantity='3 uL')
+
+    results = recipe.bake()
+    plate1 = results['plate1']
+    plate2 = results['plate2']
+
+
+`plate1` will now contain 7 uL of water in each of its wells, and `plate2` will contain 3 uL of water in each of its wells.
+
+>>> plate1.dataframe(unit='uL')
+
+.. figure:: /images/plate1.png
+
+>>> plate2.dataframe(unit='uL')
+
+.. figure:: /images/plate2.png
 
 Using Source Plates
 """""""""""""""""""

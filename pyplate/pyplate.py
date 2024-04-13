@@ -2156,8 +2156,8 @@ class Recipe:
         assert all(isinstance(elem, (Container, Plate)) for elem in self.results.values())
         return self.results
 
-    def substance_used(self, substance: Substance, timeframe: str = 'all', unit: str = None,
-                       destinations: Iterable[Container | Plate] | str = "plates"):
+    def get_substance_used(self, substance: Substance, timeframe: str = 'all', unit: str = None,
+                           destinations: Iterable[Container | Plate] | str = "plates"):
         """
         Returns the amount of substance used in the recipe.
 
