@@ -1,3 +1,5 @@
+.. _introduction:
+
 Introduction
 ============
 
@@ -24,6 +26,7 @@ Core Classes
 - ``Factor``: A variable that is under the control of the experimenter
 - ``Experiment``: A particular combination of Factors. Generally implemented in a single well (Container) on a Plate.
 - ``ExperimentalSpace``: The set of all valid Experiments given a set of Factors.
+
 ``PyPlate`` allows related experiments to be grouped together into blocks for the minimization of error.
 
 ``PyPlate`` defines all laboratory operations in terms of four key nouns:
@@ -33,7 +36,7 @@ Core Classes
 - ``Plate``: A rectangular array of ``Container``\ s (e.g., a particular 96 well plate).
 - ``Recipe``: A list of physically reasonable instructions for transforming one set of ``Container``\ s or ``Plate``\ s into another.
 
-.. _note:: *Each class is immutable.*  (An immutable object is one whose fields cannot be changed once it has been constructed.  If a method alters an object, a copy is always returned.)
+.. note:: *Each class is immutable.*  (An immutable object is one whose fields cannot be changed once it has been constructed.  If a method alters an object, a copy is always returned.)
 
 Canonical Workflow
 """"""""""""""""""

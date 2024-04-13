@@ -76,6 +76,23 @@ Fill with 200.0 mL of H2O.
 >>> print(salt_water.get_concentration(solute=salt, units='M'))
 0.25
 
+Transferring Between Containers
+"""""""""""""""""""""""""""""""
+
+You can transfer a volume of a solution to another container::
+
+    new_container = Container(name='new container')
+    salt_water = Container.create_solution('salt water', solute=salt, solvent=water,
+                                           concentration='1 M', total_quantity='100 mL')
+
+    salt_water, new_container = salt_water.transfer(source=salt_water, destination=new_container, quantity='10 mL')
+
+    >>> print(salt_water.get_volume(unit='mL'))
+    90.0
+
+    >>> print(new_container.get_volume(unit='mL'))
+    10.0
+
 Diluting Stock Solutions
 """"""""""""""""""""""""
 

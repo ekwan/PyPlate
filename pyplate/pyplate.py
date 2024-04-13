@@ -375,13 +375,13 @@ class Unit:
                              * what.mol_weight / what.density / 1e3)
             else:
                 # This shouldn't happen.
-                raise TypeError("Invalid type for what.")
+                raise TypeError("Invalid type for substance.")
         elif isinstance(what, Container):
             # Assume the container contains a liquid
             unit = 'L'
             quantity *= Unit.convert_prefix_to_multiplier(config.volume_storage_unit[0])
         else:
-            raise TypeError("Invalid type for what.")
+            raise TypeError("Invalid type for substance.")
 
         multiplier = 1
         while quantity < 1 and multiplier > 1e-6:
@@ -428,6 +428,7 @@ class Unit:
     @staticmethod
     def calculate_concentration_ratio(solute: Substance, concentration: str, solvent: Substance) \
             -> Tuple[float, str, str]:
+        # TODO: eliminate this from dilute and tests.
         """
         Helper function for dealing with concentrations.
 
@@ -478,19 +479,6 @@ class Unit:
             # ratio can be multiplied by a stored value of moles to get number of U
             ratio *= Unit.convert_from_storage(1, 'mol')
         return ratio, numerator, denominator
-
-    @staticmethod
-    def calculate_concentration_ratio_moles(solute: Substance, quantity: str, solvent: Substance) \
-            -> Tuple[float, str, str]:
-        q, q_unit = Unit.parse_quantity(quantity)
-        if q_unit not in ('g', 'L', 'mol'):
-            raise ValueError("Invalid unit in quantity.")
-        if q_unit == 'g':
-            q /= solute.mol_weight
-        elif q_unit == 'L':
-            q *= solute.density
-        return Unit.calculate_concentration_ratio(solute, f"{q} mol", solvent)
-
 
 class Substance:
     """
