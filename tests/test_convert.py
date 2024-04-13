@@ -18,8 +18,9 @@ def test_convert(salt, water, lipase, dmso):
 
     with pytest.raises(ValueError, match='Only enzymes can be measured in activity units'):
         Unit.convert(water, '1 U', 'mL')
-    with pytest.raises(ValueError, match='Enzymes can only be measured in activity units'):
-        Unit.convert(lipase, '1 g', 'U')
+    # with pytest.raises(ValueError, match='Enzymes can only be measured in activity units'):
+    assert Unit.convert(lipase, '1 g', 'U') == 10. * 1000.  # 1 g * 1000 mg/g * 10 U/mg
+
 
     # Only enzymes have activity units
     assert Unit.convert(water, '1 mL', 'U') == 0

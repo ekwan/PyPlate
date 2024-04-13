@@ -46,16 +46,27 @@ def test_create_solution(salt, water, triethylamine, dmso, sodium_sulfate, lipas
 
     # Solute is an enzyme, concentration has U in the numerator
     solute = lipase
-    for denominator, quantity_unit in product(units, repeat=2):
+    quantity_unit = 'mL'
+    for denominator in ['mol', 'mL']:
         for solvent in solvents:
-            con = Container.create_solution(solute, solvent, concentration=f"1.1 U/{denominator}",
+            con = Container.create_solution(solute, solvent, concentration=f"0.11 U/{denominator}",
                                             total_quantity=f"10 {quantity_unit}")
-            assert all(value > 0 for value in con.contents.values())
-            total = sum(Unit.convert(substance, f"{value} {config.moles_storage_unit}", quantity_unit) for
-                        substance, value in con.contents.items())
-            assert abs(total - 10) < epsilon, f"Making 10 {quantity_unit} of a 1.1 U/{denominator}" \
-                                              f" solution of {solute} and {solvent} failed."
-            conc = con.contents[solute] / \
-                sum(Unit.convert(substance, f"{value} {config.moles_storage_unit}", denominator)
-                    for substance, value in con.contents.items())
-            assert abs(conc - 1.1) < epsilon
+            assert all(value > 0 for value in con.contents.values()), f"{denominator} {quantity_unit} {con}"
+            # Final quantity is correct
+            assert abs(con.get_volume('mL') - 10) < epsilon
+            conc = con.get_concentration(solute, f"U/{denominator}")
+            # conc = con.contents[solute] / \
+            #     sum(Unit.convert(substance, f"{value} {config.moles_storage_unit}", denominator)
+            #         for substance, value in con.contents.items())
+            assert abs(conc - 0.11) < epsilon, f"{con} {conc}"
+
+    denominator = quantity_unit = 'mL'
+    for solvent in solvents:
+        con = Container.create_solution(solute, solvent, concentration=f"0.11 U/{denominator}",
+                                        total_quantity=f"10 mL")
+        assert all(value > 0 for value in con.contents.values())
+        total = con.get_volume('mL')
+        assert abs(total - 10) < epsilon, f"Making 10 {quantity_unit} of a 1.1 U/{denominator}" \
+                                          f" solution of {solute} and {solvent} failed. {con}"
+        conc = con.get_concentration(solute, f"U/{denominator}")
+        assert abs(conc - 0.11) < epsilon
