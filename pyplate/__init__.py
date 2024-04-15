@@ -33,6 +33,10 @@ class Config:
         self.volume_display_unit = yaml_config['volume_display_unit']
         assert self.volume_display_unit[-1] == 'L'
 
+        self.concentration_display_unit = yaml_config['concentration_display_unit']
+        # we can't use Unit to do a full check of the unit, so we just do a cursory check
+        assert ('/' in self.concentration_display_unit or self.concentration_display_unit[-1] == 'm' or
+                self.concentration_display_unit[-1] == 'M')
         self.default_solid_density = float(yaml_config['default_solid_density'])
         self.default_enzyme_density = float(yaml_config['default_enzyme_density'])
         self.default_weight_volume_units = yaml_config['default_weight_volume_units']
