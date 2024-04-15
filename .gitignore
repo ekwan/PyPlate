@@ -167,3 +167,5 @@ docs/build/
 docs/source/_autosummary/
 .DS_Store
 docs/source/developers_guide/_autosummary/
+
+_*/

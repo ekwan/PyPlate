@@ -312,10 +312,10 @@ class Unit:
 
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
-            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.volume_storage_unit[0])
+            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.volume_storage_unit[:-1])
         else:  # moles
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
-            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0])
+            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.moles_storage_unit[:-3])
         return round(result, config.internal_precision)
 
     @staticmethod
@@ -340,9 +340,11 @@ class Unit:
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
             result = value * Unit.convert_prefix_to_multiplier(config.volume_storage_unit[0]) / prefix_value
-        else:  # moles
+        elif unit[-3:] == 'mol':  # moles
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
             result = value * Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0]) / prefix_value
+        else:
+            raise ValueError("Invalid unit.")
         return round(result, config.internal_precision)
 
     @staticmethod
@@ -365,23 +367,23 @@ class Unit:
                 unit = 'g'
                 # convert moles to grams
                 # molecular weight is in g/mol
-                quantity *= Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0]) * what.mol_weight
+                quantity *= Unit.convert_prefix_to_multiplier(config.moles_storage_unit[:-3]) * what.mol_weight
             elif what.is_liquid():
                 unit = 'L'
                 # convert moles to liters
                 # molecular weight is in g/mol
                 # density is in g/mL
-                quantity *= (Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0])
+                quantity *= (Unit.convert_prefix_to_multiplier(config.moles_storage_unit[:-3])
                              * what.mol_weight / what.density / 1e3)
             else:
                 # This shouldn't happen.
-                raise TypeError("Invalid type for substance.")
+                raise TypeError("Invalid type for what.")
         elif isinstance(what, Container):
             # Assume the container contains a liquid
             unit = 'L'
-            quantity *= Unit.convert_prefix_to_multiplier(config.volume_storage_unit[0])
+            quantity *= Unit.convert_prefix_to_multiplier(config.volume_storage_unit[:-1])
         else:
-            raise TypeError("Invalid type for substance.")
+            raise TypeError("Invalid type for what.")
 
         multiplier = 1
         while quantity < 1 and multiplier > 1e-6:
@@ -488,7 +490,7 @@ class Substance:
     Attributes:
         name: Name of substance.
         mol_weight: Molecular weight (g/mol).
-        U_per_mass: Activity units per mass if `Substance` is an enzyme (U/g).
+        specific_activity: Activity units per mass if `Substance` is an enzyme (U/g).
         density: Density if `Substance` is a liquid (g/mL).
         concentration: Calculated concentration if `Substance` is a liquid (mol/mL).
         molecule: `cctk.Molecule` if provided.
@@ -513,7 +515,6 @@ class Substance:
         Note: Support for isotopologues will be added in the future.
 
         """
-        self.specific_activity = None  # U/g
         if not isinstance(name, str):
             raise TypeError("Name must be a str.")
         if not isinstance(mol_type, int):
@@ -523,6 +524,7 @@ class Substance:
 
         self.name = name
         self._type = mol_type
+        self.specific_activity = None  # U/g
         self.mol_weight = self.concentration = None
         self.density = float('inf')
         self.molecule = molecule
@@ -595,7 +597,6 @@ class Substance:
         substance.mol_weight = mol_weight  # g / mol
         substance.density = density  # g / mL
         substance.concentration = density / mol_weight  # mol / mL
-        substance.U_per_mass = None
         return substance
 
     @staticmethod
@@ -605,7 +606,7 @@ class Substance:
 
         Arguments:
             name: Name of enzyme.
-            specific_activity: A ratio of activity units to mass ('10 U/g', '10 U/mg', '.1 mg/U')
+            specific_activity: A ratio of activity units to mass ('10 U/g', '10 U/mg', '0.1 mg/U')
             molecule: (optional) A cctk.Molecule
 
         Returns: New substance.
@@ -621,6 +622,9 @@ class Substance:
             value, numerator, denominator = Unit.parse_concentration(specific_activity)
         except Exception:
             raise ValueError("Specific activity must be in U/g or g/U.")
+
+        if value < 0:
+            raise ValueError("Specific activity must be positive.")
 
         substance = Substance(name, Substance.ENZYME, molecule)
         substance.density = config.default_enzyme_density
@@ -809,21 +813,25 @@ class Container:
             transfer, unit = Unit.get_human_readable_unit(transfer, 'L')
         else:
             # total mass in source container times ratio
-            mass = sum(
-                Unit.convert(substance, f"{amount} {config.moles_storage_unit if not substance.is_enzyme() else 'U'}",
-                             "mg") for substance, amount in source_container.contents.items())
+            mass = sum(Unit.convert(substance,
+                                    f"{amount} {config.moles_storage_unit if not substance.is_enzyme() else 'U'}",
+                                    "mg") for substance, amount in source_container.contents.items())
             transfer, unit = Unit.get_human_readable_unit(mass * ratio, 'mg')
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         to.instructions += f"\nTransfer {round(transfer, precision)} {unit} of {source_container.name} to {to.name}"
-        to.volume = round(
-            sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit) for
-                substance, amount in to.contents.items()), config.internal_precision)
+        to.volume = 0
+        for substance, amount in to.contents.items():
+            unit = 'U' if substance.is_enzyme() else config.moles_storage_unit
+            to.volume += Unit.convert(substance, f"{amount} {unit}", config.volume_storage_unit)
+        to.volume = round(to.volume, config.internal_precision)
         if to.volume > to.max_volume:
             raise ValueError(f"Exceeded maximum volume in {to.name}.")
-        source_container.volume = sum(
-            Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
-            for substance, amount in source_container.contents.items())
+        source_container.volume = 0
+        for substance, amount in source_container.contents.items():
+            unit = 'U' if substance.is_enzyme() else config.moles_storage_unit
+            source_container.volume += Unit.convert(substance, f"{amount} {unit}", config.volume_storage_unit)
         source_container.volume = round(source_container.volume, config.internal_precision)
+
         return source_container, to
 
     def _transfer_slice(self, source_slice: Plate | PlateSlicer, quantity: str) -> Tuple[Plate, Container]:
@@ -949,6 +957,7 @@ class Container:
             numerator = Unit.convert_from(solute, self.contents.get(solute, 0), 'U', units[0])
         else:
             numerator = Unit.convert_from(solute, self.contents.get(solute, 0), config.moles_storage_unit, units[0])
+
         if units[1].endswith('L'):
             denominator = self.get_volume(units[1])
         else:
@@ -1065,7 +1074,8 @@ class Container:
         if x < 0 or y < 0:
             raise ValueError("Solution is impossible to create.")
 
-        result = Container(name, initial_contents=[(solute, f"{x} {'U' if solute.is_enzyme() else 'mol'}"), (solvent, f"{y} mL")])
+        result = Container(name, initial_contents=[(solute, f"{x} {'U' if solute.is_enzyme() else 'mol'}"),
+                                                   (solvent, f"{y} mL")])
         contents = []
         for substance, value in result.contents.items():
             value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
@@ -1803,8 +1813,8 @@ class Recipe:
 
         new_container = Container(name, max_volume=f"{source.max_volume} {config.volume_storage_unit}")
         self.uses(new_container)
-        self.steps.append(
-            RecipeStep(self, 'solution_from', source, new_container, solute, concentration, solvent, quantity))
+        self.steps.append(RecipeStep(self, 'solution_from', source, new_container,
+                                     solute, concentration, solvent, quantity))
 
         return new_container
 
@@ -1866,7 +1876,7 @@ class Recipe:
 
         self.steps.append(RecipeStep(self, 'dilute', None, destination, solute, concentration, solvent, new_name))
 
-    def fill_to(self, destination: Container | PlateSlicer | Plate, solvent: Substance, quantity: str) -> None:
+    def fill_to(self, destination: Container | Plate | PlateSlicer, solvent: Substance, quantity: str) -> None:
         """
         Adds a step to fill `destination` container/plate/slice with `solvent` up to `quantity`.
 
@@ -2111,7 +2121,6 @@ class Recipe:
                         if start_well == end_well:
                             result.append(f"{plate.row_names[start_well[0]]}{plate.column_names[start_well[1]]}")
                         return result
-
                     amounts = dict()
                     plate = step.to[0]
                     for row in range(plate.n_rows):
