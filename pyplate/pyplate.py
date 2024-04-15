@@ -958,6 +958,9 @@ class Container:
         else:
             numerator = Unit.convert_from(solute, self.contents.get(solute, 0), config.moles_storage_unit, units[0])
 
+        if numerator == 0:
+            return 0
+
         if units[1].endswith('L'):
             denominator = self.get_volume(units[1])
         else:
@@ -2550,7 +2553,14 @@ class PlateSlicer(Slicer):
         if not isinstance(cmap, str):
             raise TypeError("Colormap must be a str.")
 
+        if ('/' in unit or unit[-1] == 'm' or unit[-1] == 'M') and substance == 'all':
+            raise ValueError("Cannot display concentrations with respect to 'all' substances.")
+
         def helper(elem):
+            if '/' in unit or unit[-1] == 'm' or unit[-1] == 'M':
+                """ Returns concentration of substance in elem. """
+                return elem.get_concentration(substance, unit)
+            # else
             """ Returns amount of substance in elem. """
             if substance == 'all':
                 amount = 0
