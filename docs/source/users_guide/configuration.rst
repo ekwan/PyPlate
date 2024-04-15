@@ -36,7 +36,7 @@ Because floating point numbers are not exact, some rounding of numbers during in
     # How many digits of precision to maintain in internal calculations
     internal_precision: 10
 
-Default Units
+Storage Units
 """""""""""""
 
 Amounts of substances and volumes can be stored with different units. The default units for these can be set using the `moles_storage_units` and `volume_storage_units` options.
@@ -50,10 +50,11 @@ Amounts of substances and volumes can be stored with different units. The defaul
     # umol means we will store moles as micromoles
     moles_storage_unit: umol
 
-Default Units
+Display Units
 """""""""""""
 
 In many of PyPlate's functions, the user can specify which units to return data in.
+
 - `volume_display_unit` specifies the default unit for displaying volumes.
 - `moles_display_unit` specifies the default unit for displaying moles.
 - `concentration_display_unit` specifies the default unit for displaying concentrations.
@@ -78,6 +79,20 @@ When specifying concentration in '%w/v', a default for the units for weight and 
 
     # units for %w/v
     default_weight_volume_units: g/mL
+
+Default Densities
+"""""""""""""""""
+
+Solids and enzymes have the same default densities for all objects.
+
+- The default density for solids is set using the `default_solid_density` option.
+- The default density for enzymes is set using the `default_enzyme_density` option.
+
+.. code-block:: yaml
+
+    # density for solids/enzymes in g/mL or U/mL. Can be set to float('inf') to give solids and enzymes zero volume.
+    default_solid_density: 1
+    default_enzyme_density: 1
 
 Colormaps
 """""""""

@@ -6,7 +6,7 @@ Visualizations
 Various functions are provided to visualize the amount of substances in a plate, a recipe, or a recipe step.
 
 Plates
-""""""
+------
 
 `get_moles` returns a numpy array of the amount of each substance in a plate.
 
@@ -43,7 +43,7 @@ array([[10.6, 10.6, 10.6, 10.6, 10.6, 10.6, 10.6, 10.6, 10.6, 10.6, 10.6, 10.6],
        [10. , 10. , 10. , 10. , 10. , 10. , 10. , 10. , 10. , 10. , 10. , 10. ]])
 
 Dataframes
-----------
+^^^^^^^^^^
 
 `dataframe` returns a styled pandas dataframe of the amount of each or all substance in a plate.
 - By default the data is returned for all substances. A specific substance can be specified.
@@ -66,6 +66,10 @@ Dataframes
 >>> plate.dataframe(substance=salt, unit='mg')
 
 .. image:: /images/plate_dataframe_salt_mg.png
+
+>>> plate.dataframe(substance=salt, unit='M')
+
+.. image:: /images/plate_dataframe_salt_M.png
 
 PyPlate
 - Visualization of plate

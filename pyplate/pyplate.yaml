@@ -22,7 +22,7 @@ moles_display_unit: umol
 # Default concentration unit for get_concentration()
 concentration_display_unit: M
 
-# density for solids/biologics in g/mL or U/mL. Can be set to float('inf') to give solids and biologics zero volume.
+# density for solids/enzymes in g/mL or U/mL. Can be set to float('inf') to give solids and enzymes zero volume.
 default_solid_density: 1
 default_enzyme_density: 1
 

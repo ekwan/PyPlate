@@ -1028,7 +1028,7 @@ class Container:
             raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
 
         if not name:
-            name = f"solution of {solute.name} in {solvent.name}"
+            name = f"Solution of {solute.name} in {solvent.name}"
 
         concentration = kwargs.get('concentration', None)
         quantity = kwargs.get('quantity', None)

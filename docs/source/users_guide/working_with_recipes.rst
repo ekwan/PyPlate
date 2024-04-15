@@ -5,13 +5,11 @@ Working with Recipes
 If you have a complicated series of operations to perform, you can combine them into a ``Recipe``.
 
 - ``Recipes``\ s allow you to "compile" steps to ensure that the proposed experimental steps are physically reasonable.
-- Containers and plates must be declared in the recipe before they can be used.
-
-- The recipe can be "baked" to execute the steps and return the resulting objects.
-- The final state of the ``Plate`` and ``Container`` objects in the recipe are returned from bake as a dictionary of object names to objects.
-- After bake, the recipe contains a list of steps.
-
-  - Each step has instructions that can be printed.
+- ``Container``\ s and ``Plate``\ s must be declared in the recipe before they can be used. (``Substance``\ s cannot be declared.)
+- The recipe must be "baked" to execute the steps and retrieve the resulting objects.
+- The final state of the ``Plate`` and ``Container`` objects in the recipe are returned from ``bake()`` as a dictionary of object names to objects.
+- After baking, the recipe will contain a list of steps (``recipe.steps``).
+- Each step has instructions that can be printed and visualizations that can be displayed.
 
 The following examples use these :ref:`objects <used_objects>`.
 
@@ -26,12 +24,18 @@ Let's create a 96-well ``Plate`` and register it with the ``Recipe``::
     recipe.uses(plate)
 
 
-In addition to creating containers using the ``Container`` class, we can also do so within a ``Recipe``.
-Let's transfer '10 uL' of water into each of the wells of ``plate``::
+In addition to creating containers using the ``Container`` class, we can also do so within a ``Recipe``::
 
     water_stock = recipe.create_container(name='water stock', initial_contents=[(water, '100 mL')])
+
+The new container is returned so that it may be used in later recipe steps. The container is automatically declared to the recipe.
+
+Let's transfer '10 uL' of water into each of the wells of ``plate``::
+
+
     # Dispense 10 uL of water into each well of the plate.
     recipe.transfer(source=water_stock, destination=plate, quantity='10 uL')
+
 
 In order to actually perform the operations above, we need to "bake" the recipe::
 
@@ -67,8 +71,9 @@ Transfer 10 uL from water_stock to plate[:].
 Using Stages
 """"""""""""
 
-Stages can be added to the ``Recipe`` to mark sections that are of interest to the user.
-These stages can be used in .. functions here
+Stages are useful for organizing the steps of a recipe into logical sections. |Br|
+The amount of material used in each stage can be queried, see below.
+
 
 Let's see a simple example where this is helpful::
 
@@ -95,6 +100,8 @@ We can query the amount of water "used" during the dispensing stage of the ``Rec
 >>> print(recipe.get_substance_used(substance=water, timeframe='dispensing', unit='mL'))
 0.96
 
+For more details, see :ref:`_usage_tracking`.
+
 Transfer Between Plates
 """""""""""""""""""""""
 
@@ -110,6 +117,13 @@ Let's create two plates and transfer the contents of one to the other::
     water_stock = recipe.create_container(name='water stock', initial_contents=[(water, '100 mL')])
     recipe.transfer(source=water_stock, destination=plate1, quantity='10 uL')
     recipe.transfer(source=plate1, destination=plate2, quantity='3 uL')
+
+Transfers between plates must involve regions of the same shape. (Use slices if necessary :ref:`_locations`)
+This transfer works because both plates are 8x12.
+
+.. sizes ???
+
+::
 
     results = recipe.bake()
     plate1 = results['plate1']
@@ -129,6 +143,7 @@ Let's create two plates and transfer the contents of one to the other::
 Using Source Plates
 """""""""""""""""""
 
+Suppose you have a cross-coupling reaction of the
 .. Making a plate and using it to dispense to multiple other plates
 
 

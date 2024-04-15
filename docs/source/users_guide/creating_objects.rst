@@ -13,26 +13,31 @@ Creating Substances
 
 - A ``Substance`` is a solid, liquid, or enzyme.
 - Solids
-  - All solids have the same default density as defined in pyplate.yaml as ``default_solid_density``. (1 g/mL in default config)
+
+  - All solids have the same default density as defined in pyplate.yaml as ``default_solid_density``. (1 g/mL is the default)
   - Different solids have different molecular weights.
 - Liquids
+
   - Different liquids have different molecular weights and densities.
 - Enzymes
+
   - Enzymes are like solids, but are specified in *units of activity* ('U') instead of mass.
-  - The density of enzymes is defined in pyplate.yaml as ``default_enzyme_density``. (1 U/mL in default config)
-- All substances contribute volume to the Containers they are in.
+  - The density of enzymes is defined in pyplate.yaml as ``default_enzyme_density``. (1 U/mL is the default)
+  - Enzymes have a specific activity which is the ratio of activity to mass.
+  - `specific_activity` can be defined in terms of 'U/g' or 'g/U'. Standard prefixes can be prepended for the mass. (e.g. 'U/mg')
 
-Create a solid::
+- All substances contribute volume to the ``Container``\ s they are in.
 
+.. code-block:: python
+
+    # Create a solid
     salt = Substance.Solid(name='NaCl', mol_weight=58.44)
 
-Create a liquid::
-
+    # Create a liquid
     water = Substance.Liquid(name='H2O', mol_weight=18.01528, density=1.0)
 
-Create an enzyme::
-
-    amylase = Substance.Enzyme(name='Amylase', specific_activity='100 U/mg')
+    # Create an enzyme
+    lipase = Substance.Enzyme(name='Lipase', specific_activity='15 U/mg')
 
 
 Creating Containers
@@ -67,7 +72,7 @@ Creating Plates
 * If any operation would cause the volume of a well to exceed the maximum volume, a ``ValueError`` is raised.
 * The default plate type is a 96-well plate.
 * Plates can be created with any number of rows and columns.
-* Different row and column labels can be specified. (Each label must be unique.)
+* Arbitrary row and column labels can be specified. (Each label must be unique.)
 * Plates can be created with a make label to specify the manufacturer.
 
 Create a 96-well plate::

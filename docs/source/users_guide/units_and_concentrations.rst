@@ -8,18 +8,12 @@ Units
 
 - There are three types of units in pyplate:
 
-  - Mass
-
-    - grams (g, mg, ug)
-
-  - Volume
-
-    - liters (L, mL, uL)
-
+  - Mass (grams, `g`)
+  - Volume (liters, `L`)
   - Numbers
 
-    - moles (mol, mmol, umol)
-    - Enzyme Activity units (U)
+    - moles (`mol`)
+    - Enzyme Activity units (`U`)
 
 
 PyPlate supports these common prefixes:
@@ -35,7 +29,7 @@ PyPlate supports these common prefixes:
     - 'M' (mega)
 
 
-- Quantities are specified as strings with a number and a unit abbreviation. (‘1 mmol’, ‘10.2 g’, ‘10 uL’, …)
+Quantities are specified as strings with a number and a unit abbreviation. (‘1 mmol’, ‘10.2 g’, ‘10 uL’, …)
 
 Concentrations
 """"""""""""""
