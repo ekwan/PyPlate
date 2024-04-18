@@ -4,11 +4,11 @@
 [![Documentation Status](https://readthedocs.org/projects/pyplate-hte/badge/?version=latest)](https://pyplate-hte.readthedocs.io/en/latest/?badge=latest)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/pyplate-hte)](https://pypi.org/project/pyplate-hte)
 
-An open-source Python tool for high-throughput chemistry.
+An open-source Python-based ontology and tool for designing, implementing, and reproducing high-throughput experiments (HTE).
 
 ### Introduction
 
-PyPlate provides tools for the design and implementation of high-throughput chemistry experiments (in particular, reaction screening).  It allows the user to define a space of experimental parameters to be explored, select points in that space for experimentation, and design liquid/solid handling steps to implement those experiments in 96 well plates.
+PyPlate provides tools for the design and implementation of high-throughput chemistry and biology experiments (e.g., reaction screening, cell assays, chromatography screening).  It allows the user to define a space of experimental parameters to be explored, select points in that space for experimentation, and design liquid/solid handling steps to implement those experiments in 96 well plates.
 
 ### Installation
 
@@ -18,18 +18,11 @@ PyPlate requires Python 3.10 or later.
 
 To view plate visualizations, you will need an interactive Python shell like Jupyter.
 
-### Philosophy
-
-All experiments are divided into a *design* phase and an *implementation* phase.
-
-**Design Phase**: TBD
-
-**Implementation Phase**: PyPlate mimics the physical process of dispensing solids or liquids into plates.  `Substance`s are placed into `Container`s and dispensed into `Plate`s.  The instructions for creating a set of plates are grouped into `Recipe` objects.
-
-- add something about how to check that the implementation and design are consistent
-- All objects in PyPlate are considered immutable.
+**Note:** A similarly named package `pyplate` also exists on PyPi.  Be sure to install `pyplate-hte` and **not** `pyplate`.
 
 ## Quick Start
+
+Here is a simple example that illustrates some of the core features of `PyPlate`:
 
 ```python
 
@@ -55,10 +48,26 @@ recipe.visualize(what=plate, mode='final', unit='uL', timeframe=0)
 
 ![img.png](images/simple_visualization.png)
 
-Documentation is available at [ReadTheDocs](https://pyplate-hte.readthedocs.io/en/latest/).
+## Documentation
+
+Online documentation is available at [ReadTheDocs](https://pyplate-hte.readthedocs.io/en/latest/).  To build the documentation locally, please follow these steps:
+
+``make -C docs html``
+
+The resulting HTML files will be in `docs/build/html`.
+
+In order to build the documentation successfully, you must install the packages listed in docs/requirements.txt.  You can do this by running:
+
+``pip install -r docs/requirements.txt``
 
 ## License
 
-Licensed under the Apache License, Version 2.0 (the "License")
+Licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0) (the "License").
 
-You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0
+## Contributors
+
+**PyPlate** was designed and written by James Marvin, Eugene Kwan, Corin Wagen, Aryamaan Dhomne, and Pravin Mahendran.
+
+## Getting Help
+
+Please open a GitHub issue!  We respond regularly.  Please also feel free to contribute!

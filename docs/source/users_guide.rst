@@ -12,6 +12,9 @@ Exam demonstrating common use cases of *PyPlate*.
    users_guide/units_and_concentrations
    users_guide/creating_objects
    users_guide/working_with_containers
+   users_guide/locations
    users_guide/working_with_recipes
+   users_guide/visualizations
    users_guide/usage_tracking
+   users_guide/configuration
 

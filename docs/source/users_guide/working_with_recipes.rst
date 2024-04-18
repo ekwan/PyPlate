@@ -4,54 +4,152 @@ Working with Recipes
 ====================
 If you have a complicated series of operations to perform, you can combine them into a ``Recipe``.
 
-- ``Recipes``\ s allow you to "compile" steps to ensure that experimental steps are self-consistent.
-- Containers and plates must be declared in the recipe before they can be used.
-- The recipe can be "baked" to execute the steps and return the resulting objects.
-- The final state of the ``Plate`` and ``Container`` objects in the recipe are returned from bake as a dictionary of object names to objects.
-- After bake, the recipe contains a list of steps.
-    - Each step has instructions that can be printed.
+- ``Recipes``\ s allow you to "compile" steps to ensure that the proposed experimental steps are physically reasonable.
+- ``Container``\ s and ``Plate``\ s must be declared in the recipe before they can be used. (``Substance``\ s cannot be declared.)
+- The recipe must be "baked" to execute the steps and retrieve the resulting objects.
+- The final state of the ``Plate`` and ``Container`` objects in the recipe are returned from ``bake()`` as a dictionary of object names to objects.
+- After baking, the recipe will contain a list of steps (``recipe.steps``).
+- Each step has instructions that can be printed and visualizations that can be displayed.
 
 The following examples use these :ref:`objects <used_objects>`.
 
 Creating a simple Recipe
 """"""""""""""""""""""""
 
-::
+Let's create a 96-well ``Plate`` and register it with the ``Recipe``::
 
     plate = Plate('plate', max_volume_per_well='60 uL')
 
     recipe = Recipe()
     recipe.uses(plate)
 
+
+In addition to creating containers using the ``Container`` class, we can also do so within a ``Recipe``::
+
     water_stock = recipe.create_container(name='water stock', initial_contents=[(water, '100 mL')])
+
+The new container is returned so that it may be used in later recipe steps. The container is automatically declared to the recipe.
+
+Let's transfer '10 uL' of water into each of the wells of ``plate``::
+
+
     # Dispense 10 uL of water into each well of the plate.
     recipe.transfer(source=water_stock, destination=plate, quantity='10 uL')
 
-    # Bake the recipe. The results is a dictionary of object names to the
-    # resulting objects after the recipe has been baked.
+
+In order to actually perform the operations above, we need to "bake" the recipe::
+
     results = recipe.bake()
 
     # results == {'plate': <Plate>, 'water stock': <Container>}
 
+The results contain the final state of ``Container``\ s and ``Plate``\ s in the recipe.
+These objects are immutable, so the original objects are not modified.
+
+Let's retrieve the final state of our objects::
+
     water_stock = results['water stock']
     plate = results['plate']
 
-    # 960 uL of water has been dispensed from the water_stock container.
-    # The water_stock container now contains 99.04 mL of water.
-    print(water_stock.get_volume())
-    # 99.04
 
-    # Each step of the recipe has instructions that can be printed.
-    for step in recipe.steps:
-        print(step.instructions)
+Let's look at the contents after the recipe:
 
-    # "Create container water_stock with initial contents: [(H2O (LIQUID), '100 mL')]."
-    # "Transfer 10 uL from water_stock to plate[:]."
+>>> print(water_stock.get_volume(unit='mL'))
+99.04
+
+960 uL of water has been dispensed into each well of the plate from the water_stock container.
+99.04 mL of water remains in the water_stock container.
+
+Let's look at the instructions for each step of the recipe:
+
+>>> for step in recipe.steps:
+>>>     print(step.instructions)
+Create container water_stock with initial contents: [(H2O (LIQUID), '100 mL')].
+Transfer 10 uL from water_stock to plate[:].
+
+
+Using Stages
+""""""""""""
+
+Stages are useful for organizing the steps of a recipe into logical sections. |Br|
+The amount of material used in each stage can be queried, see below.
+
+
+Let's see a simple example where this is helpful::
+
+    plate = Plate(name='plate', max_volume_per_well='60 uL')
+    recipe = Recipe()
+    recipe.uses(plate)
+
+    recipe.start_stage('stock solution')
+    water_stock = recipe.create_container(name='water stock', initial_contents=[(water, '100 mL')])
+    recipe.end_stage('stock solution')
+
+    recipe.start_stage('dispensing')
+    recipe.transfer(source=water_stock, destination=plate, quantity='10 uL')
+
+- Stages cannot overlap.
+- The last stage is automatically closed when the recipe is baked.
+
+Let's bake the recipe::
+
+    results = recipe.bake()
+
+We can query the amount of water "used" during the dispensing stage of the ``Recipe``:
+
+>>> print(recipe.get_substance_used(substance=water, timeframe='dispensing', unit='mL'))
+0.96
+
+For more details, see :ref:`_usage_tracking`.
+
+Transfer Between Plates
+"""""""""""""""""""""""
+
+Let's create two plates and transfer the contents of one to the other::
+
+    plate1 = Plate('plate1', max_volume_per_well='60 uL')
+    plate2 = Plate('plate2', max_volume_per_well='60 uL')
+
+    recipe = Recipe()
+    recipe.uses(plate1)
+    recipe.uses(plate2)
+
+    water_stock = recipe.create_container(name='water stock', initial_contents=[(water, '100 mL')])
+    recipe.transfer(source=water_stock, destination=plate1, quantity='10 uL')
+    recipe.transfer(source=plate1, destination=plate2, quantity='3 uL')
+
+Transfers between plates must involve regions of the same shape. (Use slices if necessary :ref:`_locations`)
+This transfer works because both plates are 8x12.
+
+.. sizes ???
+
+::
+
+    results = recipe.bake()
+    plate1 = results['plate1']
+    plate2 = results['plate2']
+
+
+`plate1` will now contain 7 uL of water in each of its wells, and `plate2` will contain 3 uL of water in each of its wells.
+
+>>> plate1.dataframe(unit='uL')
+
+.. figure:: /images/plate1.png
+
+>>> plate2.dataframe(unit='uL')
+
+.. figure:: /images/plate2.png
+
+Using Source Plates
+"""""""""""""""""""
+
+Suppose you have a cross-coupling reaction of the
+.. Making a plate and using it to dispense to multiple other plates
+
+
 
 Creating a full permutation in a recipe
 """""""""""""""""""""""""""""""""""""""
-
-
 
 - Each row of the plate will contain a different Ni and P ligand combination.
 - Each column of the plate will contain a different solvent and salt combination.

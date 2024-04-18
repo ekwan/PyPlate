@@ -18,6 +18,7 @@ def test_make_solid():
         Substance.solid('', 1)
     with pytest.raises(TypeError, match="Molecular weight must be a float"):
         Substance.solid('water', '1')
+
     # Arguments are sane
     with pytest.raises(ValueError, match="Molecular weight must be positive"):
         Substance.solid('water', -1)
@@ -83,9 +84,14 @@ def test_make_enzyme():
     """
     # Argument types checked
     with pytest.raises(TypeError, match="Name must be a str"):
-        Substance.enzyme(1)
+        Substance.enzyme(1, 0)
     with pytest.raises(ValueError, match="Name must not be empty"):
-        Substance.enzyme('')
+        Substance.enzyme('', '1 U/g')
+    with pytest.raises(TypeError, match="Specific activity must be a str."):
+        Substance.enzyme('lipase', 1)
+    for activity in ['1 U', '1 g', '1 U/mL', '1 mL/U']:
+        with pytest.raises(ValueError, match="Specific activity must be in U/g or g/U."):
+            Substance.enzyme('lipase', activity)
 
 
 def test_enzyme(lipase):
@@ -95,6 +101,7 @@ def test_enzyme(lipase):
 
     """
     assert lipase.name == 'lipase'
+    assert lipase.specific_activity == 10000  # 10 U/mg = 10,000 U/g
 
 
 def test_is_solid(salt, water, lipase):

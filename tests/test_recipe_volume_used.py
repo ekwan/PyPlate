@@ -35,7 +35,7 @@ def test_container_flows(sodium_sulfate, water):
     recipe.bake()
 
     assert recipe.get_container_flows(container=stock_solution, 
-                                      timeframe='all', unit='mL') == {"in": 50, "out": 10}
+                                      timeframe='all', unit='g') == {"in": 50, "out": 10}
     assert recipe.get_container_flows(container=dest_container, timeframe='stage 2', unit='mL') == {"out": 9.278, "in": 0}
 
 
