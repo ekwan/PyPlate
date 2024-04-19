@@ -18,6 +18,8 @@ Here are some ways to refer to a specific well:
 -  **String Method**: ``“A:1”``
 -  **Tuple Method**: ``(‘A’, 1)``
 
+.. note:: Colons (':') within strings are used to separate row and column labels. This does not denote slicing.
+
 Here are some alternate ways to refer to well B3:
 
 .. hlist::
@@ -29,7 +31,7 @@ Here are some alternate ways to refer to well B3:
 
 You can refer to multiple wells as a list::
 
-    plate[[('A', 1), ('B', 2), ('C', 3), 'D:4']] or plate[['A1, 'B2', 'C3', 'D4']]
+    plate[[('A', 1), ('B', 2), ('C', 3), 'D:4']] or plate[['A:1, 'B:2', 'C:3', 'D:4']]
 
 .. image:: /images/wells_A1_B2_C3_D4.png
 
@@ -63,10 +65,10 @@ You can get a rectangular slice of the plate by using both row and column slices
 
    .. image:: /images/wells_A1_C3.png
 
-- To make a rectangular slice of ``B2`` to ``D3``, you can use::
+- To make a rectangular slice of ``B:2`` to ``D:3``, you can use::
 
     plate['B':'D', 2:3]
 
-  This will be three rows of two columns, specifically referring to ``B2``, ``B3``, ``C2``, ``C3``, ``D2``, and ``D3``.
+  This will be three rows of two columns, specifically referring to ``B:2``, ``B:3``, ``C:2``, ``C:3``, ``D:2``, and ``D:3``.
 
   .. image:: /images/wells_B2_D3.png
