@@ -30,7 +30,7 @@ In addition to creating containers using the ``Container`` class, we can also do
 
 The new container is returned so that it may be used in later recipe steps. The container is automatically declared to the recipe.
 
-Let's transfer '10 uL' of water into each of the wells of ``plate``::
+Let's transfer 10 uL of water into each of the wells of ``plate``::
 
 
     # Dispense 10 uL of water into each well of the plate.

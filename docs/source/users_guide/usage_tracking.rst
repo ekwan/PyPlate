@@ -2,6 +2,7 @@
 
 .. role:: style2
     :class: .rst-content h1
+
 Usage Tracking
 ==============
 
@@ -10,7 +11,7 @@ Usage Tracking
 -  Three usage tracking modes are offered:
 
    - :ref:`substance-tracking`: reports how much of a particular Substance has entered specified destination containers
-   - :ref:`amount-remaining:`: reports the the total mass/volume/quantity in a Container at the end or start of a Stage
+   - :ref:`amount-remaining`: reports the the total mass/volume/quantity in a Container at the end or start of a Stage
    - :ref:`container-flow-tracking`: reports the inflows and outflows of a particular Container, which is useful in the case where materials are added to the container during the recipe stage
 
 - If any tracking methods are used with Plates, an array of results for each well is returned
