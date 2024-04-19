@@ -3,20 +3,13 @@
 Substance Tracking
 ------------------------
 
--  In this tracking mode, we must define a set of Containers and/or
-   Plates as the destinations
--  A Substance is considered “used” once it has been moved to the
-   destination or removed with ``recipe.remove`` e.g. a solvent being
-   evaporated
--  When calling ``recipe.remove``, the substance is considered to be
+-  Substance tracking reports how much of a particular Substance has been used
+-  Usage is defined as the net increase of the amount of a given
+   Substance in a destination set of Containers or Plates during a specified timeframe
+-  When calling ``recipe.remove``, the Substance is considered to be
    moved to a special trash container, which is always considered a
    destination
--  If no destinations are explicitly specified, all Plates are
-   considered to be destinations
--  Usage is defined as the net increase of the amount of a given
-   substance in the destinations during a specified timeframe
--  A timeframe begins/ends at the start/end of the given recipe stage or
-   the start/end of the entire recipe
+-  If no destinations set is explicitly specified, the set of all Plates is considered to be the destination
 -  If the amount of the substance in the destinations undergoes a net
    decrease during the timeframe, an error is thrown
 
@@ -49,11 +42,10 @@ Example calls
 
    How much sodium sulfate was used during the whole recipe if
    ``container`` is our only destination?
-..
 
-.. code:: python
 
-  recipe.substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[container])
+>>> recipe.substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[container])
+5.0
 
 -  We compare the amount of ``sodium_sulfate`` in ``container`` at the beginning and end of the recipe
 -  There are ``0 mmol`` at the beginning and ``5 mmol`` at the end
@@ -63,11 +55,10 @@ Example calls
     How much water was used during the whole recipe if ``container`` is
     our only destination?
 
-..
 
-.. code:: python
 
-  recipe.substance_used(substance=water, timeframe='all', unit='mmol', destinations=[container])
+>>> recipe.substance_used(substance=water, timeframe='all', unit='mmol', destinations=[container])
+515.0
 
 -  We compare the amount of water in ``container`` at the beginning and end of the recipe
 -  There are ``0 mmol`` of water in ``container`` at the beginning of the recipe and ``0 mmol`` of water in ``container`` at the end of the recipe
@@ -79,9 +70,10 @@ Example calls
     How much sodium sulfate was used during ``Stage 1``\ if
     ``stock_solution`` is our only destination?
 
-.. code:: python
+>>> recipe.substance_used(substance=sodium_sulfate, timeframe='Stage 1', unit='mmol', destinations=[stock_container])
+ValueError: Substance tracking assumes a net increase in the amount of the substance being tracked in the destination set.
+The amount of sodium_sulfate in the destinations decreased by 5 mmol.
 
-  recipe.substance_used(substance=sodium_sulfate, timeframe='Stage 1', unit='mmol', destinations=[stock_container])
 
 -  We compare the amount of sodium sulfate in ``stock_solution`` at the beginning and end of ``Stage 1``
 -  During this during stage 1 we transfer ``10 ml`` from ``stock_solution`` to ``container``
@@ -103,8 +95,6 @@ Start of Recipe:
     stock_solution: {water: "0 mmol", sodium_sulfate: "0 mmol"}
     trash: {water: "0 mmol", sodium_sulfate: "0 mmol"}``
 
-::
-
 Stage 1 (start):
 ^^^^^^^^^^^^^^^^
 ::
@@ -112,7 +102,6 @@ Stage 1 (start):
     container: {water: "2578 mmol", sodium_sulfate: "25 mmol"}
     stock_solution: {water: "0 mmol", sodium_sulfate: "0 mmol"}
     trash: {water: "0 mmol", sodium_sulfate: "0 mmol"}``
-::
 
 Stage 1 (end):
 ^^^^^^^^^^^^^^^^
@@ -121,7 +110,6 @@ Stage 1 (end):
     stock_solution: {water: "2063 mmol", sodium_sulfate: "20 mmol"}
     container: {water: "515 mmol", sodium_sulfate: "5 mmol"}
     trash: {water: "0 mmol", sodium_sulfate: "0 mmol"}``
-::
 
 Stage 2 (start):
 ^^^^^^^^^^^^^^^^
@@ -130,7 +118,6 @@ Stage 2 (start):
     stock_solution: {water: "2063 mmol", sodium_sulfate: "20 mmol"}
     container: {water: "515 mmol", sodium_sulfate: "5 mmol"}
     trash: {water: "0 mmol", sodium_sulfate: "0 mmol"}
-::
 
 Stage 2 (end):
 ^^^^^^^^^^^^^^
@@ -139,7 +126,6 @@ Stage 2 (end):
     stock_solution: {water: "2063 mmol", sodium_sulfate: "20 mmol"}
     container: {water: "0 mmol", sodium_sulfate: "5 mmol"}
     trash: {water: "515 mmol", sodium_sulfate: "0 mmol"}
-::
 
 .. toctree::
     :hidden:

@@ -889,7 +889,7 @@ class Container:
         return any(substance.is_liquid() for substance in self.contents)
 
     @cache
-    def substances(self):
+    def get_substances(self):
         """
 
         Returns: A set of substances present in the container.
@@ -1458,13 +1458,13 @@ class Plate:
         # Arguments are type checked in PlateSlicer.volumes
         return self[:].get_volumes(substance=substance, unit=unit)
 
-    def substances(self) -> set[Substance]:
+    def get_substances(self) -> set[Substance]:
         """
 
         Returns: A set of substances present in the slice.
 
         """
-        return self[:].substances()
+        return self[:].get_substances()
 
     def get_moles(self, substance: (Substance | Iterable[Substance]), unit: str = None) -> numpy.ndarray:
         """
@@ -1569,7 +1569,7 @@ class RecipeStep:
         self.instructions = ""
 
     def visualize(self, what: Plate, mode: str, unit: str, substance: (str | Substance) = 'all', cmap: str = None) \
-            -> pandas.io.formats.style.Styler:
+            -> str | pandas.io.formats.style.Styler:
         """
 
         Provide visualization of what happened during this step.
@@ -1583,6 +1583,8 @@ class RecipeStep:
 
         Returns: A dataframe with the requested information.
         """
+        if what.name not in self.objects_used:
+            return "This plate was not used in this step."
         return self.recipe.visualize(what, mode, unit, self, substance, cmap)
 
 
@@ -1938,7 +1940,7 @@ class Recipe:
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
                 self.results[dest_name] = Container(dest_name, max_volume, initial_contents)
-                step.substances_used = self.results[dest_name].substances()
+                step.substances_used = self.results[dest_name].get_substances()
                 step.to.append(self.results[dest_name])
                 step.instructions = f"Create container {dest_name} with initial contents: {initial_contents}."
             elif operator == 'transfer':
@@ -1963,7 +1965,7 @@ class Recipe:
                     source = self.results[source_name]
                     step.frm[0] = source
 
-                step.substances_used = source.substances()
+                step.substances_used = source.get_substances()
 
                 if isinstance(dest, PlateSlicer):
                     dest = deepcopy(dest)
@@ -2005,7 +2007,7 @@ class Recipe:
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
                 self.results[dest_name] = Container.create_solution(solute, solvent, dest_name, **kwargs)
-                step.substances_used = self.results[dest_name].substances()
+                step.substances_used = self.results[dest_name].get_substances()
                 step.to.append(self.results[dest_name])
             elif operator == 'solution_from':
                 source = step.frm[0]
@@ -2022,7 +2024,7 @@ class Recipe:
                 source = self.results[source_name]
                 self.results[source_name], self.results[dest_name] = \
                     Container.create_solution_from(source, solute, concentration, solvent, quantity, dest.name)
-                step.substances_used = self.results[dest_name].substances()
+                step.substances_used = self.results[dest_name].get_substances()
                 step.frm.append(self.results[source_name])
                 step.to.append(self.results[dest_name])
             elif operator == 'remove':
@@ -2046,7 +2048,7 @@ class Recipe:
                 self.results[dest_name] = dest.remove(what)
                 step.to.append(self.results[dest_name])
                 # substances_used is everything that is in step.to[0] but not in step.to[1]
-                step.substances_used = set.difference(step.to[0].substances(), step.to[1].substances())
+                step.substances_used = set.difference(step.to[0].get_substances(), step.to[1].get_substances())
                 if isinstance(dest, Container):
                     step.trash = {substance: step.to[0].contents[substance] for substance in step.substances_used}
                 else:  # Plate
@@ -2282,7 +2284,7 @@ class Recipe:
 
     def visualize(self, what: Plate, mode: str, unit: str, timeframe: (int | str | RecipeStep) = 'all',
                   substance: (str | Substance) = 'all', cmap: str = None) \
-            -> pandas.io.formats.style.Styler:
+            -> str | pandas.io.formats.style.Styler:
         """
 
         Provide visualization of what happened during the step.
@@ -2327,7 +2329,8 @@ class Recipe:
                 return Unit.convert_from(substance, elem.contents.get(substance, 0), substance_unit, unit)
 
         if isinstance(timeframe, RecipeStep):
-            start_index = end_index = self.steps.index(timeframe)
+            start_index = self.steps.index(timeframe)
+            end_index = start_index + 1
         elif isinstance(timeframe, str):
             start_index = self.stages[timeframe].start
             end_index = self.stages[timeframe].stop
@@ -2356,7 +2359,7 @@ class Recipe:
                 end = i
                 break
         if start is None or end is None:
-            raise ValueError("Plate not used in the desired step(s).")
+            return "This plate was not used in the specified timeframe."
 
         if mode == 'delta':
             before_data = None
@@ -2628,7 +2631,7 @@ class PlateSlicer(Slicer):
 
         return numpy.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)
 
-    def substances(self) -> set[Substance]:
+    def get_substances(self) -> set[Substance]:
         """
 
         Returns: A set of substances present in the plate.

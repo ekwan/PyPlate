@@ -1,16 +1,20 @@
+.. _usage_tracking:
+
 .. role:: style2
     :class: .rst-content h1
+
 Usage Tracking
 ==============
 
--  PyPlate offers the ability to see how much of a given Substance or
-   mixture has been used
--  Usage may be calculated over the entire recipe, or during a specific recipe stage
+-  PyPlate offers the ability to determine how much of a given Substance or
+   mixture has been used during a recipe or in a particular recipe stage
 -  Three usage tracking modes are offered:
 
    - :ref:`substance-tracking`: reports how much of a particular Substance has entered specified destination containers
-   - :ref:`intermediate-stage-tracking`: reports the the mass/volume/quantity of a particular Container at the end or start of a Stage
+   - :ref:`amount-remaining`: reports the the total mass/volume/quantity in a Container at the end or start of a Stage
    - :ref:`container-flow-tracking`: reports the inflows and outflows of a particular Container, which is useful in the case where materials are added to the container during the recipe stage
+
+- If any tracking methods are used with Plates, an array of results for each well is returned
 
 .. raw:: html
 
@@ -72,17 +76,17 @@ Create a stock solution, use it, then add to it again, and use it again::
 
 ::
 
-    >>> recipe.substance_used(substance=water, destinations=[container], unit='mmol')
-    1051.034
+    >>> recipe.substance_used(substance=water, destinations=[container], unit='mol')
+    1.051034
 
 In this call, we compare the contents of ``container`` at the beginning and end of the recipe to find that the net difference
-in the amount of water is 1051.034 mmol. Thus, we've "used" 1051.034 mmol of water.
+in the amount of water is 1.051034 mol. Thus, we've "used" 1.051034 mol of water.
 
     >>> recipe.substance_used(substance=water, destinations=[stock_solution], unit='mmol', timeframe='stage 1')
     1704.673
 
 In this call, we compare the contents of ``stock_solution`` at the beginning and end of the recipe to find that the net difference
-in the amount of water is 1051.034 mmol. Thus, we've "used" 1051.034 mmol of water to diluting the solution.
+in the amount of water is 1.051034 mol. Thus, we've "used" 1051.034 mmol of water to diluting the solution.
 
     >>> recipe.get_container_flows(container=stock_solution, unit='mL', timeframe='all')
     {'in': 90.0, 'out': 20.0}

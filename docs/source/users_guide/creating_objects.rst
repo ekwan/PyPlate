@@ -31,13 +31,13 @@ Creating Substances
 .. code-block:: python
 
     # Create a solid
-    salt = Substance.Solid(name='NaCl', mol_weight=58.44)
+    salt = Substance.solid(name='NaCl', mol_weight=58.44)
 
     # Create a liquid
-    water = Substance.Liquid(name='H2O', mol_weight=18.01528, density=1.0)
+    water = Substance.liquid(name='H2O', mol_weight=18.01528, density=1.0)
 
     # Create an enzyme
-    lipase = Substance.Enzyme(name='Lipase', specific_activity='15 U/mg')
+    lipase = Substance.enzyme(name='Lipase', specific_activity='15 U/mg')
 
 
 Creating Containers
