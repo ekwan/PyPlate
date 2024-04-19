@@ -7,6 +7,7 @@ PyPlate follows the ``pandas`` convention of having both integer- and
 label-based indices for referencing wells in ``Plate``\ s.
 
 - When row or column specifiers are provided as integers, they are assumed to be integer indices (1, 2, 3, …).
+- Integer indices are 1-based, meaning that the first row or column is referred to as 1, not 0.
 - When specifiers are provided as strings, they are assumed to be label indices (“A”, “B”, “C”, …).
 
 - By default, rows in plates are given alphabetical labels “A”, “B”, “C”, and columns in plates are given numerical labels “1”, “2”, “3”.
@@ -19,11 +20,12 @@ Here are some ways to refer to a specific well:
 
 Here are some alternate ways to refer to well B3:
 
-.. _hlist
+.. hlist::
+    :columns: 3
 
-- ``“B:3”``
-- ``('B', 3)``
-- ``(2,3)``
+    - ``“B:3”``
+    - ``('B', 3)``
+    - ``(2,3)``
 
 You can refer to multiple wells as a list::
 
@@ -31,13 +33,24 @@ You can refer to multiple wells as a list::
 
 Slicing syntax is supported:
 
--  You can provide python slices of wells with 1-based or label-based
-   indexes::
+To get a range of rows, you can use the following syntax:
 
-    plate[:3], plate[:, :3], plate['C':], plate[1, '3':], plate['A':'D', :]
+-  ``plate['A':'C']`` will return rows 1, 2, and 3 ('A', 'B', and 'C').
+-  ``plate[1:3]`` will return rows 1, 2, and 3.
+-  ``plate['D':]`` will return rows 4, 5, 6 ... to the end of the plate.
+
+To get a range of columns, you can use the following syntax:
+
+-  ``plate[:, '1':'3']`` will return columns 1, 2, and 3 ('1', '2', and '3').
+-  ``plate[:, 1:3]`` will return columns 1, 3, 3.
+-  ``plate[:, '4':]`` will return columns 4, 5, 6 ... to the end of the plate.
+
+You can get a rectangular slice of the plate by using both row and column slices:
+
+-  ``plate['A':'C', '1':'3']`` will return rows 1, 2, and 3 and columns 1, 2, and 3.
 
 - To make a rectangular slice of ``B2`` to ``D3``, you can use::
 
     plate['B':'D', 2:3]
 
-  This will be two rows of three columns, specifically referring to ``B2``, ``B3``, ``C2``, ``C3``, ``D2``, and ``D3``.
+  This will be three rows of two columns, specifically referring to ``B2``, ``B3``, ``C2``, ``C3``, ``D2``, and ``D3``.

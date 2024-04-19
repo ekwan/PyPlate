@@ -100,7 +100,7 @@ We can query the amount of water "used" during the dispensing stage of the ``Rec
 >>> print(recipe.get_substance_used(substance=water, timeframe='dispensing', unit='mL'))
 0.96
 
-For more details, see :ref:`_usage_tracking`.
+For more details, see :ref:`usage_tracking`.
 
 Transfer Between Plates
 """""""""""""""""""""""
@@ -118,10 +118,8 @@ Let's create two plates and transfer the contents of one to the other::
     recipe.transfer(source=water_stock, destination=plate1, quantity='10 uL')
     recipe.transfer(source=plate1, destination=plate2, quantity='3 uL')
 
-Transfers between plates must involve regions of the same shape. (Use slices if necessary :ref:`_locations`)
+Transfers between plates must involve regions of the same shape. (Use slices if necessary :ref:`locations`) |br|
 This transfer works because both plates are 8x12.
-
-.. sizes ???
 
 ::
 
@@ -143,10 +141,40 @@ This transfer works because both plates are 8x12.
 Using Source Plates
 """""""""""""""""""
 
-Suppose you have a cross-coupling reaction of the
-.. Making a plate and using it to dispense to multiple other plates
+Suppose you have a cross-coupling reaction of the form  X + Y --> Z. |br|
+You have 8 variations of coupling partner X1, X2, ..., X8 and 12 variations of coupling partner Y1, Y2, ..., Y12. |br|
+Together, the full product of these would make 96 potential products Z. |br|
+Now suppose you want to test a number of different conditions, sampling 1 condition per 96 well plate. |br|
+You can make a source plate where Xs are in rows and Ys are in columns::
+
+    # x_solutions is the list of solutions for each X partner
+    # y_solutions is the list of solutions for each Y partner
+    plate = Plate('source_plate', max_volume_per_well='240 uL')
+    recipe = Recipe()
+    recipe.uses(plate, *x_solutions, *y_solutions)
+    for row, x in enumerate(x_solutions):
+        for column, y in enumerate(y_solutions):
+            # Row and column indices in PyPlate are 1-indexed
+            recipe.transfer(source=x, destination=plate[row + 1, column + 1], quantity='60 uL')
+            recipe.transfer(source=y, destination=plate[row + 1, column + 1], quantity='60 uL')
 
 
+Now, transfer this source plate to various destination plates::
+
+    destination_plates = [Plate(f'destination_plate_{i}', max_volume_per_well='60 uL') for i in range(1, 5)]
+    recipe.uses(*destination_plates)
+    for i, destination_plate in enumerate(destination_plates):
+        recipe.transfer(source=plate, destination=destination_plate, quantity='10 uL')
+
+If you have two P-ligands and two N-ligands, you can distribute them across the four destination plates::
+
+    # n_solutions is the list of solutions for each N ligand
+    # p_solutions is the list of solutions for each P ligand
+    for n_i, n in enumerate(n_solutions):
+        for p_i, p in enumerate(p_solutions):
+            plate_index = n_i * 2 + p_i   # 0, 1, 2, 3
+            recipe.transfer(source=n, destination=destination_plates[plate_index], quantity='10 uL')
+            recipe.transfer(source=p, destination=destination_plates[plate_index], quantity='10 uL')
 
 Creating a full permutation in a recipe
 """""""""""""""""""""""""""""""""""""""

@@ -48,6 +48,7 @@ Dataframes
 `dataframe` returns a styled pandas dataframe of the amount of each or all substance in a plate.
 - By default the data is returned for all substances. A specific substance can be specified.
 - You can specify what data you are interested in by passing the `unit` argument.
+
   - If you want the amount of moles of each substance in a plate, you can pass `unit='umol'`.
   - If you want the volume of each substance in a plate, you can pass `unit='uL'`.
   - If you want the mass of each substance in a plate, you can pass `unit='mg'`.
