@@ -3,10 +3,21 @@
 Visualizations
 ==============
 
-Various functions are provided to visualize the amount of substances in a plate, a recipe, or a recipe step.
+Various functions are provided to visualize information about a plate, a recipe, or a recipe step.
 
 Plates
 ------
+
+Substances
+^^^^^^^^^^
+
+`get_substance` returns the set of all get_substances in a plate.
+
+>>> plate.get_substance()
+{<Substance: salt>, <Substance: water>}
+
+Amounts
+^^^^^^^
 
 `get_moles` returns a numpy array of the amount of each substance in a plate.
 
@@ -72,8 +83,30 @@ Dataframes
 
 .. image:: /images/plate_dataframe_salt_M.png
 
-PyPlate
-- Visualization of plate
-- Visualization of a slice
-- Visualization of recipe
-- Visualization of recipe step
+
+Slices
+------
+
+All of the above functions can be applied to a slice of a plate.
+
+>>> plate[:2, :2].get_volumes(unit='uL')
+array([[10.6, 10.6],
+       [10. , 10. ]])
+
+
+Recipes
+-------
+
+
+
+
+Recipe Steps:
+-------------
+
+- When a recipe is baked, all the steps are stored in the `steps` attribute of the recipe.
+- Each step has a `visualize` method that can be used to visualize the step.
+
+>>> for step in recipe.steps:
+        display(step.visualize(what=plate2, mode='final', unit='uL'))
+
+.. image:: /images/recipe_steps_visualization.png
