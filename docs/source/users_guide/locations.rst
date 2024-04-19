@@ -31,6 +31,8 @@ You can refer to multiple wells as a list::
 
     plate[[('A', 1), ('B', 2), ('C', 3), 'D:4']] or plate[['A1, 'B2', 'C3', 'D4']]
 
+.. image:: /images/wells_A1_B2_C3_D4.png
+
 Slice Notation
 --------------
 
@@ -47,7 +49,7 @@ To get a range of rows, you can use the following syntax:
 To get a range of columns, you can use the following syntax:
 
 -  ``plate[:, '1':'3']`` will return columns 1, 2, and 3 ('1', '2', and '3').
--  ``plate[:, 1:3]`` will return columns 1, 3, 3.
+-  ``plate[:, 1:3]`` will return columns 1, 2, 3.
 
    .. image:: /images/cols_1_3.png
 -  ``plate[:, '4':]`` will return columns 4, 5, 6 ... to the end of the plate.
@@ -57,7 +59,7 @@ To get a range of columns, you can use the following syntax:
 
 You can get a rectangular slice of the plate by using both row and column slices:
 
--  ``plate['A':'C', '1':'3']`` will return rows 1, 2, and 3 and columns 1, 2, and 3.
+-  ``plate['A':'C', '1':'3']`` will return the region bound by 'A:1' to 'C:3' inclusive.
 
    .. image:: /images/wells_A1_C3.png
 
