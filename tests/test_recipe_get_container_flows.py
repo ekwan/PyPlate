@@ -39,7 +39,7 @@ def test_container_flows(sodium_sulfate, water):
     assert recipe.get_container_flows(container=dest_container, timeframe='stage 2', unit='mL') == {"out": 9.278, "in": 0}
 
 
-def test_volume_used_fill_to(salt, water):
+def test_fill_to(salt, water):
     """
     Tests the accuracy of volume tracking for a container filled to a specified volume within a recipe.
 
@@ -111,7 +111,7 @@ def test_volume_used_container_to_plate(dmso, empty_plate):
     assert pytest.approx(container.volume) == 800
     assert recipe.get_container_flows(container=container, timeframe='all', unit = 'mL') == {"in": 20, "out": 19.2}
 
-def test_get_container_flows_create_solution(sodium_sulfate, water):
+def test_get_container_flows_create_solution(sodium_sulfate, water, empty_plate):
     """
     Tests the creation of a solution within a recipe and its volume and substance usage tracking.
 
@@ -139,19 +139,43 @@ def test_get_container_flows_create_solution(sodium_sulfate, water):
 
 
     recipe = Recipe()
-    recipe.uses(sodium_sulfate, water)
 
-    container = recipe.create_solution(sodium_sulfate, water, concentration='0.5 M', total_quantity='50 mL')
-    assert container.volume == 0
+    container = recipe.create_solution(solute=sodium_sulfate, solvent=water, concentration='0.5 M', total_quantity='50 mL')
+
+    recipe.uses(empty_plate)
+    recipe.start_stage('stage 1')
+    recipe.transfer(container, empty_plate, '10 uL')
+    recipe.end_stage('stage 1')
+
+    container2 = Container('container2', initial_contents=[(water, '20 mL')], max_volume = '100 mL')
+    recipe.start_stage('stage 2')
+    recipe.uses(container2)
+    recipe.transfer(container, container2, '5 mL')
+    recipe.end_stage('stage 2')
 
     recipe.bake()
 
     #Assertions
-    expected_amount = '25.0 mmol'
-    assert recipe.substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol') == expected_amount
-    assert recipe.get_container_flows(container=container, timeframe='all', unit= 'mL') == {"in": 50, "out": 0}
+    
 
-def test_volume_used_dilute(sodium_sulfate, water):
+    #Calculations : 50 mL * 0.5 M = 25 mmol
+    #Transferred = 10*10^-3 * 0.5 = 5*10^-3 mmol
+    #Num wells = 96
+    #Total = 5*10^-3 * 96 = 0.48 mmol
+    #Remaining = 25 - 0.48 = 24.52 mmol
+    expected_amount = 24.52
+    assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='stage 1', unit='mmol', destinations=[empty_plate]) == 0.48
+    assert recipe.get_container_flows(container=container, timeframe='stage 1', unit= 'mL') == {"in": 0, "out": 0.96}
+
+    #Do we want container to only be a container? Should we expand it to plates as well? 
+    #assert recipe.get_container_flows(container=empty_plate, timeframe='all', unit= 'mL') == {"in": 0.96, "out": 0}
+
+    #When using mg, it converts it with the density
+    assert recipe.get_container_flows(container=container, timeframe='all', unit= 'mL') == {"in": 50, "out": 5.96}
+    assert recipe.get_container_flows(container=container2, timeframe='stage 2', unit= 'mL') == {"in": 5, "out": 0}
+    assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[container]) == 22.02
+
+def test_dilute(sodium_sulfate, water):
     """
     Tests the dilution process within a recipe and evaluates volume tracking for the involved container.
 
