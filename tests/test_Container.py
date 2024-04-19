@@ -228,3 +228,45 @@ def test_create_solution_from(water, salt):
     # Try to create a solution with more volume than the source container holds
     with pytest.raises(ValueError, match='Not enough mixture left in source container'):
         Container.create_solution_from(stock, salt, '1 M', water, '100 mL')
+
+def test_create_solution(water, salt, sodium_sulfate):
+    # create solution with just one solute
+    simple_solution = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
+
+    # create solution with multiple solutes
+    compound_solution = Container.create_solution([salt, sodium_sulfate], water, concentration='1 M',
+                                                  quantity=['1 g', '0.5 g'])
+
+    # create solvent container
+    water_container = Container('water')
+    water_container.fill_to(water, '100 mL')
+
+    # create solvent container with solute in it
+    invalid_solvent_container = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
+
+    # create solution with multiple solutes and solvent as a container
+    container_solution = Container.create_solution([salt, sodium_sulfate], water_container, concentration='1 M',
+                                                   quantity=['1 g', '0.5 g'])
+
+    # verify solute amount
+    assert (pytest.approx(Unit.convert(salt, '25 mmol', config.moles_storage_unit)) ==
+            simple_solution.contents[salt])
+
+    # verify solute amounts
+    assert (pytest.approx(Unit.convert(salt, '1 g', config.moles_storage_unit)) ==
+            compound_solution.contents[salt])
+    assert (pytest.approx(Unit.convert(sodium_sulfate, '0.5 g', config.moles_storage_unit)) ==
+            compound_solution.contents[sodium_sulfate])
+
+    # verify solute amounts and solvent amount from container
+    assert (pytest.approx(Unit.convert(salt, '1 g', config.moles_storage_unit)) ==
+            container_solution.contents[salt])
+    assert (pytest.approx(Unit.convert(sodium_sulfate, '0.5 g', config.moles_storage_unit)) ==
+            container_solution.contents[sodium_sulfate])
+    assert (pytest.approx(Unit.convert(water, '100 mL', config.moles_storage_unit)) ==
+            container_solution.contents[water])
+
+    # TODO: Update with actual error
+    with pytest.raises(ValueError, match='???'):
+        invalid_container_solution = Container.create_solution([salt, sodium_sulfate], invalid_solvent_container,
+                                                               concentration='1 M', quantity=['1 g', '0.5 g'])

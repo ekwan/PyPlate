@@ -8,6 +8,6 @@
 
    self
    introduction
-   users_guide
    pyplate
+   users_guide
    developers_guide
