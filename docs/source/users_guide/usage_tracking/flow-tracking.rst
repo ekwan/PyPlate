@@ -7,6 +7,8 @@ Container Flow Tracking
    given Container during a specific timeframe
 -  This may be used to track the usage of a solution, rather than a
    single substance
+-  Flow Tracking is most helpful in the case that material is added to the container during the stage being queried
+-  If no material is added to the container during the stage, :ref:`amount-remaining` can be used to track usage of a solution
 -  Timeframes are specified using recipe stages as in substance-level
    tracking
 
@@ -31,9 +33,8 @@ Example calls
 
    What are the flows for ``stock_solution`` across the entire recipe?
 
-.. code:: python
-
-   recipe.get_container_flows(container=stock_solution, timeframe='all', unit='mL')
+>>> recipe.get_container_flows(container=stock_solution, timeframe='all', unit='mL')
+{"in": 50, "out": 10}
 
 We take the difference of the flows of ``stock_solution`` at the
 beginning and end of the recipe and return the dictionary. The

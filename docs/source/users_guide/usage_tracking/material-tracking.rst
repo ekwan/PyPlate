@@ -1,15 +1,14 @@
-.. _intermediate-stage-tracking:
+.. _amount-remaining:
 
-Intermediate Stage Tracking
+Amount Remaining
 ------------------
 
--  In this mode, we track the change in the volume/mass/quantity of a
-   given Container across a specific timeframe
--  We assume that no additional material is added to the Container
-   during the given stage
+-  In this mode, we can determine the total volume/mass/quantity in a
+   given Container before and after a recipe stage
+-  If material is added during the specified recipe stage, :ref:`flow-tracking` should be used instead
 -  This may be used to track the usage of a mixture, rather than a
    single substance
--  Calculations are performed in volume internally
+
 
 Refer to :ref:`minimal-recipe` document for the recipe being queried in the examples below.
 
@@ -18,11 +17,12 @@ How to use ``get_amount_remaining()``
 
 .. code:: python
 
-   def get_amount_remaining(container: Container | Plate, timeframe, str='all', unit: str | None = None)
+   def get_amount_remaining(container: Container | Plate, timeframe, str='all', unit: str | None = None, mode: str = 'after')
 
 -  ``container``: The container to query
 -  ``timeframe``: The timeframe from which to get the volume
 -  ``unit``: The unit to return the amount in
+-  ``mode``: Whether to query the container before or after the stage
 
 .. _example-calls-1:
 
