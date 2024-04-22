@@ -6,12 +6,14 @@ Configuration
 pyplate.yaml location
 """""""""""""""""""""
 
-Various configuration options are available to control the behavior of the package. They are stored in a yaml file named `pyplate.yaml`. The default configuration file is located in the package directory.
-|br| A custom configuration file can be created. The package will look for the configuration file in the following order:
+``pyplate.yaml`` controls package behavior.  PyPlate will search for ``pyplate.yaml`` in the following locations in this order:
 
-- A directory specified by the environment variable `PYPLATE_CONFIG`
+- The directory specified by the environment variable ``PYPLATE_CONFIG``
 - The current working directory
 - The user's home directory
+- The package directory
+
+The configuration file that is found first will take precedence.
 
 Precision
 """""""""
@@ -23,11 +25,15 @@ The number of digits to display in the output can be controlled using the `preci
     # How many digits of precision to return to the user
     precisions:
       default: 3
-      uL: 1
+      uL: 0
       umol: 1
-      mg: 2
+      mg: 1
 
-The default precision is 3 digits. The precision for units `uL`, `umol`, and `mg` are set to 1, 1, and 2 digits respectively.
+The default precision is 3 digits. The precision for units `uL` is set to 0 because it is impossible to measure less than 1 `uL`. `umol`, and `mg` are set to 1 digit.
+
+
+Internal Precision
+""""""""""""""""""
 
 Because floating point numbers are not exact, some rounding of numbers during intermediate calculations should occur. The number of digits to retain during intermediate calculations can be controlled using the `internal_precision` option.
 
@@ -49,6 +55,9 @@ Amounts of substances and volumes can be stored with different units. The defaul
 
     # umol means we will store moles as micromoles
     moles_storage_unit: umol
+
+.. what are the implications of choosing different storage units?
+.. when might someone want to do that?
 
 Display Units
 """""""""""""
@@ -73,7 +82,7 @@ In many of PyPlate's functions, the user can specify which units to return data 
 Concentration Units
 """""""""""""""""""
 
-When specifying concentration in '%w/v', a default for the units for weight and volume is set using the `default_weight_Volume_units` option.
+When specifying concentration in '%w/v', a default for the units for weight and volume is set using the `default_weight_volume_units` option.
 
 .. code-block:: yaml
 

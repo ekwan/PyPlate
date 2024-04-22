@@ -4,9 +4,9 @@ internal_precision: 10
 # How many digits of precision to return to the user
 precisions:
   default: 3
-  uL: 1
+  uL: 0
   umol: 1
-  mg: 2
+  mg: 1
 
 # How to store volumes and moles internally
 # uL means we will store volumes as microliters
