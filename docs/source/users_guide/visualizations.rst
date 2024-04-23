@@ -57,6 +57,7 @@ Dataframes
 ^^^^^^^^^^
 
 `dataframe` returns a styled pandas dataframe of the amount of each or all substance in a plate.
+
 - By default the data is returned for all substances. A specific substance can be specified.
 - You can specify what data you are interested in by passing the `unit` argument.
 
@@ -97,16 +98,38 @@ array([[10.6, 10.6],
 Recipes
 -------
 
+If we want to visualize what happened to a plate during part or all of a recipe, we can use the `visualize` method of the recipe.
 
+- The `visualize` method can be used to visualize the final state of a plate or the change in a plate.
+
+  - The `mode` argument can be used to specify what we are interested in.
+  - 'delta' will show the change in the plate during the step.
+  - 'final' will show the final state of the plate after the step.
+
+- We can get information about certain substances or all substances in the plate.
+
+  - 'all' will show information about all substances in the plate.
+
+- We can specify the unit we are interested in. (moles, volume, or mass)
+
+>>> recipe.visualize(what=plate, mode='final', unit='uL')
+
+.. image:: /images/recipe_visualization.png
 
 
 Recipe Steps:
 -------------
 
 - When a recipe is baked, all the steps are stored in the `steps` attribute of the recipe.
-- Each step has a `visualize` method that can be used to visualize the step.
+- Each step has a `visualize` method that can be used to visualize the step, using the same arguments as the `visualize` method of the recipe.
 
 >>> for step in recipe.steps:
         display(step.visualize(what=plate2, mode='final', unit='uL'))
 
 .. image:: /images/recipe_steps_visualization.png
+
+>>> for step in recipe.steps:
+        print(step.instructions)
+    Transfer 10 uL from plate1[:] to plate2[:].
+    Transfer 10 uL from plate2[:] to plate3[:].
+    Transfer 10 uL from plate3[:] to plate4[:].
