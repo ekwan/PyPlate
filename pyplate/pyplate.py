@@ -786,8 +786,10 @@ class Container:
 
         elif unit == 'g':
             mass_to_transfer = round(quantity_to_transfer, config.internal_precision)
-            total_mass = sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", "g") for
-                             substance, amount in source_container.contents.items())
+            total_mass = 0
+            for substance, amount in source_container.contents.items():
+                source_unit = 'U' if substance.is_enzyme() else config.moles_storage_unit
+                total_mass += Unit.convert_from(substance, amount, source_unit, "g")
             ratio = mass_to_transfer / total_mass
         elif unit == 'mol':
             moles_to_transfer = Unit.convert_to_storage(quantity_to_transfer, 'mol')
