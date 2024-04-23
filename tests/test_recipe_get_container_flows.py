@@ -144,13 +144,17 @@ def test_get_container_flows_create_solution(sodium_sulfate, water, empty_plate)
 
     recipe.uses(empty_plate)
     recipe.start_stage('stage 1')
+
+    #Both these transfers result in the same output
     recipe.transfer(container, empty_plate, '10 uL')
+    recipe.transfer(container, empty_plate, '10 mg')
     recipe.end_stage('stage 1')
 
     container2 = Container('container2', initial_contents=[(water, '20 mL')], max_volume = '100 mL')
     recipe.start_stage('stage 2')
     recipe.uses(container2)
     recipe.transfer(container, container2, '5 mL')
+    
     recipe.end_stage('stage 2')
 
     recipe.bake()
@@ -175,6 +179,39 @@ def test_get_container_flows_create_solution(sodium_sulfate, water, empty_plate)
     assert recipe.get_container_flows(container=container2, timeframe='stage 2', unit= 'mL') == {"in": 5, "out": 0}
     assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[container]) == 22.02
 
+
+def test_enzyme(lipase):
+
+    recipe = Recipe()
+    container = recipe.create_container('container', initial_contents=[(lipase, '10 U')])
+
+    container2 = recipe.create_container('container2', initial_contents=None)
+
+    recipe.transfer(container, container2, '5 U')
+
+    recipe.bake()
+    assert recipe.get_container_flows(container=container, timeframe='all', unit='U') == {"in": 10, "out": 5}
+    assert recipe.get_container_flows(container=container2, timeframe='all', unit='U') == {"in": 5, "out": 0}
+
+def test_enzyme_fill_to(lipase):
+
+    recipe = Recipe()
+    container = recipe.create_container('container', initial_contents=None)
+
+    recipe.fill_to(container, lipase, '10 mg')
+
+    container2 = recipe.create_container('container2', initial_contents=None)
+
+    recipe.transfer(container, container2, '5 mg')
+
+    recipe.bake()
+
+    #Specific activity is 10 U/mg. So 10 mg = 100 U
+
+    assert recipe.get_container_flows(container=container, timeframe='all', unit='U') == {"in": 100, "out": 50}
+    assert recipe.get_container_flows(container=container2, timeframe='all', unit='U') == {"in": 50, "out": 0}
+
+
 def test_dilute(sodium_sulfate, water):
     """
     Tests the dilution process within a recipe and evaluates volume tracking for the involved container.
@@ -185,11 +222,13 @@ def test_dilute(sodium_sulfate, water):
     - Creating an empty container and initializing a recipe.
     - Creating a sodium sulfate solution with a 1 M concentration and a total quantity of 10 mL.
     - Transferring 5 mL of this solution into the container.
-    - Diluting the solution within the container to a new concentration of 0.25 M using water as the solvent.
+    - Diluting the solution within the container to a new concentration of 0.25 M 
+    using water as the solvent.
     - Baking the recipe to finalize the dilution process.
 
     Assertions:
-    - Ensures that the container's volume is correctly tracked through the dilution process. Initially, the container is expected to have a volume of 0 mL, which may need clarification as it contradicts the transfer and dilution steps.
+    - Ensures that the container's volume is correctly tracked through the dilution process.
+      Initially, the container is expected to have a volume of 0 mL
     - Verifies that the `volume_used` method accurately reports the total volume of liquid added ('in') as 20 mL and the volume removed ('out') as 0 mL, based on the dilution calculation.
 
     Parameters:
