@@ -913,7 +913,7 @@ class Container:
 
     @cache
     def _repr_html_(self):
-        return self.dataframe().to_html()
+        return self.dataframe().to_html(notebook=True)
 
     @cache
     def __repr__(self):
