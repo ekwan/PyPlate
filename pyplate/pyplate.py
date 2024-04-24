@@ -36,6 +36,7 @@ from typing import Tuple, Dict, Iterable
 from copy import deepcopy, copy
 import numpy
 import pandas
+from tabulate import tabulate
 
 from pyplate.slicer import Slicer
 from . import Config
@@ -482,6 +483,7 @@ class Unit:
             ratio *= Unit.convert_from_storage(1, 'mol')
         return ratio, numerator, denominator
 
+
 class Substance:
     """
     An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.). Immutable.
@@ -872,22 +874,51 @@ class Container:
         to = to_array[0]
         return source_slice.plate, to
 
-    def __repr__(self):
-        # TODO: Make this more readable/beautiful
-        contents = []
-        for substance, value in sorted(self.contents.items(), key=lambda elem: (elem[0]._type, -elem[1])):
-            if substance.is_enzyme():
-                contents.append(f"{substance}: {value} U")
-            else:
-                value, unit = Unit.get_human_readable_unit(Unit.convert_from_storage(value, 'mol'), 'mmol')
-                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-                contents.append(
-                    f"{substance}: {round(value, precision)} {unit}")
+    @cache
+    def dataframe(self) -> pandas.DataFrame:
+        df = pandas.DataFrame(columns=['Volume', 'Mass', 'Moles', 'U'])
+        if self.max_volume == float('inf'):
+            df.loc['Maximum Volume'] = ['∞', '-', '-', '-']
+        else:
+            volume, unit = Unit.convert_from_storage_to_standard_format(self, self.max_volume)
+            volume = round(volume,
+                           config.precisions[unit] if unit in config.precisions else config.precisions['default'])
+            df.loc['Maximum Volume'] = [volume, '-', '-', '-']
+        totals = {'L': 0, 'g': 0, 'mol': 0, 'U': 0}
+        for substance, value in self.contents.items():
+            columns = []
+            for unit in ['L', 'g', 'mol', 'U']:
+                if unit == 'mol' and substance.is_enzyme():
+                    columns.append('-')
+                elif unit == 'U' and not substance.is_enzyme():
+                    columns.append('-')
+                else:
+                    from_unit = config.moles_storage_unit if not substance.is_enzyme() else 'U'
+                    converted_value = Unit.convert_from(substance, value, from_unit, unit)
+                    totals[unit] += converted_value
+                    converted_value, unit = Unit.get_human_readable_unit(converted_value, unit)
+                    precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                    columns.append(f"{round(converted_value, precision)} {unit}")
+            df.loc[substance.name] = columns
+        columns = []
+        for unit in ['L', 'g', 'mol', 'U']:
+            value = totals[unit]
+            value, unit = Unit.get_human_readable_unit(value, unit)
+            precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+            columns.append(f"{round(value, precision)} {unit}")
+        df.loc['Total'] = columns
 
-        max_volume = ('/' + str(Unit.convert_from_storage(self.max_volume, 'mL'))) \
-            if self.max_volume != float('inf') else ''
-        return f"Container ({self.name}) ({Unit.convert_from_storage(self.volume, 'mL')}" + \
-            f"{max_volume} mL of ({contents})"
+        df.columns.name = self.name
+        return df
+
+    @cache
+    def _repr_html_(self):
+        return self.dataframe().to_html()
+
+    @cache
+    def __repr__(self):
+        df = self.dataframe()
+        return tabulate(df, headers=[self.name] + list(df.columns), tablefmt='pretty')
 
     @cache
     def has_liquid(self) -> bool:
@@ -2134,6 +2165,7 @@ class Recipe:
                         if start_well == end_well:
                             result.append(f"{plate.row_names[start_well[0]]}{plate.column_names[start_well[1]]}")
                         return result
+
                     amounts = dict()
                     plate = step.to[0]
                     for row in range(plate.n_rows):
