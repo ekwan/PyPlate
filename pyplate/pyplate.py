@@ -796,6 +796,12 @@ class Container:
             total_moles = sum(amount for substance, amount in source_container.contents.items()
                               if not substance.is_enzyme())
             ratio = moles_to_transfer / total_moles
+        elif unit == 'U':
+            total_activity = sum(amount for substance, amount in source_container.contents.items()
+                                 if substance.is_enzyme())
+            if total_activity == 0:
+                raise ValueError("There are no enzymes in the source container.")
+            ratio = quantity_to_transfer / total_activity
         else:
             raise ValueError("Invalid quantity unit.")
 
