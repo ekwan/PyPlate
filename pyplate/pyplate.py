@@ -2392,12 +2392,31 @@ class Recipe:
         return flows
 
     def get_amount_remaining(self, container: Container | Plate, timeframe: str = 'all', unit: str | None = None, mode: str = 'after') -> float:
+
+        def conversion_helper(entry):
+            substance, quantity = entry
+            return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_storage_unit,
+                                     unit)
+
+        def plate_helper(well):
+            entry = well.contents.items()
+            return sum(map(conversion_helper, entry))
+
+        def container_helper(container):
+            if isinstance(container, Container):
+                entry = container.contents.items()
+                return sum(map(conversion_helper, entry))
+            elif isinstance(container, Plate):
+                vfunc = np.vectorize(plate_helper)
+                return vfunc(container.wells)
+
+
         if unit is None:
             unit = config.volume_display_unit
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
-        if not isinstance(container, Container):
-            raise TypeError("Container must be a Container.")
+        if not isinstance(container, Container) and not isinstance(container, Plate):
+            raise TypeError("Container must be a Container or a Plate.")
         if not isinstance(timeframe, str):
             raise TypeError("Timeframe must be a str.")
         if timeframe not in self.stages.keys():
@@ -2421,7 +2440,7 @@ class Recipe:
                         query_container = step.frm[1]
                     else:
                         query_container = step.frm[0]
-                break
+                return container_helper(query_container)
 
 
 
