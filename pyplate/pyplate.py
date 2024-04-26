@@ -2375,7 +2375,7 @@ class Recipe:
                                         sum(map(helper, step.to[0].contents.items())))
                 if isinstance(step.to[0], Plate) and step.to[0].name == container.name:
                     if step.trash:
-                        flows["out"] += map(plate_helper, step.trash.items())
+                        flows["out"] += sum(map(helper, step.trash.items()))
                     else:
                         vfunc = np.vectorize(plate_helper)
                         flows["in"] += vfunc(step.to[1].wells) - vfunc(step.to[0].wells)
