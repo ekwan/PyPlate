@@ -16,5 +16,6 @@ Exam demonstrating common use cases of *PyPlate*.
    users_guide/working_with_recipes
    users_guide/visualizations
    users_guide/usage_tracking
+   users_guide/experiment_design
    users_guide/configuration
 
