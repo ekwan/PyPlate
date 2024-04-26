@@ -1050,8 +1050,8 @@ class Container:
             New container with desired solution.
         """
 
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a Substance.")
+        if not isinstance(solvent, (Substance, Container)):
+            raise TypeError("Solvent must be a Substance or a Container.")
         if name and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
@@ -1064,34 +1064,23 @@ class Container:
         quantity = kwargs.get('quantity', None)
         total_quantity = kwargs.get('total_quantity', None)
 
+        original_solvent = solvent
+        if isinstance(solvent, Container):
+            # Calculate mol_weight and density of solvent
+            # get total mass of solvent
+            total_mass = sum(Unit.convert_from(substance, amount, 'U' if substance.is_enzyme() else 'mol', 'g')
+                             for substance, amount in solvent.contents.items())
+            total_moles = Unit.convert_from_storage(sum(amount for substance, amount in solvent.contents.items()
+                                                        if not substance.is_enzyme()), 'mol')
+            total_volume = solvent.get_volume('mL')
+            if total_moles == 0 or total_volume == 0:
+                raise ValueError("Solvent must contain a non-zero amount of substance.")
+            # mol_weight = g/mol, density = g/mL
+            solvent = Substance.liquid('fake solvent',
+                                       mol_weight=total_mass/total_moles, density=total_mass/total_volume)
+
         if (concentration is not None) + (quantity is not None) + (total_quantity is not None) != 2:
             raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
-
-        if concentration is not None:
-            if isinstance(concentration, str):
-                concentration = [concentration] * len(solute)
-            elif not isinstance(concentration, list) or any(not isinstance(c, str) for c in concentration):
-                raise TypeError("Concentration(s) must be a str.")
-            try:
-                parsed_concentration = []
-                for c in concentration:
-                    parsed_concentration.append(Unit.parse_concentration(c))
-            except ValueError:
-                raise ValueError(f"Invalid concentration. ({c})")
-            concentration = parsed_concentration
-
-        if quantity is not None:
-            if isinstance(quantity, str):
-                quantity = [quantity] * len(solute)
-            elif not isinstance(quantity, list) or any(not isinstance(q, str) for q in quantity):
-                raise TypeError("Quantity(s) must be a str.")
-            try:
-                parsed_quantity = []
-                for q in quantity:
-                    parsed_quantity.append(Unit.parse_quantity(q))
-            except ValueError:
-                raise ValueError(f"Invalid quantity. ({q})")
-            quantity = parsed_quantity
 
         if total_quantity and not isinstance(total_quantity, str):
             raise TypeError("Total quantity must be a str.")
@@ -1099,87 +1088,84 @@ class Container:
         if not name:
             name = f"Solution of {','.join(substance.name for substance in solute)} in {solvent.name}"
 
-        convert_one = lambda substance, u: Unit.convert_from(substance, 1,
-                                                             'U' if substance.is_enzyme() else 'mol', u)
+        def convert_one(substance: Substance, u: str) -> float:
+            """ Converts 1 mol or U to unit `u` for a given substance. """
+            return Unit.convert_from(substance, 1, 'U' if substance.is_enzyme() else 'mol', u)
 
-        initial_contents = []
-        # result of linalg.lstsq will be moles (or 'U') for all solutes solvent
+        # result of linalg.solve will be moles (or 'U') for all solutes solvent
 
-        if quantity is not None and total_quantity is not None:
-            try:
-                total_quantity, total_quantity_unit = Unit.parse_quantity(total_quantity)
-            except ValueError:
-                raise ValueError(f"Invalid total quantity. ({total_quantity})")
-            # We can build this without linalg
-            initial_contents = []
-            computed_total_quantity = 0.
-            for substance, (q, unit) in zip(solute, quantity):
-                initial_contents.append((substance, f"{q} {unit}"))
-                computed_total_quantity += Unit.convert_from(substance, q, unit, total_quantity_unit)
-            if computed_total_quantity >= total_quantity:
-                raise ValueError("Total quantity must be greater than sum of quantities.")
-            initial_contents.append((solvent, f"{total_quantity - computed_total_quantity} {total_quantity_unit}"))
-        elif concentration is not None and quantity is not None:
-            n = len(solute)
-            identity = numpy.identity(n + 1)[0]
-            a = numpy.zeros((n * 2, n + 1), dtype=float)
-            b = numpy.zeros(n * 2, dtype=float)
-            if len(concentration) != n or len(quantity) != n:
-                raise ValueError("Concentration, quantity, and solute must have the same length.")
+        n = len(solute)
+        a = numpy.zeros((n*2, n+1), dtype=float)
+        b = numpy.zeros(n*2, dtype=float)
+        index = 0
+        identity = numpy.identity(n+1)[0]
+        if concentration is not None:
+            if isinstance(concentration, str):
+                concentration = [concentration] * len(solute)
+            elif not isinstance(concentration, Iterable):
+                raise TypeError("Concentration(s) must be a str.")
             bottom_arrays = {}
-            # first n rows are for concentrations, last n rows are for quantities
-            # I need to zip solutes and concentrations and get an index
-            for i, ((c, numerator, denominator), substance) in enumerate(zip(concentration, solute)):
-                if denominator not in bottom_arrays:
-                    bottom = numpy.array(list(convert_one(substance, denominator) for substance in solute + [solvent]))
-                    bottom_arrays[denominator] = bottom
-                else:
-                    bottom = bottom_arrays[denominator]
-                a[i] = c * bottom - numpy.roll(identity, i) * convert_one(substance, numerator)
-            for i, ((q, unit), substance) in enumerate(zip(quantity, solute)):
-                a[n + i] = numpy.roll(identity, i) * convert_one(substance, unit)
-                b[n + i] = q
-            xs, _, _, _ = numpy.linalg.lstsq(a, b, rcond=None)
-            if any(x <= 0 for x in xs):
-                raise ValueError("Solution is impossible to create.")
-            initial_contents = list(
-                (substance, f"{x} {'U' if substance.is_enzyme() else 'mol'}")
-                for x, substance in zip(xs, solute + [solvent])
-            )
-        elif concentration is not None and total_quantity is not None:
-            n = len(solute)
-            identity = numpy.identity(n + 1)[0]
-            # One column for each solute and one for solvent
-            # One row for each concentration and one for total_quantity
-            a = numpy.zeros((n + 1, n + 1), dtype=float)
-            b = numpy.zeros(n + 1, dtype=float)
-            if len(concentration) != n:
-                raise ValueError("Concentration and solute must have the same length.")
-            bottom_arrays = {}
-            # I need to zip solutes and concentrations and get an index
-            for i, ((c, numerator, denominator), substance) in enumerate(zip(concentration, solute)):
+            for i, (c, substance) in enumerate(zip(concentration, solute)):
+                if not isinstance(c, str):
+                    raise TypeError("Concentration(s) must be a str.")
+                try:
+                    c, numerator, denominator = Unit.parse_concentration(c)
+                except ValueError:
+                    raise ValueError(f"Invalid concentration. ({c})")
+
                 if denominator not in bottom_arrays:
                     bottom = numpy.array(list(convert_one(substance, denominator) for substance in solute+[solvent]))
                     bottom_arrays[denominator] = bottom
                 else:
                     bottom = bottom_arrays[denominator]
-                a[i] = c * bottom - numpy.roll(identity, i) * convert_one(substance, numerator)
-            total_quantity, total_quantity_unit = Unit.parse_quantity(total_quantity)
-            a[-1] = numpy.array(list(convert_one(substance, total_quantity_unit) for substance in solute+[solvent]))
-            b[-1] = total_quantity
-            xs = numpy.linalg.solve(a, b)
-            if any(x <= 0 for x in xs):
-                raise ValueError("Solution is impossible to create.")
-            initial_contents = list((substance, f"{x} {'U' if substance.is_enzyme() else 'mol'}")
-                                    for x, substance in zip(xs, solute + [solvent]))
 
-        result = Container(name, initial_contents=initial_contents)
+                # c = top/bottom
+                a[index] = c * bottom - numpy.roll(identity, i) * convert_one(substance, numerator)
+                index += 1
+
+        if quantity is not None:
+            if isinstance(quantity, str):
+                quantity = [quantity] * len(solute)
+            elif not isinstance(quantity, Iterable):
+                raise TypeError("Quantity(s) must be a str.")
+            for i, (q, substance) in enumerate(zip(quantity, solute)):
+                if not isinstance(q, str):
+                    raise TypeError("Quantity(s) must be a str.")
+                q, unit = Unit.parse_quantity(q)
+                a[index] = numpy.roll(identity, i) * convert_one(substance, unit)
+                b[index] = q
+                index += 1
+
+        if total_quantity is not None:
+            total_quantity, total_quantity_unit = Unit.parse_quantity(total_quantity)
+            a[index] = numpy.array(list(convert_one(substance, total_quantity_unit) for substance in solute+[solvent]))
+            b[index] = total_quantity
+
+        xs = numpy.linalg.solve(a[:n+1], b[:n+1])
+        if any(x <= 0 for x in xs):
+            raise ValueError("Solution is impossible to create.")
+
+        for i in range(len(a)):
+            if abs(sum(a[i] * xs) - b[i]) > 1e-6:
+                raise ValueError("Solution is impossible to create.")
+
+        initial_contents = list((substance, f"{x} {'U' if substance.is_enzyme() else 'mol'}") for x, substance in zip(xs, solute+[solvent]))
+        if isinstance(original_solvent, Container):
+            result = Container(name, initial_contents=initial_contents[:-1])
+            _, solvent_amount = initial_contents[-1]
+            original_solvent, result = Container.transfer(original_solvent, result, solvent_amount)
+        else:
+            result = Container(name, initial_contents=initial_contents)
+
         contents = []
         for substance, value in result.contents.items():
             value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
             precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
             contents.append(f"{round(value, precision)} {unit} of {substance.name}")
         result.instructions = "Add " + ", ".join(contents) + " to a container."
+
+        if isinstance(original_solvent, Container):
+            return original_solvent, result
         return result
 
     @staticmethod

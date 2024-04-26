@@ -238,8 +238,7 @@ def test_create_solution(water, salt, sodium_sulfate):
                                                   quantity=['1 g', '0.5 g'])
 
     # create solvent container
-    water_container = Container('water')
-    water_container.fill_to(water, '100 mL')
+    water_container = Container('water', initial_contents=[(water, '100 mL')])
 
     # create solvent container with solute in it
     invalid_solvent_container = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
