@@ -138,6 +138,7 @@ This transfer works because both plates are 8x12.
 
 .. figure:: /images/plate2.png
 
+.. _cross_coupling_liquid_handling:
 Using Source Plates
 """""""""""""""""""
 

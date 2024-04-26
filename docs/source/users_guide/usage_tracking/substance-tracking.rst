@@ -95,6 +95,7 @@ Start of Recipe:
     stock_solution: {water: "0 mmol", sodium_sulfate: "0 mmol"}
     trash: {water: "0 mmol", sodium_sulfate: "0 mmol"}``
 
+
 Stage 1 (start):
 ^^^^^^^^^^^^^^^^
 ::
@@ -102,6 +103,7 @@ Stage 1 (start):
     container: {water: "2578 mmol", sodium_sulfate: "25 mmol"}
     stock_solution: {water: "0 mmol", sodium_sulfate: "0 mmol"}
     trash: {water: "0 mmol", sodium_sulfate: "0 mmol"}``
+
 
 Stage 1 (end):
 ^^^^^^^^^^^^^^^^
@@ -111,6 +113,7 @@ Stage 1 (end):
     container: {water: "515 mmol", sodium_sulfate: "5 mmol"}
     trash: {water: "0 mmol", sodium_sulfate: "0 mmol"}``
 
+
 Stage 2 (start):
 ^^^^^^^^^^^^^^^^
 ::
@@ -119,6 +122,7 @@ Stage 2 (start):
     container: {water: "515 mmol", sodium_sulfate: "5 mmol"}
     trash: {water: "0 mmol", sodium_sulfate: "0 mmol"}
 
+
 Stage 2 (end):
 ^^^^^^^^^^^^^^
 ::
@@ -126,6 +130,7 @@ Stage 2 (end):
     stock_solution: {water: "2063 mmol", sodium_sulfate: "20 mmol"}
     container: {water: "0 mmol", sodium_sulfate: "5 mmol"}
     trash: {water: "515 mmol", sodium_sulfate: "0 mmol"}
+
 
 .. toctree::
     :hidden:
