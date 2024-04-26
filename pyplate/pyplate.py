@@ -1077,7 +1077,7 @@ class Container:
                 raise ValueError("Solvent must contain a non-zero amount of substance.")
             # mol_weight = g/mol, density = g/mL
             solvent = Substance.liquid('fake solvent',
-                                       mol_weight=total_mass/total_moles, density=total_mass/total_volume)
+                                       mol_weight=total_mass / total_moles, density=total_mass / total_volume)
 
         if (concentration is not None) + (quantity is not None) + (total_quantity is not None) != 2:
             raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
@@ -1095,10 +1095,10 @@ class Container:
         # result of linalg.solve will be moles (or 'U') for all solutes solvent
 
         n = len(solute)
-        a = numpy.zeros((n*2, n+1), dtype=float)
-        b = numpy.zeros(n*2, dtype=float)
+        a = numpy.zeros((n * 2, n + 1), dtype=float)
+        b = numpy.zeros(n * 2, dtype=float)
         index = 0
-        identity = numpy.identity(n+1)[0]
+        identity = numpy.identity(n + 1)[0]
         if concentration is not None:
             if isinstance(concentration, str):
                 concentration = [concentration] * len(solute)
@@ -1114,7 +1114,7 @@ class Container:
                     raise ValueError(f"Invalid concentration. ({c})")
 
                 if denominator not in bottom_arrays:
-                    bottom = numpy.array(list(convert_one(substance, denominator) for substance in solute+[solvent]))
+                    bottom = numpy.array(list(convert_one(substance, denominator) for substance in solute + [solvent]))
                     bottom_arrays[denominator] = bottom
                 else:
                     bottom = bottom_arrays[denominator]
@@ -1138,10 +1138,11 @@ class Container:
 
         if total_quantity is not None:
             total_quantity, total_quantity_unit = Unit.parse_quantity(total_quantity)
-            a[index] = numpy.array(list(convert_one(substance, total_quantity_unit) for substance in solute+[solvent]))
+            a[index] = numpy.array(
+                list(convert_one(substance, total_quantity_unit) for substance in solute + [solvent]))
             b[index] = total_quantity
 
-        xs = numpy.linalg.solve(a[:n+1], b[:n+1])
+        xs = numpy.linalg.solve(a[:n + 1], b[:n + 1])
         if any(x <= 0 for x in xs):
             raise ValueError("Solution is impossible to create.")
 
@@ -1149,24 +1150,35 @@ class Container:
             if abs(sum(a[i] * xs) - b[i]) > 1e-6:
                 raise ValueError("Solution is impossible to create.")
 
-        initial_contents = list((substance, f"{x} {'U' if substance.is_enzyme() else 'mol'}") for x, substance in zip(xs, solute+[solvent]))
+        initial_contents = list((substance, f"{x} {'U' if substance.is_enzyme() else 'mol'}") for x, substance in
+                                zip(xs, solute + [solvent]))
         if isinstance(original_solvent, Container):
             result = Container(name, initial_contents=initial_contents[:-1])
+            contents = []
+            for substance, value in result.contents.items():
+                value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                contents.append(f"{round(value, precision)} {unit} of {substance.name}")
             _, solvent_amount = initial_contents[-1]
+            solvent_volume = Unit.convert_from(solvent, xs[-1], 'mol', 'L')
+            solvent_volume, volume_unit = Unit.get_human_readable_unit(solvent_volume, 'L')
+            solvent_volume = round(solvent_volume,
+                                   config.precisions[volume_unit] if volume_unit in config.precisions else
+                                   config.precisions['default'])
+
             original_solvent, result = Container.transfer(original_solvent, result, solvent_amount)
+            result.instructions = ("Add " + ", ".join(contents) +
+                                   f" to {solvent_volume} {volume_unit} of {original_solvent.name}.")
+            return original_solvent, result
         else:
             result = Container(name, initial_contents=initial_contents)
-
-        contents = []
-        for substance, value in result.contents.items():
-            value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
-            precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-            contents.append(f"{round(value, precision)} {unit} of {substance.name}")
-        result.instructions = "Add " + ", ".join(contents) + " to a container."
-
-        if isinstance(original_solvent, Container):
-            return original_solvent, result
-        return result
+            contents = []
+            for substance, value in result.contents.items():
+                value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                contents.append(f"{round(value, precision)} {unit} of {substance.name}")
+            result.instructions = "Add " + ", ".join(contents) + " to a container."
+            return result
 
     @staticmethod
     def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance | Container,
