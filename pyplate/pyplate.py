@@ -1573,7 +1573,7 @@ class Plate:
         # Arguments are type checked in PlateSlicer.moles
         return self[:].get_moles(substance=substance, unit=unit)
 
-    def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None) \
+    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None) \
             -> pandas.io.formats.style.Styler:
         """
 
@@ -1586,6 +1586,8 @@ class Plate:
 
         """
         # Types are checked in PlateSlicer.dataframe
+        if unit is None:
+            unit = config.volume_display_unit
         return self[:].dataframe(substance=substance, unit=unit, cmap=cmap)
 
     def get_volume(self, unit: str = 'uL') -> float:
@@ -1652,6 +1654,8 @@ class RecipeStep:
 
     def __init__(self, recipe: Recipe, operator: str, frm: Container | PlateSlicer | Plate,
                  to: Container | PlateSlicer | Plate, *operands):
+        self.frm_slice = None
+        self.to_slice = None
         self.recipe = recipe
         self.objects_used = set()
         self.substances_used = set()
@@ -1662,24 +1666,47 @@ class RecipeStep:
         self.operands = operands
         self.instructions = ""
 
-    def visualize(self, what: Plate, mode: str, unit: str, substance: (str | Substance) = 'all', cmap: str = None) \
-            -> str | pandas.io.formats.style.Styler:
-        """
+    def _repr_html_(self):
+        precision = config.precisions[config.volume_display_unit] if config.volume_display_unit in config.precisions \
+            else config.precisions['default']
+        source_visual = None
+        if isinstance(self.frm[0], Container):
+            source_visual = self.frm[0].dataframe()
+        elif isinstance(self.frm[0], Plate):
+            if self.frm_slice is None:
+                source_visual = self.frm[0].dataframe()
+            else:
+                frm_slice = copy(self.frm_slice)
+                frm_slice.plate = self.frm[0]
+                source_visual = frm_slice.dataframe()
+        destination_visual = None
+        if isinstance(self.to[0], Container):
+            destination_visual = self.to[1].dataframe()
+        elif isinstance(self.to[0], Plate):
+            if self.to_slice is None:
+                destination_visual = self.to[1].dataframe().data - self.to[0].dataframe().data
+            else:
+                to_slice = copy(self.to_slice)
+                to_slice.plate = self.to[0]
+                before = to_slice.dataframe()
+                to_slice.plate = self.to[1]
+                after = to_slice.dataframe()
+                destination_visual = (after.data - before.data).style.format(precision=precision).use(before.export())
 
-        Provide visualization of what happened during this step.
+        if isinstance(source_visual, pandas.DataFrame):
+            source_visual = source_visual.style
+        if isinstance(destination_visual, pandas.DataFrame):
+            destination_visual = destination_visual.style
 
-        Args:
-            what: Plate we are interested in.
-            mode: 'delta', or 'final'
-            unit: Unit we are interested in. ('mmol', 'uL', 'mg')
-            substance: Substance we are interested in. ('all', water, ATP)
-            cmap: Colormap to use. Defaults to default_colormap from config.
+        label = "Destination (delta): " if isinstance(self.to[0], Plate) else "Destination: "
+        destination_visual.set_caption(label + self.to[0].name)
+        if source_visual is None:
+            return self.instructions + '<br/>' + destination_visual.to_html()
 
-        Returns: A dataframe with the requested information.
-        """
-        if what.name not in self.objects_used:
-            return "This plate was not used in this step."
-        return self.recipe.visualize(what, mode, unit, self, substance, cmap)
+        source_visual.set_table_attributes("style='display:inline; margin-right:20px'")
+        source_visual.set_caption(f"Source (initial): {self.frm[0].name}")
+        destination_visual.set_table_attributes("style='display:inline'")
+        return self.instructions + '<br/>' + source_visual.to_html() + destination_visual.to_html()
 
 
 class Recipe:
@@ -2024,6 +2051,9 @@ class Recipe:
                     step.objects_used.add(elem.plate.name)
                 elif isinstance(elem, (Container, Plate)):
                     step.objects_used.add(elem.name)
+
+            step.frm_slice = step.frm[0] if isinstance(step.frm[0], PlateSlicer) else None
+            step.to_slice = step.to[0] if isinstance(step.to[0], PlateSlicer) else None
 
             operator = step.operator
             if operator == 'create_container':
@@ -2699,7 +2729,7 @@ class PlateSlicer(Slicer):
 
         return frm.plate, to.plate
 
-    def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None):
+    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None):
         """
 
         Arguments:
@@ -2710,6 +2740,9 @@ class PlateSlicer(Slicer):
         Returns: Shaded dataframe of quantities in each well.
 
         """
+        if unit is None:
+            unit = config.volume_display_unit
+
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
         if (substance != 'all' and not isinstance(substance, Substance) and
@@ -2748,7 +2781,7 @@ class PlateSlicer(Slicer):
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         df = self.get_dataframe().apply(numpy.vectorize(helper, cache=True, otypes='d'))
         vmin, vmax = df.min().min(), df.max().max()
-        styler = df.style.format(precision=precision).background_gradient(cmap, vmin=vmin, vmax=vmax)
+        styler = df.style.background_gradient(cmap, vmin=vmin, vmax=vmax).format(precision=precision)
         return styler
 
     def get_volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> numpy.ndarray:
