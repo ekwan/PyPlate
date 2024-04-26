@@ -1684,14 +1684,15 @@ class RecipeStep:
             destination_visual = self.to[1].dataframe()
         elif isinstance(self.to[0], Plate):
             if self.to_slice is None:
-                destination_visual = self.to[1].dataframe().data - self.to[0].dataframe().data
+                before = self.to[0].dataframe()
+                after = self.to[1].dataframe()
             else:
                 to_slice = copy(self.to_slice)
                 to_slice.plate = self.to[0]
                 before = to_slice.dataframe()
                 to_slice.plate = self.to[1]
                 after = to_slice.dataframe()
-                destination_visual = (after.data - before.data).style.format(precision=precision).use(before.export())
+            destination_visual = (after.data - before.data).style.format(precision=precision).use(before.export())
 
         if isinstance(source_visual, pandas.DataFrame):
             source_visual = source_visual.style
@@ -2178,7 +2179,7 @@ class Recipe:
                 else:  # Plate
                     for well in step.to[0].wells.flatten():
                         for substance in step.substances_used:
-                            step.trash[substance] = step.trash.get(substance, 0.) + well.contents[substance]
+                            step.trash[substance] = step.trash.get(substance, 0.) + well.contents.get(substance, 0.)
             elif operator == 'dilute':
                 dest = step.to[0]
                 dest_name = dest.name
