@@ -80,9 +80,9 @@ def test_create_stock_solution(water, salt, salt_water):
 
     """
     # Argument types checked
-    with pytest.raises(TypeError, match='Solute must be a Substance'):
+    with pytest.raises(TypeError, match=r'Solute\(s\) must be a Substance'):
         Container.create_solution('salt', water, concentration='0.5 M', total_quantity='100 mL')
-    with pytest.raises(TypeError, match='Concentration must be a str'):
+    with pytest.raises(TypeError, match=r'Concentration\(s\) must be a str'):
         Container.create_solution(salt, water, concentration=.5, total_quantity='100 mL')
     with pytest.raises(TypeError, match='Solvent must be a Substance'):
         Container.create_solution(salt, 'water', concentration='0.5 M', total_quantity='100 mL')

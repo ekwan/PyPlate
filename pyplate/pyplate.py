@@ -1050,74 +1050,130 @@ class Container:
             New container with desired solution.
         """
 
-        if not isinstance(solute, Substance):
-            raise TypeError("Solute must be a Substance.")
         if not isinstance(solvent, Substance):
             raise TypeError("Solvent must be a Substance.")
         if name and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
-        if 'concentration' in kwargs and not isinstance(kwargs['concentration'], str):
-            raise TypeError("Concentration must be a str.")
-        if 'quantity' in kwargs and not isinstance(kwargs['quantity'], str):
-            raise TypeError("Quantity must be a str.")
-        if 'total_quantity' in kwargs and not isinstance(kwargs['total_quantity'], str):
-            raise TypeError("Total quantity must be a str.")
-        if ('concentration' in kwargs) + ('total_quantity' in kwargs) + ('quantity' in kwargs) != 2:
-            raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
-
-        if not name:
-            name = f"Solution of {solute.name} in {solvent.name}"
+        if isinstance(solute, Substance):
+            solute = [solute]
+        elif not isinstance(solute, list) or any(not isinstance(substance, Substance) for substance in solute):
+            raise TypeError("Solute(s) must be a Substance.")
 
         concentration = kwargs.get('concentration', None)
         quantity = kwargs.get('quantity', None)
         total_quantity = kwargs.get('total_quantity', None)
 
-        if concentration is not None and quantity is not None:
-            # Calculate total quantity
-            ratio, numerator, denominator = Unit.parse_concentration(concentration)
-            amount = Unit.convert(solute, quantity, numerator)
-            total_quantity = f"{amount / ratio} {denominator}"
-        elif quantity is not None and total_quantity is not None:
-            # Calculate concentration
-            quantity_value, quantity_unit = Unit.parse_quantity(quantity)
-            total_quantity_value, total_quantity_unit = Unit.parse_quantity(total_quantity)
-            ratio, numerator, denominator = quantity_value / total_quantity_value, quantity_unit, total_quantity_unit
+        if (concentration is not None) + (quantity is not None) + (total_quantity is not None) != 2:
+            raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
+
+        if concentration is not None:
+            if isinstance(concentration, str):
+                concentration = [concentration] * len(solute)
+            elif not isinstance(concentration, list) or any(not isinstance(c, str) for c in concentration):
+                raise TypeError("Concentration(s) must be a str.")
+            try:
+                parsed_concentration = []
+                for c in concentration:
+                    parsed_concentration.append(Unit.parse_concentration(c))
+            except ValueError:
+                raise ValueError(f"Invalid concentration. ({c})")
+            concentration = parsed_concentration
+
+        if quantity is not None:
+            if isinstance(quantity, str):
+                quantity = [quantity] * len(solute)
+            elif not isinstance(quantity, list) or any(not isinstance(q, str) for q in quantity):
+                raise TypeError("Quantity(s) must be a str.")
+            try:
+                parsed_quantity = []
+                for q in quantity:
+                    parsed_quantity.append(Unit.parse_quantity(q))
+            except ValueError:
+                raise ValueError(f"Invalid quantity. ({q})")
+            quantity = parsed_quantity
+
+        if total_quantity and not isinstance(total_quantity, str):
+            raise TypeError("Total quantity must be a str.")
+
+        if not name:
+            name = f"Solution of {','.join(substance.name for substance in solute)} in {solvent.name}"
+
+        convert_one = lambda substance, u: Unit.convert_from(substance, 1,
+                                                             'U' if substance.is_enzyme() else 'mol', u)
+
+        initial_contents = []
+        # result of linalg.lstsq will be moles (or 'U') for all solutes solvent
+
+        if quantity is not None and total_quantity is not None:
+            try:
+                total_quantity, total_quantity_unit = Unit.parse_quantity(total_quantity)
+            except ValueError:
+                raise ValueError(f"Invalid total quantity. ({total_quantity})")
+            # We can build this without linalg
+            initial_contents = []
+            computed_total_quantity = 0.
+            for substance, (q, unit) in zip(solute, quantity):
+                initial_contents.append((substance, f"{q} {unit}"))
+                computed_total_quantity += Unit.convert_from(substance, q, unit, total_quantity_unit)
+            if computed_total_quantity >= total_quantity:
+                raise ValueError("Total quantity must be greater than sum of quantities.")
+            initial_contents.append((solvent, f"{total_quantity - computed_total_quantity} {total_quantity_unit}"))
+        elif concentration is not None and quantity is not None:
+            n = len(solute)
+            identity = numpy.identity(n + 1)[0]
+            a = numpy.zeros((n * 2, n + 1), dtype=float)
+            b = numpy.zeros(n * 2, dtype=float)
+            if len(concentration) != n or len(quantity) != n:
+                raise ValueError("Concentration, quantity, and solute must have the same length.")
+            bottom_arrays = {}
+            # first n rows are for concentrations, last n rows are for quantities
+            # I need to zip solutes and concentrations and get an index
+            for i, ((c, numerator, denominator), substance) in enumerate(zip(concentration, solute)):
+                if denominator not in bottom_arrays:
+                    bottom = numpy.array(list(convert_one(substance, denominator) for substance in solute + [solvent]))
+                    bottom_arrays[denominator] = bottom
+                else:
+                    bottom = bottom_arrays[denominator]
+                a[i] = c * bottom - numpy.roll(identity, i) * convert_one(substance, numerator)
+            for i, ((q, unit), substance) in enumerate(zip(quantity, solute)):
+                a[n + i] = numpy.roll(identity, i) * convert_one(substance, unit)
+                b[n + i] = q
+            xs, _, _, _ = numpy.linalg.lstsq(a, b, rcond=None)
+            if any(x <= 0 for x in xs):
+                raise ValueError("Solution is impossible to create.")
+            initial_contents = list(
+                (substance, f"{x} {'U' if substance.is_enzyme() else 'mol'}")
+                for x, substance in zip(xs, solute + [solvent])
+            )
         elif concentration is not None and total_quantity is not None:
-            ratio, numerator, denominator = Unit.parse_concentration(concentration)
-        else:
-            raise RuntimeError("Invalid combination of arguments.")
+            n = len(solute)
+            identity = numpy.identity(n + 1)[0]
+            # One column for each solute and one for solvent
+            # One row for each concentration and one for total_quantity
+            a = numpy.zeros((n + 1, n + 1), dtype=float)
+            b = numpy.zeros(n + 1, dtype=float)
+            if len(concentration) != n:
+                raise ValueError("Concentration and solute must have the same length.")
+            bottom_arrays = {}
+            # I need to zip solutes and concentrations and get an index
+            for i, ((c, numerator, denominator), substance) in enumerate(zip(concentration, solute)):
+                if denominator not in bottom_arrays:
+                    bottom = numpy.array(list(convert_one(substance, denominator) for substance in solute+[solvent]))
+                    bottom_arrays[denominator] = bottom
+                else:
+                    bottom = bottom_arrays[denominator]
+                a[i] = c * bottom - numpy.roll(identity, i) * convert_one(substance, numerator)
+            total_quantity, total_quantity_unit = Unit.parse_quantity(total_quantity)
+            a[-1] = numpy.array(list(convert_one(substance, total_quantity_unit) for substance in solute+[solvent]))
+            b[-1] = total_quantity
+            xs = numpy.linalg.solve(a, b)
+            if any(x <= 0 for x in xs):
+                raise ValueError("Solution is impossible to create.")
+            initial_contents = list((substance, f"{x} {'U' if substance.is_enzyme() else 'mol'}")
+                                    for x, substance in zip(xs, solute + [solvent]))
 
-        # We now have total_quantity and the concentration.
-        # x is solute quantity in moles or U, y is solvent quantity in mL
-        a = numpy.array([[0., 0.], [0., 0.]])
-        b = numpy.array([0., 0.])
-
-        solute_unit = (solute, 1, 'U') if solute.is_enzyme() else (solute, 1, 'mol')
-        solvent_unit = (solvent, 1, 'mL')
-
-        top = numpy.array([Unit.convert_from(*solute_unit, to_unit=numerator), 0.])
-        bottom = numpy.array([Unit.convert_from(*solute_unit, to_unit=denominator),
-                              Unit.convert_from(*solvent_unit, to_unit=denominator)])
-
-        if ratio is None or bottom is None or top is None:
-            raise TypeError("Invalid values.")
-        a[0] = ratio * bottom - top
-
-        total_quantity_value, total_quantity_unit = Unit.parse_quantity(total_quantity)
-
-        a[1] = numpy.array([Unit.convert_from(*solute_unit, to_unit=total_quantity_unit),
-                            Unit.convert_from(*solvent_unit, to_unit=total_quantity_unit)])
-
-        b[1] = total_quantity_value
-
-        x, y = numpy.linalg.solve(a, b)
-
-        if x < 0 or y < 0:
-            raise ValueError("Solution is impossible to create.")
-
-        result = Container(name, initial_contents=[(solute, f"{x} {'U' if solute.is_enzyme() else 'mol'}"),
-                                                   (solvent, f"{y} mL")])
+        result = Container(name, initial_contents=initial_contents)
         contents = []
         for substance, value in result.contents.items():
             value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
