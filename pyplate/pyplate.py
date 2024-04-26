@@ -35,6 +35,7 @@ from functools import cache
 from typing import Tuple, Dict, Iterable
 from copy import deepcopy, copy
 import numpy
+import numpy as np
 import pandas
 from tabulate import tabulate
 
@@ -2346,7 +2347,51 @@ class Recipe:
             substance, quantity = entry
             return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_storage_unit,
                                      unit)
+        def plate_helper(container):
+            entry = container.contents.items()
+            return sum(map(helper, entry))
 
+        if unit is None:
+            unit = config.volume_display_unit
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+        if not isinstance(container, Container) and not isinstance(container, Plate):
+            raise TypeError("Container must be a Container or a Plate.")
+        if not isinstance(timeframe, str):
+            raise TypeError("Timeframe must be a str.")
+        if timeframe not in self.stages.keys():
+            raise ValueError("Invalid Timeframe")
+        steps = self.steps[self.stages[timeframe]]
+        flows = {"in": 0, "out": 0}
+        if isinstance(container, Plate):
+            flows = {"in": np.zeros(container.wells.shape), "out": np.zeros(container.wells.shape)}
+        for step in steps:
+            if container.name in step.objects_used:
+                if isinstance(step.to[0], Container) and step.to[0].name == container.name:
+                    if step.trash:
+                        flows["out"] += sum(map(helper, step.trash.items()))
+                    else:
+                        flows["in"] += (sum(map(helper, step.to[1].contents.items())) -
+                                        sum(map(helper, step.to[0].contents.items())))
+                if isinstance(step.to[0], Plate) and step.to[0].name == container.name:
+                    if step.trash:
+                        flows["out"] += map(plate_helper, step.trash.items())
+                    else:
+                        vfunc = np.vectorize(plate_helper)
+                        flows["in"] += vfunc(step.to[1].wells) - vfunc(step.to[0].wells)
+                if isinstance(step.frm[0], Container) and step.frm[0].name == container.name:
+                    flows["out"] += (sum(map(helper, step.frm[0].contents.items())) -
+                                     sum(map(helper, step.frm[1].contents.items())))
+                if isinstance(step.frm[0], Plate) and step.frm[0].name == container.name:
+                    vfunc = np.vectorize(plate_helper)
+                    flows["out"] += vfunc(step.frm[0].wells) - vfunc(step.frm[1].wells)
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+        for key in flows:
+            flows[key] = round(flows[key], precision)
+
+        return flows
+
+    def get_amount_remaining(self, container: Container | Plate, timeframe: str = 'all', unit: str | None = None, mode: str = 'after') -> float:
         if unit is None:
             unit = config.volume_display_unit
         if not isinstance(unit, str):
@@ -2357,24 +2402,30 @@ class Recipe:
             raise TypeError("Timeframe must be a str.")
         if timeframe not in self.stages.keys():
             raise ValueError("Invalid Timeframe")
+
         steps = self.steps[self.stages[timeframe]]
-        flows = {"in": 0, "out": 0}
+        if mode == 'after':
+            steps = reversed(steps)
+
+        out = None
+        query_container = None
         for step in steps:
             if container.name in step.objects_used:
-                if isinstance(step.to[0], Container) and step.to[0].name == container.name:
-                    if step.trash:
-                        flows["out"] += sum(map(helper, step.trash.items()))
+                if step.to[0].name == container.name:
+                    if mode == 'after':
+                        query_container = step.to[1]
                     else:
-                        flows["in"] += (sum(map(helper, step.to[1].contents.items())) -
-                                        sum(map(helper, step.to[0].contents.items())))
-                if isinstance(step.frm[0], Container) and step.frm[0].name == container.name:
-                    flows["out"] += (sum(map(helper, step.frm[0].contents.items())) -
-                                     sum(map(helper, step.frm[1].contents.items())))
-        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-        for key in flows:
-            flows[key] = round(flows[key], precision)
+                        query_container = step.to[0]
+                else:
+                    if mode == 'after':
+                        query_container = step.frm[1]
+                    else:
+                        query_container = step.frm[0]
+                break
 
-        return flows
+
+
+
 
     def visualize(self, what: Plate, mode: str, unit: str, timeframe: (int | str | RecipeStep) = 'all',
                   substance: (str | Substance) = 'all', cmap: str = None) \
