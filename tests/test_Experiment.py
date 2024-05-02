@@ -1,12 +1,12 @@
 import pytest
 from pyplate.experiment_design import Factor, Experiment, ExperimentalSpace
-from pyplate.pyplate import Container
+from pyplate.pyplate import Container, Substance
 
 
 @pytest.fixture
 def example_experiment():
     factors = {"Factor1": "Value1", "Factor2": "Value2"}
-    return Experiment(factors, 1, 0)
+    return Experiment(factors, 1, 0, verifier=lambda x: True)
 
 
 # Tests for the Experiment class
@@ -18,7 +18,7 @@ def test_experiment_creation(example_experiment):
 
 def test_experiment_mapping_well(example_experiment):
     well = Container("96-well")
-    example_experiment.map_well(well)
+    example_experiment.map_container(well)
     assert example_experiment.well == well
 
 
@@ -28,7 +28,14 @@ def test_experiment_repr(example_experiment):
 
 
 def test_experiment_str(example_experiment):
-    expected_str = "Experiment: {'Factor1': 'Value1', 'Factor2': 'Value2'} with experiment_id 1 and replicate_idx 0"
+    water = Substance("H2O", mol_type=2)
+    water.mol_weight = 18.0153
+    water.density = 1
+    well = Container(
+        "96-well", max_volume="7.77 L", initial_contents=[(water, "7.76 L")]
+    )
+    example_experiment.map_container(well)
+    expected_str = "Experiment: {'Factor1': 'Value1', 'Factor2': 'Value2'} with experiment_id 1, replicate_idx 0, mapped to well Container (96-well) (7760.0/7770.0 mL of (['H2O (LIQUID): 430.745 mol'])"
     assert str(example_experiment) == expected_str
 
 

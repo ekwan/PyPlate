@@ -19,7 +19,7 @@ def test_2(salt, water):
     recipe.transfer(container, plate, quantity='50 uL')
     recipe.transfer(plate, plate2, quantity='10 uL')
     recipe.bake()
-    assert recipe.substance_used(salt, 'all', 'mmol') == '100.0 mmol'
+    assert recipe.get_substance_used(salt, 'all', 'mmol') == '100.0 mmol'
     # 50 umol * 96 = 4.8 mmol
-    assert recipe.substance_used(salt, 'dispensing', 'mmol') == '4.8 mmol'
+    assert recipe.get_substance_used(salt, 'dispensing', 'mmol') == '4.8 mmol'
     # returns 4.8 mmol + 10 umol * 96 = 5.76 mmol

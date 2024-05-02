@@ -1,7 +1,7 @@
 import numpy as np
 from pyplate.pyplate import Recipe, Container, Substance
-
 import pytest
+
 
 def test_simple_volume_used(salt_water, water):
     container = Container('container', initial_contents=[(water, '20 mL')])
@@ -12,7 +12,7 @@ def test_simple_volume_used(salt_water, water):
     recipe.bake()
     
     #Assertions
-    assert recipe.volume_used(container, 'all', 'mL') == 100
+    assert recipe.get_substance_used(container, 'all', 'mL') == 100
 
 def test_container_flows(sodium_sulfate, water):
     
