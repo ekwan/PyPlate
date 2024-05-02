@@ -88,260 +88,37 @@ def test_experimental_space_add_experiment_verification(
 
 
 def test_experimental_space_generate_experiments(cookie_experimental_space):
-    expected_exps = {
-        (300, "Chocolate Chip"): [
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 300,
-                    "Flavor": "Chocolate Chip",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 300,
-                    "Flavor": "Chocolate Chip",
-                },
-                1,
-                2,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 300,
-                    "Flavor": "Chocolate Chip",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 300,
-                    "Flavor": "Chocolate Chip",
-                },
-                1,
-                2,
-                None,
-            ),
-        ],
-        (300, "Oatmeal Raisin"): [
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 300,
-                    "Flavor": "Oatmeal Raisin",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 300,
-                    "Flavor": "Oatmeal Raisin",
-                },
-                1,
-                2,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 300,
-                    "Flavor": "Oatmeal Raisin",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 300,
-                    "Flavor": "Oatmeal Raisin",
-                },
-                1,
-                2,
-                None,
-            ),
-        ],
-        (300, "Peanut Butter"): [
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 300,
-                    "Flavor": "Peanut Butter",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 300,
-                    "Flavor": "Peanut Butter",
-                },
-                1,
-                2,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 300,
-                    "Flavor": "Peanut Butter",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 300,
-                    "Flavor": "Peanut Butter",
-                },
-                1,
-                2,
-                None,
-            ),
-        ],
-        (350, "Chocolate Chip"): [
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 350,
-                    "Flavor": "Chocolate Chip",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 350,
-                    "Flavor": "Chocolate Chip",
-                },
-                1,
-                2,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 350,
-                    "Flavor": "Chocolate Chip",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 350,
-                    "Flavor": "Chocolate Chip",
-                },
-                1,
-                2,
-                None,
-            ),
-        ],
-        (350, "Oatmeal Raisin"): [
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 350,
-                    "Flavor": "Oatmeal Raisin",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 350,
-                    "Flavor": "Oatmeal Raisin",
-                },
-                1,
-                2,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 350,
-                    "Flavor": "Oatmeal Raisin",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 350,
-                    "Flavor": "Oatmeal Raisin",
-                },
-                1,
-                2,
-                None,
-            ),
-        ],
-        (350, "Peanut Butter"): [
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 350,
-                    "Flavor": "Peanut Butter",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 10,
-                    "Baking Temperature": 350,
-                    "Flavor": "Peanut Butter",
-                },
-                1,
-                2,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 350,
-                    "Flavor": "Peanut Butter",
-                },
-                1,
-                1,
-                None,
-            ),
-            Experiment(
-                {
-                    "Baking Time": 30,
-                    "Baking Temperature": 350,
-                    "Flavor": "Peanut Butter",
-                },
-                1,
-                2,
-                None,
-            ),
-        ],
-    }
+    expected_exps = \
+        {(300, 'Chocolate Chip'): [
+            Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Chocolate Chip'}, 1, 1, None),
+            Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Chocolate Chip'}, 1, 2, None),
+            Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Chocolate Chip'}, 1, 1, None),
+            Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Chocolate Chip'}, 1, 2, None)],
+         (300, 'Oatmeal Raisin'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Oatmeal Raisin'}, 1, 2, None)],
+         (300, 'Peanut Butter'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Peanut Butter'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 300, 'Flavor': 'Peanut Butter'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Peanut Butter'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 300, 'Flavor': 'Peanut Butter'}, 1, 2, None)],
+         (350, 'Chocolate Chip'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Chocolate Chip'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Chocolate Chip'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Chocolate Chip'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Chocolate Chip'}, 1, 2, None)],
+         (350, 'Oatmeal Raisin'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Oatmeal Raisin'}, 1, 2, None)],
+         (350, 'Peanut Butter'): [
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Peanut Butter'}, 1, 1, None),
+             Experiment({'Baking Time': 10, 'Baking Temperature': 350, 'Flavor': 'Peanut Butter'}, 1, 2, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Peanut Butter'}, 1, 1, None),
+             Experiment({'Baking Time': 30, 'Baking Temperature': 350, 'Flavor': 'Peanut Butter'}, 1, 2, None)]}
 
     generated_exps = cookie_experimental_space.generate_experiments(
         factors={
