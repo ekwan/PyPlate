@@ -15,12 +15,12 @@ Substance Tracking
 
 Refer to :ref:`minimal-recipe` document for the recipe being queried in the examples below.
 
-How to use ``substance_used()``:
+How to use ``get_substance_used()``:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: python
 
-   def substance_used(self, substance: Substance, timeframe: str = 'all', unit: str = None,
+   def get_substance_used(self, substance: Substance, timeframe: str = 'all', unit: str = None,
                    destinations: Iterable[Container | Plate] | str = "plates")
 
 -  ``substance``: The Substance to track
@@ -44,7 +44,7 @@ Example calls
    ``container`` is our only destination?
 
 
->>> recipe.substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[container])
+>>> recipe.get_substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[container])
 5.0
 
 -  We compare the amount of ``sodium_sulfate`` in ``container`` at the beginning and end of the recipe
@@ -57,7 +57,7 @@ Example calls
 
 
 
->>> recipe.substance_used(substance=water, timeframe='all', unit='mmol', destinations=[container])
+>>> recipe.get_substance_used(substance=water, timeframe='all', unit='mmol', destinations=[container])
 515.0
 
 -  We compare the amount of water in ``container`` at the beginning and end of the recipe
@@ -70,7 +70,7 @@ Example calls
     How much sodium sulfate was used during ``Stage 1``\ if
     ``stock_solution`` is our only destination?
 
->>> recipe.substance_used(substance=sodium_sulfate, timeframe='Stage 1', unit='mmol', destinations=[stock_container])
+>>> recipe.get_substance_used(substance=sodium_sulfate, timeframe='Stage 1', unit='mmol', destinations=[stock_container])
 ValueError: Substance tracking assumes a net increase in the amount of the substance being tracked in the destination set.
 The amount of sodium_sulfate in the destinations decreased by 5 mmol.
 
