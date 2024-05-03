@@ -142,7 +142,7 @@ This transfer works because both plates are 8x12.
 Using Source Plates
 """""""""""""""""""
 
-Suppose you have a cross-coupling reaction of the form  X + Y --> Z. |br|
+Suppose you have a cross-electrophile coupling reaction of the form  X + Y --> Z. |br|
 You have 8 variations of coupling partner X1, X2, ..., X8 and 12 variations of coupling partner Y1, Y2, ..., Y12. |br|
 Together, the full product of these would make 96 potential products Z. |br|
 Now suppose you want to test a number of different conditions, sampling 1 condition per 96 well plate. |br|

@@ -117,8 +117,8 @@ If we want to visualize what happened to a plate during part or all of a recipe,
 .. image:: /images/recipe_visualization.png
 
 
-Recipe Steps:
--------------
+Recipe Steps
+------------
 
 - When a recipe is baked, all the steps are stored in the `steps` attribute of the recipe.
 - Each step has a `visualize` method that can be used to visualize the step, using the same arguments as the `visualize` method of the recipe.
