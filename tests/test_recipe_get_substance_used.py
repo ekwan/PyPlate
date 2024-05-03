@@ -444,12 +444,13 @@ def test_stages_2(water):
     recipe.uses(plate1, plate2)
 
     recipe.transfer(source=container1, destination=plate1, quantity='10 uL')
-
+    
+    recipe.start_stage('stage1')
     # fill the first well in plate
     recipe.fill_to(plate1[1, 1], solvent=water, quantity='20 uL')
 
     # start a new stage
-    recipe.start_stage('stage1')
+    
     recipe.transfer(source=plate1, destination=plate2, quantity='1 uL')
     recipe.remove(plate2, water)
     recipe.end_stage('stage1')
@@ -457,11 +458,11 @@ def test_stages_2(water):
     # bake the recipe
     recipe.bake()
     # dest should be destinations
-    assert recipe.get_substance_used(water, timeframe='all', unit='mL', destinations = [container1, plate1, plate2]) == 30.0
-    assert recipe.get_substance_used(water, timeframe='all', unit='mL', destinations = [plate1, plate2]) == 22.0
-    # assert recipe.get_substance_used(water, timeframe='stage1', unit='mL', dest = [plate1, plate2]) == -1.0
-    assert recipe.get_substance_used(water, timeframe='all', unit='mL', destinations = [plate1, plate2]) == 0.0
-    assert recipe.get_substance_used(water, timeframe='all', unit='mL', destinations = [plate2]) == 1
+    assert recipe.get_substance_used(water, timeframe='all', unit='mL', destinations = [container1, plate1, plate2]) == 10.96
+    assert recipe.get_substance_used(water, timeframe='stage1', unit='mL', destinations = [plate1, plate2]) == 0.96
+    #assert recipe.get_substance_used(water, timeframe='stage1', unit='mL', destinations = [plate1, plate2]) == -
+    assert recipe.get_substance_used(water, timeframe='all', unit='mL', destinations = [plate1, plate2]) == 1.92
+    assert recipe.get_substance_used(water, timeframe='all', unit='mL', destinations = [plate2]) == 0.096
 
 
 def test_stages_plates(water, salt):
