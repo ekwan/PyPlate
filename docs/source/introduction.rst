@@ -63,7 +63,7 @@ Below, we go through the README example in more detail.  Import the necessary cl
 
     from pyplate import Substance, Container, Plate, Recipe
 
-Create a liquid substance, triethylamine, with a molecular weight of 101.19 g/mol and a density of 0.726 g/mL.  The default units are set in ``pyplate.yaml`` (see **LINK TO CONFIG DISCUSSION**).
+Create a liquid substance, triethylamine, with a molecular weight of 101.19 g/mol and a density of 0.726 g/mL.  The default units are set in ``pyplate.yaml`` (see :ref:`configuration`).
 
 ::
 

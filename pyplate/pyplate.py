@@ -35,7 +35,9 @@ from functools import cache
 from typing import Tuple, Dict, Iterable
 from copy import deepcopy, copy
 import numpy
+import numpy as np
 import pandas
+from tabulate import tabulate
 
 from pyplate.slicer import Slicer
 from . import Config
@@ -482,6 +484,7 @@ class Unit:
             ratio *= Unit.convert_from_storage(1, 'mol')
         return ratio, numerator, denominator
 
+
 class Substance:
     """
     An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.). Immutable.
@@ -786,14 +789,22 @@ class Container:
 
         elif unit == 'g':
             mass_to_transfer = round(quantity_to_transfer, config.internal_precision)
-            total_mass = sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", "g") for
-                             substance, amount in source_container.contents.items())
+            total_mass = 0
+            for substance, amount in source_container.contents.items():
+                source_unit = 'U' if substance.is_enzyme() else config.moles_storage_unit
+                total_mass += Unit.convert_from(substance, amount, source_unit, "g")
             ratio = mass_to_transfer / total_mass
         elif unit == 'mol':
             moles_to_transfer = Unit.convert_to_storage(quantity_to_transfer, 'mol')
             total_moles = sum(amount for substance, amount in source_container.contents.items()
                               if not substance.is_enzyme())
             ratio = moles_to_transfer / total_moles
+        elif unit == 'U':
+            total_activity = sum(amount for substance, amount in source_container.contents.items()
+                                 if substance.is_enzyme())
+            if total_activity == 0:
+                raise ValueError("There are no enzymes in the source container.")
+            ratio = quantity_to_transfer / total_activity
         else:
             raise ValueError("Invalid quantity unit.")
 
@@ -864,22 +875,51 @@ class Container:
         to = to_array[0]
         return source_slice.plate, to
 
-    def __repr__(self):
-        # TODO: Make this more readable/beautiful
-        contents = []
-        for substance, value in sorted(self.contents.items(), key=lambda elem: (elem[0]._type, -elem[1])):
-            if substance.is_enzyme():
-                contents.append(f"{substance}: {value} U")
-            else:
-                value, unit = Unit.get_human_readable_unit(Unit.convert_from_storage(value, 'mol'), 'mmol')
-                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-                contents.append(
-                    f"{substance}: {round(value, precision)} {unit}")
+    @cache
+    def dataframe(self) -> pandas.DataFrame:
+        df = pandas.DataFrame(columns=['Volume', 'Mass', 'Moles', 'U'])
+        if self.max_volume == float('inf'):
+            df.loc['Maximum Volume'] = ['∞', '-', '-', '-']
+        else:
+            volume, unit = Unit.convert_from_storage_to_standard_format(self, self.max_volume)
+            volume = round(volume,
+                           config.precisions[unit] if unit in config.precisions else config.precisions['default'])
+            df.loc['Maximum Volume'] = [volume, '-', '-', '-']
+        totals = {'L': 0, 'g': 0, 'mol': 0, 'U': 0}
+        for substance, value in self.contents.items():
+            columns = []
+            for unit in ['L', 'g', 'mol', 'U']:
+                if unit == 'mol' and substance.is_enzyme():
+                    columns.append('-')
+                elif unit == 'U' and not substance.is_enzyme():
+                    columns.append('-')
+                else:
+                    from_unit = config.moles_storage_unit if not substance.is_enzyme() else 'U'
+                    converted_value = Unit.convert_from(substance, value, from_unit, unit)
+                    totals[unit] += converted_value
+                    converted_value, unit = Unit.get_human_readable_unit(converted_value, unit)
+                    precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                    columns.append(f"{round(converted_value, precision)} {unit}")
+            df.loc[substance.name] = columns
+        columns = []
+        for unit in ['L', 'g', 'mol', 'U']:
+            value = totals[unit]
+            value, unit = Unit.get_human_readable_unit(value, unit)
+            precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+            columns.append(f"{round(value, precision)} {unit}")
+        df.loc['Total'] = columns
 
-        max_volume = ('/' + str(Unit.convert_from_storage(self.max_volume, 'mL'))) \
-            if self.max_volume != float('inf') else ''
-        return f"Container ({self.name}) ({Unit.convert_from_storage(self.volume, 'mL')}" + \
-            f"{max_volume} mL of ({contents})"
+        df.columns.name = self.name
+        return df
+
+    @cache
+    def _repr_html_(self):
+        return self.dataframe().to_html(notebook=True)
+
+    @cache
+    def __repr__(self):
+        df = self.dataframe()
+        return tabulate(df, headers=[self.name] + list(df.columns), tablefmt='pretty')
 
     @cache
     def has_liquid(self) -> bool:
@@ -889,7 +929,7 @@ class Container:
         return any(substance.is_liquid() for substance in self.contents)
 
     @cache
-    def substances(self):
+    def get_substances(self):
         """
 
         Returns: A set of substances present in the container.
@@ -958,6 +998,9 @@ class Container:
         else:
             numerator = Unit.convert_from(solute, self.contents.get(solute, 0), config.moles_storage_unit, units[0])
 
+        if numerator == 0:
+            return 0
+
         if units[1].endswith('L'):
             denominator = self.get_volume(units[1])
         else:
@@ -1008,81 +1051,135 @@ class Container:
             New container with desired solution.
         """
 
-        if not isinstance(solute, Substance):
-            raise TypeError("Solute must be a Substance.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a Substance.")
+        if not isinstance(solvent, (Substance, Container)):
+            raise TypeError("Solvent must be a Substance or a Container.")
         if name and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
-        if 'concentration' in kwargs and not isinstance(kwargs['concentration'], str):
-            raise TypeError("Concentration must be a str.")
-        if 'quantity' in kwargs and not isinstance(kwargs['quantity'], str):
-            raise TypeError("Quantity must be a str.")
-        if 'total_quantity' in kwargs and not isinstance(kwargs['total_quantity'], str):
-            raise TypeError("Total quantity must be a str.")
-        if ('concentration' in kwargs) + ('total_quantity' in kwargs) + ('quantity' in kwargs) != 2:
-            raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
-
-        if not name:
-            name = f"solution of {solute.name} in {solvent.name}"
+        if isinstance(solute, Substance):
+            solute = [solute]
+        elif not isinstance(solute, list) or any(not isinstance(substance, Substance) for substance in solute):
+            raise TypeError("Solute(s) must be a Substance.")
 
         concentration = kwargs.get('concentration', None)
         quantity = kwargs.get('quantity', None)
         total_quantity = kwargs.get('total_quantity', None)
 
-        if concentration is not None and quantity is not None:
-            # Calculate total quantity
-            ratio, numerator, denominator = Unit.parse_concentration(concentration)
-            amount = Unit.convert(solute, quantity, numerator)
-            total_quantity = f"{amount / ratio} {denominator}"
-        elif quantity is not None and total_quantity is not None:
-            # Calculate concentration
-            quantity_value, quantity_unit = Unit.parse_quantity(quantity)
-            total_quantity_value, total_quantity_unit = Unit.parse_quantity(total_quantity)
-            ratio, numerator, denominator = quantity_value / total_quantity_value, quantity_unit, total_quantity_unit
-        elif concentration is not None and total_quantity is not None:
-            ratio, numerator, denominator = Unit.parse_concentration(concentration)
-        else:
-            raise RuntimeError("Invalid combination of arguments.")
+        original_solvent = solvent
+        if isinstance(solvent, Container):
+            # Calculate mol_weight and density of solvent
+            # get total mass of solvent
+            total_mass = sum(Unit.convert_from(substance, amount, 'U' if substance.is_enzyme() else 'mol', 'g')
+                             for substance, amount in solvent.contents.items())
+            total_moles = Unit.convert_from_storage(sum(amount for substance, amount in solvent.contents.items()
+                                                        if not substance.is_enzyme()), 'mol')
+            total_volume = solvent.get_volume('mL')
+            if total_moles == 0 or total_volume == 0:
+                raise ValueError("Solvent must contain a non-zero amount of substance.")
+            # mol_weight = g/mol, density = g/mL
+            solvent = Substance.liquid('fake solvent',
+                                       mol_weight=total_mass / total_moles, density=total_mass / total_volume)
 
-        # We now have total_quantity and the concentration.
-        # x is solute quantity in moles or U, y is solvent quantity in mL
-        a = numpy.array([[0., 0.], [0., 0.]])
-        b = numpy.array([0., 0.])
+        if (concentration is not None) + (quantity is not None) + (total_quantity is not None) != 2:
+            raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
 
-        solute_unit = (solute, 1, 'U') if solute.is_enzyme() else (solute, 1, 'mol')
-        solvent_unit = (solvent, 1, 'mL')
+        if total_quantity and not isinstance(total_quantity, str):
+            raise TypeError("Total quantity must be a str.")
 
-        top = numpy.array([Unit.convert_from(*solute_unit, to_unit=numerator), 0.])
-        bottom = numpy.array([Unit.convert_from(*solute_unit, to_unit=denominator),
-                              Unit.convert_from(*solvent_unit, to_unit=denominator)])
+        if not name:
+            name = f"Solution of {','.join(substance.name for substance in solute)} in {solvent.name}"
 
-        if ratio is None or bottom is None or top is None:
-            raise TypeError("Invalid values.")
-        a[0] = ratio * bottom - top
+        def convert_one(substance: Substance, u: str) -> float:
+            """ Converts 1 mol or U to unit `u` for a given substance. """
+            return Unit.convert_from(substance, 1, 'U' if substance.is_enzyme() else 'mol', u)
 
-        total_quantity_value, total_quantity_unit = Unit.parse_quantity(total_quantity)
+        # result of linalg.solve will be moles (or 'U') for all solutes solvent
 
-        a[1] = numpy.array([Unit.convert_from(*solute_unit, to_unit=total_quantity_unit),
-                            Unit.convert_from(*solvent_unit, to_unit=total_quantity_unit)])
+        n = len(solute)
+        a = numpy.zeros((n * 2, n + 1), dtype=float)
+        b = numpy.zeros(n * 2, dtype=float)
+        index = 0
+        identity = numpy.identity(n + 1)[0]
+        if concentration is not None:
+            if isinstance(concentration, str):
+                concentration = [concentration] * len(solute)
+            elif not isinstance(concentration, Iterable):
+                raise TypeError("Concentration(s) must be a str.")
+            bottom_arrays = {}
+            for i, (c, substance) in enumerate(zip(concentration, solute)):
+                if not isinstance(c, str):
+                    raise TypeError("Concentration(s) must be a str.")
+                try:
+                    c, numerator, denominator = Unit.parse_concentration(c)
+                except ValueError:
+                    raise ValueError(f"Invalid concentration. ({c})")
 
-        b[1] = total_quantity_value
+                if denominator not in bottom_arrays:
+                    bottom = numpy.array(list(convert_one(substance, denominator) for substance in solute + [solvent]))
+                    bottom_arrays[denominator] = bottom
+                else:
+                    bottom = bottom_arrays[denominator]
 
-        x, y = numpy.linalg.solve(a, b)
+                # c = top/bottom
+                a[index] = c * bottom - numpy.roll(identity, i) * convert_one(substance, numerator)
+                index += 1
 
-        if x < 0 or y < 0:
+        if quantity is not None:
+            if isinstance(quantity, str):
+                quantity = [quantity] * len(solute)
+            elif not isinstance(quantity, Iterable):
+                raise TypeError("Quantity(s) must be a str.")
+            for i, (q, substance) in enumerate(zip(quantity, solute)):
+                if not isinstance(q, str):
+                    raise TypeError("Quantity(s) must be a str.")
+                q, unit = Unit.parse_quantity(q)
+                a[index] = numpy.roll(identity, i) * convert_one(substance, unit)
+                b[index] = q
+                index += 1
+
+        if total_quantity is not None:
+            total_quantity, total_quantity_unit = Unit.parse_quantity(total_quantity)
+            a[index] = numpy.array(
+                list(convert_one(substance, total_quantity_unit) for substance in solute + [solvent]))
+            b[index] = total_quantity
+
+        xs = numpy.linalg.solve(a[:n + 1], b[:n + 1])
+        if any(x <= 0 for x in xs):
             raise ValueError("Solution is impossible to create.")
 
-        result = Container(name, initial_contents=[(solute, f"{x} {'U' if solute.is_enzyme() else 'mol'}"),
-                                                   (solvent, f"{y} mL")])
-        contents = []
-        for substance, value in result.contents.items():
-            value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
-            precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-            contents.append(f"{round(value, precision)} {unit} of {substance.name}")
-        result.instructions = "Add " + ", ".join(contents) + " to a container."
-        return result
+        for i in range(len(a)):
+            if abs(sum(a[i] * xs) - b[i]) > 1e-6:
+                raise ValueError("Solution is impossible to create.")
+
+        initial_contents = list((substance, f"{x} {'U' if substance.is_enzyme() else 'mol'}") for x, substance in
+                                zip(xs, solute + [solvent]))
+        if isinstance(original_solvent, Container):
+            result = Container(name, initial_contents=initial_contents[:-1])
+            contents = []
+            for substance, value in result.contents.items():
+                value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                contents.append(f"{round(value, precision)} {unit} of {substance.name}")
+            _, solvent_amount = initial_contents[-1]
+            solvent_volume = Unit.convert_from(solvent, xs[-1], 'mol', 'L')
+            solvent_volume, volume_unit = Unit.get_human_readable_unit(solvent_volume, 'L')
+            solvent_volume = round(solvent_volume,
+                                   config.precisions[volume_unit] if volume_unit in config.precisions else
+                                   config.precisions['default'])
+
+            original_solvent, result = Container.transfer(original_solvent, result, solvent_amount)
+            result.instructions = ("Add " + ", ".join(contents) +
+                                   f" to {solvent_volume} {volume_unit} of {original_solvent.name}.")
+            return original_solvent, result
+        else:
+            result = Container(name, initial_contents=initial_contents)
+            contents = []
+            for substance, value in result.contents.items():
+                value, unit = Unit.convert_from_storage_to_standard_format(substance, value)
+                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+                contents.append(f"{round(value, precision)} {unit} of {substance.name}")
+            result.instructions = "Add " + ", ".join(contents) + " to a container."
+            return result
 
     @staticmethod
     def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance | Container,
@@ -1455,13 +1552,13 @@ class Plate:
         # Arguments are type checked in PlateSlicer.volumes
         return self[:].get_volumes(substance=substance, unit=unit)
 
-    def substances(self) -> set[Substance]:
+    def get_substances(self) -> set[Substance]:
         """
 
         Returns: A set of substances present in the slice.
 
         """
-        return self[:].substances()
+        return self[:].get_substances()
 
     def get_moles(self, substance: (Substance | Iterable[Substance]), unit: str = None) -> numpy.ndarray:
         """
@@ -1476,7 +1573,7 @@ class Plate:
         # Arguments are type checked in PlateSlicer.moles
         return self[:].get_moles(substance=substance, unit=unit)
 
-    def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None) \
+    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None) \
             -> pandas.io.formats.style.Styler:
         """
 
@@ -1489,6 +1586,8 @@ class Plate:
 
         """
         # Types are checked in PlateSlicer.dataframe
+        if unit is None:
+            unit = config.volume_display_unit
         return self[:].dataframe(substance=substance, unit=unit, cmap=cmap)
 
     def get_volume(self, unit: str = 'uL') -> float:
@@ -1555,6 +1654,8 @@ class RecipeStep:
 
     def __init__(self, recipe: Recipe, operator: str, frm: Container | PlateSlicer | Plate,
                  to: Container | PlateSlicer | Plate, *operands):
+        self.frm_slice = None
+        self.to_slice = None
         self.recipe = recipe
         self.objects_used = set()
         self.substances_used = set()
@@ -1565,22 +1666,48 @@ class RecipeStep:
         self.operands = operands
         self.instructions = ""
 
-    def visualize(self, what: Plate, mode: str, unit: str, substance: (str | Substance) = 'all', cmap: str = None) \
-            -> pandas.io.formats.style.Styler:
-        """
+    def _repr_html_(self):
+        precision = config.precisions[config.volume_display_unit] if config.volume_display_unit in config.precisions \
+            else config.precisions['default']
+        source_visual = None
+        if isinstance(self.frm[0], Container):
+            source_visual = self.frm[0].dataframe()
+        elif isinstance(self.frm[0], Plate):
+            if self.frm_slice is None:
+                source_visual = self.frm[0].dataframe()
+            else:
+                frm_slice = copy(self.frm_slice)
+                frm_slice.plate = self.frm[0]
+                source_visual = frm_slice.dataframe()
+        destination_visual = None
+        if isinstance(self.to[0], Container):
+            destination_visual = self.to[1].dataframe()
+        elif isinstance(self.to[0], Plate):
+            if self.to_slice is None:
+                before = self.to[0].dataframe()
+                after = self.to[1].dataframe()
+            else:
+                to_slice = copy(self.to_slice)
+                to_slice.plate = self.to[0]
+                before = to_slice.dataframe()
+                to_slice.plate = self.to[1]
+                after = to_slice.dataframe()
+            destination_visual = (after.data - before.data).style.format(precision=precision).use(before.export())
 
-        Provide visualization of what happened during this step.
+        if isinstance(source_visual, pandas.DataFrame):
+            source_visual = source_visual.style
+        if isinstance(destination_visual, pandas.DataFrame):
+            destination_visual = destination_visual.style
 
-        Args:
-            what: Plate we are interested in.
-            mode: 'delta', or 'final'
-            unit: Unit we are interested in. ('mmol', 'uL', 'mg')
-            substance: Substance we are interested in. ('all', water, ATP)
-            cmap: Colormap to use. Defaults to default_colormap from config.
+        label = "Destination (delta): " if isinstance(self.to[0], Plate) else "Destination: "
+        destination_visual.set_caption(label + self.to[0].name)
+        if source_visual is None:
+            return self.instructions + '<br/>' + destination_visual.to_html()
 
-        Returns: A dataframe with the requested information.
-        """
-        return self.recipe.visualize(what, mode, unit, self, substance, cmap)
+        source_visual.set_table_attributes("style='display:inline; margin-right:20px'")
+        source_visual.set_caption(f"Source (initial): {self.frm[0].name}")
+        destination_visual.set_table_attributes("style='display:inline'")
+        return self.instructions + '<br/>' + source_visual.to_html() + destination_visual.to_html()
 
 
 class Recipe:
@@ -1926,6 +2053,9 @@ class Recipe:
                 elif isinstance(elem, (Container, Plate)):
                     step.objects_used.add(elem.name)
 
+            step.frm_slice = step.frm[0] if isinstance(step.frm[0], PlateSlicer) else None
+            step.to_slice = step.to[0] if isinstance(step.to[0], PlateSlicer) else None
+
             operator = step.operator
             if operator == 'create_container':
                 dest = step.to[0]
@@ -1935,7 +2065,7 @@ class Recipe:
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
                 self.results[dest_name] = Container(dest_name, max_volume, initial_contents)
-                step.substances_used = self.results[dest_name].substances()
+                step.substances_used = self.results[dest_name].get_substances()
                 step.to.append(self.results[dest_name])
                 step.instructions = f"Create container {dest_name} with initial contents: {initial_contents}."
             elif operator == 'transfer':
@@ -1960,7 +2090,7 @@ class Recipe:
                     source = self.results[source_name]
                     step.frm[0] = source
 
-                step.substances_used = source.substances()
+                step.substances_used = source.get_substances()
 
                 if isinstance(dest, PlateSlicer):
                     dest = deepcopy(dest)
@@ -2002,7 +2132,7 @@ class Recipe:
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
                 self.results[dest_name] = Container.create_solution(solute, solvent, dest_name, **kwargs)
-                step.substances_used = self.results[dest_name].substances()
+                step.substances_used = self.results[dest_name].get_substances()
                 step.to.append(self.results[dest_name])
             elif operator == 'solution_from':
                 source = step.frm[0]
@@ -2019,7 +2149,7 @@ class Recipe:
                 source = self.results[source_name]
                 self.results[source_name], self.results[dest_name] = \
                     Container.create_solution_from(source, solute, concentration, solvent, quantity, dest.name)
-                step.substances_used = self.results[dest_name].substances()
+                step.substances_used = self.results[dest_name].get_substances()
                 step.frm.append(self.results[source_name])
                 step.to.append(self.results[dest_name])
             elif operator == 'remove':
@@ -2043,13 +2173,13 @@ class Recipe:
                 self.results[dest_name] = dest.remove(what)
                 step.to.append(self.results[dest_name])
                 # substances_used is everything that is in step.to[0] but not in step.to[1]
-                step.substances_used = set.difference(step.to[0].substances(), step.to[1].substances())
+                step.substances_used = set.difference(step.to[0].get_substances(), step.to[1].get_substances())
                 if isinstance(dest, Container):
                     step.trash = {substance: step.to[0].contents[substance] for substance in step.substances_used}
                 else:  # Plate
                     for well in step.to[0].wells.flatten():
                         for substance in step.substances_used:
-                            step.trash[substance] = step.trash.get(substance, 0.) + well.contents[substance]
+                            step.trash[substance] = step.trash.get(substance, 0.) + well.contents.get(substance, 0.)
             elif operator == 'dilute':
                 dest = step.to[0]
                 dest_name = dest.name
@@ -2121,6 +2251,7 @@ class Recipe:
                         if start_well == end_well:
                             result.append(f"{plate.row_names[start_well[0]]}{plate.column_names[start_well[1]]}")
                         return result
+
                     amounts = dict()
                     plate = step.to[0]
                     for row in range(plate.n_rows):
@@ -2247,19 +2378,24 @@ class Recipe:
             substance, quantity = entry
             return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_storage_unit,
                                      unit)
+        def plate_helper(container):
+            entry = container.contents.items()
+            return sum(map(helper, entry))
 
         if unit is None:
             unit = config.volume_display_unit
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
-        if not isinstance(container, Container):
-            raise TypeError("Container must be a Container.")
+        if not isinstance(container, Container) and not isinstance(container, Plate):
+            raise TypeError("Container must be a Container or a Plate.")
         if not isinstance(timeframe, str):
             raise TypeError("Timeframe must be a str.")
         if timeframe not in self.stages.keys():
             raise ValueError("Invalid Timeframe")
         steps = self.steps[self.stages[timeframe]]
         flows = {"in": 0, "out": 0}
+        if isinstance(container, Plate):
+            flows = {"in": np.zeros(container.wells.shape), "out": np.zeros(container.wells.shape)}
         for step in steps:
             if container.name in step.objects_used:
                 if isinstance(step.to[0], Container) and step.to[0].name == container.name:
@@ -2268,18 +2404,82 @@ class Recipe:
                     else:
                         flows["in"] += (sum(map(helper, step.to[1].contents.items())) -
                                         sum(map(helper, step.to[0].contents.items())))
+                if isinstance(step.to[0], Plate) and step.to[0].name == container.name:
+                    if step.trash:
+                        flows["out"] += sum(map(helper, step.trash.items()))
+                    else:
+                        vfunc = np.vectorize(plate_helper)
+                        flows["in"] += vfunc(step.to[1].wells) - vfunc(step.to[0].wells)
                 if isinstance(step.frm[0], Container) and step.frm[0].name == container.name:
                     flows["out"] += (sum(map(helper, step.frm[0].contents.items())) -
                                      sum(map(helper, step.frm[1].contents.items())))
+                if isinstance(step.frm[0], Plate) and step.frm[0].name == container.name:
+                    vfunc = np.vectorize(plate_helper)
+                    flows["out"] += vfunc(step.frm[0].wells) - vfunc(step.frm[1].wells)
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         for key in flows:
             flows[key] = round(flows[key], precision)
 
         return flows
 
+    def get_amount_remaining(self, container: Container | Plate, timeframe: str = 'all', unit: str | None = None, mode: str = 'after') -> float:
+
+        def conversion_helper(entry):
+            substance, quantity = entry
+            return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_storage_unit,
+                                     unit)
+
+        def plate_helper(well):
+            entry = well.contents.items()
+            return sum(map(conversion_helper, entry))
+
+        def container_helper(container):
+            if isinstance(container, Container):
+                entry = container.contents.items()
+                return sum(map(conversion_helper, entry))
+            elif isinstance(container, Plate):
+                vfunc = np.vectorize(plate_helper)
+                return vfunc(container.wells)
+
+
+        if unit is None:
+            unit = config.volume_display_unit
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+        if not isinstance(container, Container) and not isinstance(container, Plate):
+            raise TypeError("Container must be a Container or a Plate.")
+        if not isinstance(timeframe, str):
+            raise TypeError("Timeframe must be a str.")
+        if timeframe not in self.stages.keys():
+            raise ValueError("Invalid Timeframe")
+
+        steps = self.steps[self.stages[timeframe]]
+        if mode == 'after':
+            steps = reversed(steps)
+
+        out = None
+        query_container = None
+        for step in steps:
+            if container.name in step.objects_used:
+                if step.to[0].name == container.name:
+                    if mode == 'after':
+                        query_container = step.to[1]
+                    else:
+                        query_container = step.to[0]
+                else:
+                    if mode == 'after':
+                        query_container = step.frm[1]
+                    else:
+                        query_container = step.frm[0]
+                return container_helper(query_container)
+
+
+
+
+
     def visualize(self, what: Plate, mode: str, unit: str, timeframe: (int | str | RecipeStep) = 'all',
                   substance: (str | Substance) = 'all', cmap: str = None) \
-            -> pandas.io.formats.style.Styler:
+            -> str | pandas.io.formats.style.Styler:
         """
 
         Provide visualization of what happened during the step.
@@ -2324,7 +2524,8 @@ class Recipe:
                 return Unit.convert_from(substance, elem.contents.get(substance, 0), substance_unit, unit)
 
         if isinstance(timeframe, RecipeStep):
-            start_index = end_index = self.steps.index(timeframe)
+            start_index = self.steps.index(timeframe)
+            end_index = start_index + 1
         elif isinstance(timeframe, str):
             start_index = self.stages[timeframe].start
             end_index = self.stages[timeframe].stop
@@ -2353,7 +2554,7 @@ class Recipe:
                 end = i
                 break
         if start is None or end is None:
-            raise ValueError("Plate not used in the desired step(s).")
+            return "This plate was not used in the specified timeframe."
 
         if mode == 'delta':
             before_data = None
@@ -2529,7 +2730,7 @@ class PlateSlicer(Slicer):
 
         return frm.plate, to.plate
 
-    def dataframe(self, unit: str, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None):
+    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None):
         """
 
         Arguments:
@@ -2540,6 +2741,9 @@ class PlateSlicer(Slicer):
         Returns: Shaded dataframe of quantities in each well.
 
         """
+        if unit is None:
+            unit = config.volume_display_unit
+
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
         if (substance != 'all' and not isinstance(substance, Substance) and
@@ -2550,7 +2754,14 @@ class PlateSlicer(Slicer):
         if not isinstance(cmap, str):
             raise TypeError("Colormap must be a str.")
 
+        if ('/' in unit or unit[-1] == 'm' or unit[-1] == 'M') and substance == 'all':
+            raise ValueError("Cannot display concentrations with respect to 'all' substances.")
+
         def helper(elem):
+            if '/' in unit or unit[-1] == 'm' or unit[-1] == 'M':
+                """ Returns concentration of substance in elem. """
+                return elem.get_concentration(substance, unit)
+            # else
             """ Returns amount of substance in elem. """
             if substance == 'all':
                 amount = 0
@@ -2571,7 +2782,7 @@ class PlateSlicer(Slicer):
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         df = self.get_dataframe().apply(numpy.vectorize(helper, cache=True, otypes='d'))
         vmin, vmax = df.min().min(), df.max().max()
-        styler = df.style.format(precision=precision).background_gradient(cmap, vmin=vmin, vmax=vmax)
+        styler = df.style.background_gradient(cmap, vmin=vmin, vmax=vmax).format(precision=precision)
         return styler
 
     def get_volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> numpy.ndarray:
@@ -2618,7 +2829,7 @@ class PlateSlicer(Slicer):
 
         return numpy.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)
 
-    def substances(self) -> set[Substance]:
+    def get_substances(self) -> set[Substance]:
         """
 
         Returns: A set of substances present in the plate.

@@ -2,8 +2,6 @@ from pathlib import Path
 import os
 import yaml
 
-# import pyplate
-
 
 class Config:
     def __init__(self):
@@ -33,14 +31,19 @@ class Config:
         self.volume_display_unit = yaml_config['volume_display_unit']
         assert self.volume_display_unit[-1] == 'L'
 
+        self.concentration_display_unit = yaml_config['concentration_display_unit']
+        # we can't use Unit to do a full check of the unit, so we just do a cursory check
+        assert ('/' in self.concentration_display_unit or self.concentration_display_unit[-1] == 'm' or
+                self.concentration_display_unit[-1] == 'M')
         self.default_solid_density = float(yaml_config['default_solid_density'])
         self.default_enzyme_density = float(yaml_config['default_enzyme_density'])
         self.default_weight_volume_units = yaml_config['default_weight_volume_units']
-
 
         self.default_colormap = yaml_config['default_colormap']
         self.default_diverging_colormap = yaml_config['default_diverging_colormap']
         self.precisions = yaml_config['precisions']
 
 
-from .pyplate import Substance, Container, Plate, Recipe
+# This has to be imported after Config is defined, otherwise there will be a circular import.
+from .pyplate import Substance, Container, Plate, Recipe, Unit
+__all__ = ['Substance', 'Container', 'Plate', 'Recipe', 'Unit', 'Config']

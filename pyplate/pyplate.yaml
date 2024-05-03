@@ -4,9 +4,9 @@ internal_precision: 10
 # How many digits of precision to return to the user
 precisions:
   default: 3
-  uL: 1
+  uL: 0
   umol: 1
-  mg: 2
+  mg: 1
 
 # How to store volumes and moles internally
 # uL means we will store volumes as microliters
@@ -19,7 +19,10 @@ moles_storage_unit: umol
 # umol means we will return moles as micromoles
 moles_display_unit: umol
 
-# density for solids/biologics in g/mL or U/mL. Can be set to float('inf') to give solids and biologics zero volume.
+# Default concentration unit for get_concentration()
+concentration_display_unit: M
+
+# density for solids/enzymes in g/mL or U/mL. Can be set to float('inf') to give solids and enzymes zero volume.
 default_solid_density: 1
 default_enzyme_density: 1
 

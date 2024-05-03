@@ -30,7 +30,7 @@ def test_create_solution(salt, water, triethylamine, dmso, sodium_sulfate, lipas
                 assert abs(total - 10) < epsilon, f"Making 10 {quantity_unit} of a 0.001 {numerator}/{denominator}" \
                                                   f" solution of {solute} and {solvent} failed."
                 conc = con.get_concentration(solute, f"{numerator}/{denominator}")
-                assert abs(conc - 0.001) < epsilon
+                assert abs(conc - 0.001) < epsilon, f"{solute} and {solvent} failed to create a 0.001 {numerator}/{denominator}"
 
                 con = Container.create_solution(solute, solvent, concentration=f"0.01 {numerator}/10 {denominator}",
                                                 total_quantity=f"10 {quantity_unit}")
