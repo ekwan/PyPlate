@@ -16,7 +16,7 @@ Substance Tracking
 Refer to :ref:`minimal-recipe` document for the recipe being queried in the examples below.
 
 How to use ``get_substance_used()``:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: python
 

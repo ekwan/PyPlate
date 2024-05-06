@@ -9,6 +9,5 @@
    self
    introduction
    pyplate
-   Experiment Design API <experiment_design>
    users_guide
    developers_guide
