@@ -22,7 +22,25 @@ Create a 1 M solution of salt water::
 
 If a name is not specified, a name is generated from the solute and solvent names.
 
-.. Rework create_solution so concentration='1 g/mL' works.
+Two out of the three parameters ``concentration``, ``quantity``, and ``total_quantity`` must be specified. The third is calculated from the other two.
+
+
+A solution can be made of more than one solute at the same time::
+
+    solution = Container.create_solution(solute=[salt, sodium_sulfate], solvent=water, concentration='1 M', total_quantity='100 mL')
+
+This will have 1 M of each solute in the solution.
+
+If one value for a parameter is given, it is assumed to be the same for all solutes. If multiple values are given, they must be the same length as the number of solutes.
+
+You can specify separate concentrations for each solute as well::
+
+    solution = Container.create_solution(solute=[salt, sodium_sulfate], solvent=water, concentration=['1 M', '0.5 M'], total_quantity='100 mL')
+
+
+Or, you can specify how much of each solute you want::
+
+    solution = Container.create_solution(solute=[salt, sodium_sulfate], solvent=water, quantity=['50 mg', '50 mg'], total_quantity='100 mL')
 
 
 Getting properties
