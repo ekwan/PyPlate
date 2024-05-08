@@ -30,6 +30,10 @@ Factor
 - A factor is a variable that is under the control of the experimenter
 - Factors have names which must be unique to a given experimental space and a list of possible values
 - Possibles values for each Factor may include Substances, numerics, strings, or None
+- A factor may take one of three possible forms. Based on the type of the factor, the level of a factor in a given well may be extracted.
+    - It may be a string or numeric, in which case it is assumed to be a experimental condition which can be accessed from the experimental_conditions dictionary of a Container.
+    - It may be a Substance, in which case the contents of the Container may be queried to verify the presence of the Substance.
+    - It may be a (Substance, numeric) tuple, in which case the value of the factor may be extracted from the contents of the Container.
 
 ::
 
