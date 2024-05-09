@@ -1032,18 +1032,19 @@ class Container:
         return Unit.convert_from_storage(self.volume, unit)
 
     @staticmethod
-    def create_solution(solute: Substance, solvent: Substance, name: str = None, **kwargs) -> Container:
+    def create_solution(solute: Substance|Iterable[Substance], solvent: Substance|Container,
+                        name: str = None, **kwargs) -> Container:
         """
         Create a solution.
 
         Two out of concentration, quantity, and total_quantity must be specified.
 
         Arguments:
-            solute: What to dissolve.
-            solvent: What to dissolve with.
+            solute: What to dissolve. Can be a single Substance or a list of Substances.
+            solvent: What to dissolve with. Can be a Substance or a Container.
             name: Optional name for new container.
-            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
-            quantity: Desired quantity of solute. ('3 mL', '10 g')
+            concentration: Desired concentration(s). ('1 M', '0.1 umol/10 uL', etc.)
+            quantity: Desired quantity of solute(s). ('3 mL', '10 g')
             total_quantity: Desired total quantity. ('3 mL', '10 g')
 
 
@@ -1852,18 +1853,19 @@ class Recipe:
 
         return new_container
 
-    def create_solution(self, solute, solvent, name=None, **kwargs) -> Container:
+    def create_solution(self, solute: Substance|Iterable[Substance], solvent: Substance|Container,
+                        name=None, **kwargs) -> Container:
         """
         Adds a step to the recipe which creates a solution.
 
         Two out of concentration, quantity, and total_quantity must be specified.
 
         Arguments:
-            solute: What to dissolve.
-            solvent: What to dissolve with.
+            solute: What to dissolve. Can be a single Substance or an iterable of Substances.
+            solvent: What to dissolve with. Can be a Substance or a Container.
             name: Optional name for new container.
-            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
-            quantity: Desired quantity of solute. ('3 mL', '10 g')
+            concentration: Desired concentration(s). ('1 M', '0.1 umol/10 uL', etc.)
+            quantity: Desired quantity of solute(s). ('3 mL', '10 g')
             total_quantity: Desired total quantity. ('3 mL', '10 g')
 
 
