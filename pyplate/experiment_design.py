@@ -1,4 +1,4 @@
-from typing import Union, Optional, List, Callable
+from typing import Optional, Callable
 
 from pyplate import Substance, Container
 import itertools
@@ -186,8 +186,8 @@ blocked together based on their factors use.
                 raise ValueError(f"Experiment factor {factor_name} value {experiment[factor_name]}"
                                  f" not in possible values {factor_object.possible_values}")
         if not self.factor_rules(experiment):
-            raise ValueError(f"Experiment does not satisfy factor rules, make sure you don't have any conflicting "
-                             f"factors.")
+            raise ValueError("Experiment does not satisfy factor rules, make sure you don't have any conflicting "
+                             "factors.")
         factor_combination = sorted(experiment.factors.items())
         self.experiments[factor_combination] = experiment
 
@@ -255,7 +255,7 @@ blocked together based on their factors use.
             ],
             ...
         ]
-        
+
         Easy to use this to create dicts and thus experiments
         """
 

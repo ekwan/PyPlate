@@ -1032,7 +1032,7 @@ class Container:
         return Unit.convert_from_storage(self.volume, unit)
 
     @staticmethod
-    def create_solution(solute: Substance|Iterable[Substance], solvent: Substance|Container,
+    def create_solution(solute: Substance | Iterable[Substance], solvent: Substance | Container,
                         name: str = None, **kwargs) -> Container:
         """
         Create a solution.
@@ -1853,7 +1853,7 @@ class Recipe:
 
         return new_container
 
-    def create_solution(self, solute: Substance|Iterable[Substance], solvent: Substance|Container,
+    def create_solution(self, solute: Substance | Iterable[Substance], solvent: Substance | Container,
                         name=None, **kwargs) -> Container:
         """
         Adds a step to the recipe which creates a solution.
@@ -2380,6 +2380,7 @@ class Recipe:
             substance, quantity = entry
             return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_storage_unit,
                                      unit)
+
         def plate_helper(container):
             entry = container.contents.items()
             return sum(map(helper, entry))
@@ -2424,7 +2425,8 @@ class Recipe:
 
         return flows
 
-    def get_amount_remaining(self, container: Container | Plate, timeframe: str = 'all', unit: str | None = None, mode: str = 'after') -> float:
+    def get_amount_remaining(self, container: Container | Plate, timeframe: str = 'all',
+                             unit: str | None = None, mode: str = 'after') -> float:
 
         def conversion_helper(entry):
             substance, quantity = entry
@@ -2443,7 +2445,6 @@ class Recipe:
                 vfunc = np.vectorize(plate_helper)
                 return vfunc(container.wells)
 
-
         if unit is None:
             unit = config.volume_display_unit
         if not isinstance(unit, str):
@@ -2459,7 +2460,6 @@ class Recipe:
         if mode == 'after':
             steps = reversed(steps)
 
-        out = None
         query_container = None
         for step in steps:
             if container.name in step.objects_used:
@@ -2474,10 +2474,6 @@ class Recipe:
                     else:
                         query_container = step.frm[0]
                 return container_helper(query_container)
-
-
-
-
 
     def visualize(self, what: Plate, mode: str, unit: str, timeframe: (int | str | RecipeStep) = 'all',
                   substance: (str | Substance) = 'all', cmap: str = None) \
@@ -2855,9 +2851,9 @@ class PlateSlicer(Slicer):
             unit = config.moles_display_unit
 
         if not isinstance(substance, Iterable) or not all(isinstance(x, Substance) for x in substance):
-            raise TypeError(f"Substance must be a Substance or an Iterable of Substances.")
+            raise TypeError("Substance must be a Substance or an Iterable of Substances.")
         if not isinstance(unit, str):
-            raise TypeError(f"Unit must be a str.")
+            raise TypeError("Unit must be a str.")
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
 
