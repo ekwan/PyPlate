@@ -21,14 +21,6 @@ Features
 Core Classes
 """"""""""""
 
-``PyPlate`` defines all experiment designs with three key nouns:
-
-- ``Factor``: A variable that is under the control of the experimenter
-- ``Experiment``: A particular combination of Factors. Generally implemented in a single well (Container) on a Plate.
-- ``ExperimentalSpace``: The set of all valid Experiments given a set of Factors.
-
-``PyPlate`` allows related experiments to be grouped together into blocks for the minimization of error.
-
 ``PyPlate`` defines all laboratory operations in terms of four key nouns:
 
 - ``Substance``: An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  This means that "water" qualifies, but not "5 mL of water" or "that beaker of water."
@@ -40,17 +32,14 @@ Core Classes
 
 Canonical Workflow
 """"""""""""""""""
-``PyPlate`` assumes that you have a large set of experiments to plan and execute. Each experiment is a particular choice of experimental parameters (``Factors``) and may be considered to be a point in the ``ExperimentalSpace``. Each experiment is implemented as a series of solid and liquid handling instructions (``Recipe``). These instructions may be specified with or without explicitly defining an ``ExperimentalSpace``.
+``PyPlate`` assumes that you have a large set of experiments to plan and execute. Each experiment will be a well in a ``Plate``.
+A set of experiments is implemented as a series of solid and liquid handling instructions (``Recipe``).
 
-1. Optionally, define the ``Factors`` (substrate, solvent, temperature, etc.), the allowable levels for each Factor, the ``ExperimentalSpace`` to be explored, and a blocking strategy.
+1. Create stock solutions (like substrate stocks) and initialize empty containers (like 96 well plates).
 
-2. Create stock solutions (like substrate stocks) and initialize empty containers (like 96 well plates).
+2. Create a ``Recipe`` and define all solid or liquid handling instructions in it.
 
-3. Create a ``Recipe`` and define all solid or liquid handling instructions in it.
-
-4. Call ``recipe.bake()``.  This method will ensure that all solid and liquid handling instructions are valid. If they are indeed valid, then the updated containers will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
-
-5. Optionally, map ``Container``\ s to particular experiments.
+3. Call ``recipe.bake()``.  This method will ensure that all solid and liquid handling instructions are valid. If they are indeed valid, then the updated containers will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
 
 .. note:: By convention, stock solutions should be prepared outside of ``Recipe``\ s (even though ``PyPlate`` allows ``Container``\ s to be created inside or outside ``Recipe``\ s.) |br|
           Transfers between ``Container``\ s should be done outside of ``Recipe``\ s, but transfers between a ``Container`` and a ``Plate`` or between ``Plate``\ s should be done inside a ``Recipe``.
