@@ -1651,6 +1651,9 @@ class Plate:
 class RecipeStep:
     """
     Stores information about a single step in a recipe.
+
+    .. document private functions
+    .. automethod:: _repr_html_
     """
 
     def __init__(self, recipe: Recipe, operator: str, frm: Container | PlateSlicer | Plate,
@@ -1668,6 +1671,11 @@ class RecipeStep:
         self.instructions = ""
 
     def _repr_html_(self):
+        """
+
+        Returns: HTML representation of the step.
+
+        """
         precision = config.precisions[config.volume_display_unit] if config.volume_display_unit in config.precisions \
             else config.precisions['default']
         source_visual = None
