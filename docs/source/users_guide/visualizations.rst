@@ -94,6 +94,9 @@ All of the above functions can be applied to a slice of a plate.
 array([[10.6, 10.6],
        [10. , 10. ]])
 
+>>> plate[:2, :2].dataframe(unit='uL')
+
+
 
 Recipes
 -------
@@ -123,13 +126,9 @@ Recipe Steps
 - When a recipe is baked, all the steps are stored in the `steps` attribute of the recipe.
 - Each step has a `visualize` method that can be used to visualize the step, using the same arguments as the `visualize` method of the recipe.
 
->>> for step in recipe.steps:
-        display(step.visualize(what=plate2, mode='final', unit='uL'))
+>>> for i, step in enumerate(recipe.steps):
+        print(f"Step: {i+1}")
+        display(step)
 
 .. image:: /images/recipe_steps_visualization.png
-
->>> for step in recipe.steps:
-        print(step.instructions)
-    Transfer 10 uL from plate1[:] to plate2[:].
-    Transfer 10 uL from plate2[:] to plate3[:].
-    Transfer 10 uL from plate3[:] to plate4[:].
+   :scale: 75 %

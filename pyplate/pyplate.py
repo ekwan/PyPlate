@@ -1032,12 +1032,18 @@ class Container:
         return Unit.convert_from_storage(self.volume, unit)
 
     @staticmethod
-    def create_solution(solute: Substance|Iterable[Substance], solvent: Substance|Container,
+    def create_solution(solute: Substance | Iterable[Substance], solvent: Substance | Container,
                         name: str = None, **kwargs) -> Container:
         """
         Create a solution.
 
         Two out of concentration, quantity, and total_quantity must be specified.
+
+        Multiple solutes can be, optionally, provided as a list. Each solute will have the desired concentration
+        or quantity in the final solution.
+
+        If one value is specified for concentration or quantity and multiple solutes are provided, the value will be
+        used for all solutes.
 
         Arguments:
             solute: What to dissolve. Can be a single Substance or a list of Substances.
@@ -1574,7 +1580,8 @@ class Plate:
         # Arguments are type checked in PlateSlicer.moles
         return self[:].get_moles(substance=substance, unit=unit)
 
-    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None) \
+    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all',
+                  cmap: str = None, highlight=False) \
             -> pandas.io.formats.style.Styler:
         """
 
@@ -1582,6 +1589,7 @@ class Plate:
             unit: unit to return quantities in.
             substance: (optional) Substance or Substances to display quantity of.
             cmap: Colormap to shade dataframe with.
+            highlight: Highlight all wells.
 
         Returns: Shaded dataframe of quantities in each well.
 
@@ -1589,7 +1597,7 @@ class Plate:
         # Types are checked in PlateSlicer.dataframe
         if unit is None:
             unit = config.volume_display_unit
-        return self[:].dataframe(substance=substance, unit=unit, cmap=cmap)
+        return self[:].dataframe(substance=substance, unit=unit, cmap=cmap, highlight=highlight)
 
     def get_volume(self, unit: str = 'uL') -> float:
         """
@@ -1677,9 +1685,9 @@ class RecipeStep:
             if self.frm_slice is None:
                 source_visual = self.frm[0].dataframe()
             else:
-                frm_slice = copy(self.frm_slice)
+                frm_slice: PlateSlicer = copy(self.frm_slice)
                 frm_slice.plate = self.frm[0]
-                source_visual = frm_slice.dataframe()
+                source_visual = frm_slice.dataframe(highlight=True)
         destination_visual = None
         if isinstance(self.to[0], Container):
             destination_visual = self.to[1].dataframe()
@@ -1688,25 +1696,33 @@ class RecipeStep:
                 before = self.to[0].dataframe()
                 after = self.to[1].dataframe()
             else:
-                to_slice = copy(self.to_slice)
+                to_slice: PlateSlicer = copy(self.to_slice)
                 to_slice.plate = self.to[0]
                 before = to_slice.dataframe()
                 to_slice.plate = self.to[1]
                 after = to_slice.dataframe()
-            destination_visual = (after.data - before.data).style.format(precision=precision).use(before.export())
+            delta_data = after.data - before.data
+            destination_visual = delta_data.style.format(precision=precision).use(before.export())
+            vmin = min(delta_data.min().min(), 0)
+            vmax = Unit.convert_from_storage(self.to[0].max_volume_per_well, config.volume_display_unit)
+            cmap = config.default_colormap if vmin >= 0 and vmax >= 0 else config.default_diverging_colormap
+            destination_visual = destination_visual.background_gradient(cmap=cmap, vmin=vmin, vmax=vmax)
 
         if isinstance(source_visual, pandas.DataFrame):
             source_visual = source_visual.style
         if isinstance(destination_visual, pandas.DataFrame):
             destination_visual = destination_visual.style
 
-        label = "Destination (delta): " if isinstance(self.to[0], Plate) else "Destination: "
+        label = f"Destination (delta) ({config.volume_display_unit}): " if isinstance(self.to[0], Plate) else "Destination: "
         destination_visual.set_caption(label + self.to[0].name)
         if source_visual is None:
             return self.instructions + '<br/>' + destination_visual.to_html()
 
         source_visual.set_table_attributes("style='display:inline; margin-right:20px'")
-        source_visual.set_caption(f"Source (initial): {self.frm[0].name}")
+        if isinstance(self.frm[0], Plate):
+            source_visual.set_caption(f"Source (initial) ({config.volume_display_unit}): {self.frm[0].name}")
+        else:
+            source_visual.set_caption(f"Source (initial): {self.frm[0].name}")
         destination_visual.set_table_attributes("style='display:inline'")
         return self.instructions + '<br/>' + source_visual.to_html() + destination_visual.to_html()
 
@@ -1853,12 +1869,18 @@ class Recipe:
 
         return new_container
 
-    def create_solution(self, solute: Substance|Iterable[Substance], solvent: Substance|Container,
+    def create_solution(self, solute: Substance | Iterable[Substance], solvent: Substance | Container,
                         name=None, **kwargs) -> Container:
         """
         Adds a step to the recipe which creates a solution.
 
         Two out of concentration, quantity, and total_quantity must be specified.
+
+        Multiple solutes can be, optionally, provided as a list. Each solute will have the desired concentration
+        or quantity in the final solution.
+
+        If one value is specified for concentration or quantity and multiple solutes are provided, the value will be
+        used for all solutes.
 
         Arguments:
             solute: What to dissolve. Can be a single Substance or an iterable of Substances.
@@ -2069,7 +2091,7 @@ class Recipe:
                 self.results[dest_name] = Container(dest_name, max_volume, initial_contents)
                 step.substances_used = self.results[dest_name].get_substances()
                 step.to.append(self.results[dest_name])
-                step.instructions = f"Create container {dest_name} with initial contents: {initial_contents}."
+                step.instructions = f"Create container '{dest_name}'."
             elif operator == 'transfer':
                 source = step.frm[0]
                 source_name = source.plate.name if isinstance(source, PlateSlicer) else source.name
@@ -2077,8 +2099,8 @@ class Recipe:
                 dest_name = dest.plate.name if isinstance(dest, PlateSlicer) else dest.name
                 quantity, = step.operands
 
-                step.instructions = f"""Transfer {quantity} from {str(source) if isinstance(source, PlateSlicer) else
-                source_name} to {str(dest) if isinstance(dest, PlateSlicer) else dest_name}."""
+                step.instructions = f"""Transfer {quantity} from '{str(source) if isinstance(source, PlateSlicer) else
+                source_name}' to '{str(dest) if isinstance(dest, PlateSlicer) else dest_name}'."""
 
                 self.used.add(source_name)
                 self.used.add(dest_name)
@@ -2119,16 +2141,16 @@ class Recipe:
                 solute, solvent, kwargs = step.operands
                 # kwargs should have two out of concentration, quantity, and total_quantity
                 if 'concentration' in kwargs and 'total_quantity' in kwargs:
-                    step.instructions = f"""Create a solution of {solute.name} in {solvent.name
-                    } with a concentration of {kwargs['concentration']
+                    step.instructions = f"""Create a solution of '{solute.name}' in '{solvent.name
+                    }' with a concentration of {kwargs['concentration']
                     } and a total quantity of {kwargs['total_quantity']}."""
                 elif 'concentration' in kwargs and 'quantity' in kwargs:
-                    step.instructions = f"""Create a solution of {solute.name} in {solvent.name
-                    } with a concentration of {kwargs['concentration']
+                    step.instructions = f"""Create a solution of '{solute.name}' in '{solvent.name
+                    }' with a concentration of {kwargs['concentration']
                     } and a quantity of {kwargs['quantity']}."""
                 elif 'quantity' in kwargs and 'total_quantity' in kwargs:
-                    step.instructions = f"""Create a solution of {solute.name} in {solvent.name
-                    } with a total quantity of {kwargs['total_quantity']
+                    step.instructions = f"""Create a solution of '{solute.name}' in '{solvent.name
+                    }' with a total quantity of {kwargs['total_quantity']
                     } and a quantity of {kwargs['quantity']}."""
 
                 step.to[0] = self.results[dest_name]
@@ -2144,8 +2166,8 @@ class Recipe:
                 solute, concentration, solvent, quantity = step.operands
                 step.frm[0] = self.results[source_name]
                 step.to[0] = self.results[dest_name]
-                step.instructions = f"""Create {quantity} of a {concentration} solution of {solute.name
-                } in {solvent.name} from {source_name}."""
+                step.instructions = f"""Create {quantity} of a {concentration} solution of '{solute.name
+                }' in '{solvent.name}' from '{source_name}'."""
                 self.used.add(source_name)
                 self.used.add(dest_name)
                 source = self.results[source_name]
@@ -2169,9 +2191,9 @@ class Recipe:
                     dest = self.results[dest_name]
 
                 if isinstance(what, Substance):
-                    step.instructions = f"Remove {what.name} from {dest_name}."
+                    step.instructions = f"Remove {what.name} from '{dest_name}'."
                 else:
-                    step.instructions = f"Remove all {Substance.classes[what]} from {dest_name}."
+                    step.instructions = f"Remove all {Substance.classes[what]} from '{dest_name}'."
                 self.results[dest_name] = dest.remove(what)
                 step.to.append(self.results[dest_name])
                 # substances_used is everything that is in step.to[0] but not in step.to[1]
@@ -2194,8 +2216,8 @@ class Recipe:
                 amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'L')
                 amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
                 precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-                step.instructions = (f"Dilute {solute.name} in {dest_name} to {concentration}" +
-                                     f" by adding {round(amount_added, precision)} {unit} of {solvent.name}.")
+                step.instructions = (f"Dilute '{solute.name}' in '{dest_name}' to {concentration}" +
+                                     f" by adding {round(amount_added, precision)} {unit} of '{solvent.name}'.")
                 step.substances_used.add(solvent)
                 step.to.append(self.results[dest_name])
             elif operator == 'fill_to':
@@ -2212,7 +2234,7 @@ class Recipe:
                     amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'L')
                     amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
                     precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-                    step.instructions = (f"Fill {dest.name} with {solvent.name} up to {quantity}"
+                    step.instructions = (f"Fill '{dest.name}' with '{solvent.name}' up to {quantity}"
                                          f" by adding {round(amount_added, precision)} {unit}.")
                 else:  # PlateSlicer
                     def collapse(wells, plate):
@@ -2274,7 +2296,7 @@ class Recipe:
                         if amount not in amounts_transpose:
                             amounts_transpose[amount] = []
                         amounts_transpose[amount].append(address)
-                    step.instructions = f"Fill {dest.name} with {solvent.name} up to {quantity} by adding: "
+                    step.instructions = f"Fill '{dest.name}' with '{solvent.name}' up to {quantity} by adding: "
                     amount_strings = []
                     for amount, addresses in amounts_transpose.items():
                         addresses = collapse(addresses, plate)
@@ -2380,6 +2402,7 @@ class Recipe:
             substance, quantity = entry
             return Unit.convert_from(substance, quantity, 'U' if substance.is_enzyme() else config.moles_storage_unit,
                                      unit)
+
         def plate_helper(container):
             entry = container.contents.items()
             return sum(map(helper, entry))
@@ -2424,7 +2447,8 @@ class Recipe:
 
         return flows
 
-    def get_amount_remaining(self, container: Container | Plate, timeframe: str = 'all', unit: str | None = None, mode: str = 'after') -> float:
+    def get_amount_remaining(self, container: Container | Plate, timeframe: str = 'all',
+                             unit: str | None = None, mode: str = 'after') -> float:
 
         def conversion_helper(entry):
             substance, quantity = entry
@@ -2443,7 +2467,6 @@ class Recipe:
                 vfunc = np.vectorize(plate_helper)
                 return vfunc(container.wells)
 
-
         if unit is None:
             unit = config.volume_display_unit
         if not isinstance(unit, str):
@@ -2459,7 +2482,6 @@ class Recipe:
         if mode == 'after':
             steps = reversed(steps)
 
-        out = None
         query_container = None
         for step in steps:
             if container.name in step.objects_used:
@@ -2474,10 +2496,6 @@ class Recipe:
                     else:
                         query_container = step.frm[0]
                 return container_helper(query_container)
-
-
-
-
 
     def visualize(self, what: Plate, mode: str, unit: str, timeframe: (int | str | RecipeStep) = 'all',
                   substance: (str | Substance) = 'all', cmap: str = None) \
@@ -2647,7 +2665,7 @@ class PlateSlicer(Slicer):
 
     def get_dataframe(self):
         return pandas.DataFrame(self.plate.wells, columns=self.plate.column_names,
-                                index=self.plate.row_names).iloc[self.slices]
+                                index=self.plate.row_names)
 
     @staticmethod
     def _transfer(frm: Container | PlateSlicer, to: PlateSlicer, quantity):
@@ -2732,13 +2750,41 @@ class PlateSlicer(Slicer):
 
         return frm.plate, to.plate
 
-    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all', cmap: str = None):
+
+    def highlight_wells(self, styler: pandas.io.formats.style.Styler) -> pandas.io.formats.style.Styler:
+        highlight_wells = []
+        if isinstance(self.slices, list):
+            for slice_ in self.slices:
+                row = slice_[0].start or 0
+                col = slice_[1].start or 0
+                highlight_wells.append((row, self.plate.column_names[col]))
+        else:
+            row_start = self.slices[0].start or 0
+            row_stop = self.slices[0].stop or len(self.plate.row_names)
+            row_step = self.slices[0].step or 1
+            col_start = self.slices[1].start or 0
+            col_stop = self.slices[1].stop or len(self.plate.column_names)
+            col_step = self.slices[1].step or 1
+
+            for row in range(row_start, row_stop, row_step):
+                for col in range(col_start, col_stop, col_step):
+                    highlight_wells.append((row, self.plate.column_names[col]))
+
+        def highlight_func(elem):
+            return ['background-color: yellow' if (i, elem.name) in highlight_wells else '' for i, _ in enumerate(elem)]
+
+        styler.apply(highlight_func)
+        return styler
+
+    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all',
+                  cmap: str = None, highlight: bool = False):
         """
 
         Arguments:
             unit: unit to return quantities in.
             substance: Substance or Substances to display quantity of.
             cmap: Colormap to shade dataframe with.
+            highlight: Highlight wells in slice(s).
 
         Returns: Shaded dataframe of quantities in each well.
 
@@ -2783,8 +2829,15 @@ class PlateSlicer(Slicer):
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         df = self.get_dataframe().apply(numpy.vectorize(helper, cache=True, otypes='d'))
-        vmin, vmax = df.min().min(), df.max().max()
-        styler = df.style.background_gradient(cmap, vmin=vmin, vmax=vmax).format(precision=precision)
+        styler = df.style.format(precision=precision)
+        if highlight:
+            styler = self.highlight_wells(styler)
+        else:
+            if unit[-1] == 'L':
+                vmax = Unit.convert_from_storage(self.plate.max_volume_per_well, unit)
+            else:
+                vmax = df.max().max()
+            styler = styler.background_gradient(cmap, vmin=0, vmax=vmax)
         return styler
 
     def get_volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> numpy.ndarray:
@@ -2855,9 +2908,9 @@ class PlateSlicer(Slicer):
             unit = config.moles_display_unit
 
         if not isinstance(substance, Iterable) or not all(isinstance(x, Substance) for x in substance):
-            raise TypeError(f"Substance must be a Substance or an Iterable of Substances.")
+            raise TypeError("Substance must be a Substance or an Iterable of Substances.")
         if not isinstance(unit, str):
-            raise TypeError(f"Unit must be a str.")
+            raise TypeError("Unit must be a str.")
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
 
