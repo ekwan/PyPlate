@@ -1713,13 +1713,16 @@ class RecipeStep:
         if isinstance(destination_visual, pandas.DataFrame):
             destination_visual = destination_visual.style
 
-        label = "Destination (delta): " if isinstance(self.to[0], Plate) else "Destination: "
+        label = f"Destination (delta) ({config.volume_display_unit}): " if isinstance(self.to[0], Plate) else "Destination: "
         destination_visual.set_caption(label + self.to[0].name)
         if source_visual is None:
             return self.instructions + '<br/>' + destination_visual.to_html()
 
         source_visual.set_table_attributes("style='display:inline; margin-right:20px'")
-        source_visual.set_caption(f"Source (initial): {self.frm[0].name}")
+        if isinstance(self.frm[0], Plate):
+            source_visual.set_caption(f"Source (initial) ({config.volume_display_unit}): {self.frm[0].name}")
+        else:
+            source_visual.set_caption(f"Source (initial): {self.frm[0].name}")
         destination_visual.set_table_attributes("style='display:inline'")
         return self.instructions + '<br/>' + source_visual.to_html() + destination_visual.to_html()
 
