@@ -8,6 +8,5 @@ Private Classes
     :toctree: _autosummary
     :caption: Classes
 
-    RecipeStep
     Unit
     PlateSlicer

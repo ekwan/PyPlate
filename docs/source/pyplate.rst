@@ -10,3 +10,4 @@ PyPlate API
     Container <Container>
     Plate <Plate>
     Recipe <Recipe>
+    RecipeStep <RecipeStep>

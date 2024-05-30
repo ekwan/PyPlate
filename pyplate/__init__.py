@@ -45,5 +45,5 @@ class Config:
 
 
 # This has to be imported after Config is defined, otherwise there will be a circular import.
-from .pyplate import Substance, Container, Plate, Recipe, Unit  # noqa: E402
-__all__ = ['Substance', 'Container', 'Plate', 'Recipe', 'Unit', 'Config']
+from .pyplate import Substance, Container, Plate, Recipe, Unit, RecipeStep  # noqa: E402
+__all__ = ['Substance', 'Container', 'Plate', 'Recipe', 'Unit', 'Config', 'RecipeStep']
