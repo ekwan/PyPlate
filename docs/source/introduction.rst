@@ -52,7 +52,8 @@ Canonical Workflow
 
 5. Optionally, map ``Container``\ s to particular experiments.
 
-.. note:: By convention, stock solutions should be prepared outside of ``Recipe``\ s (even though ``PyPlate`` allows ``Containers`` to be created inside or outside ``Recipe``\ s.)
+.. note:: By convention, stock solutions should be prepared outside of ``Recipe``\ s (even though ``PyPlate`` allows ``Container``\ s to be created inside or outside ``Recipe``\ s.) |br|
+          Transfers between ``Container``\ s should be done outside of ``Recipe``\ s, but transfers between a ``Container`` and a ``Plate`` or between ``Plate``\ s should be done inside a ``Recipe``.
 
 Quickstart Example, Explained
 """""""""""""""""""""""""""""

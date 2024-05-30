@@ -14,7 +14,7 @@ Single = Union[Label, Tuple[Label, Label]]
 Singles = Union[List[Single], Single]
 """@private"""
 Slice = Union[Singles, slice, Tuple[slice, Label], Tuple[Label, slice],
-Tuple[slice, slice], Tuple[List[Single], slice], Tuple[slice, List[Single]]]
+              Tuple[slice, slice], Tuple[List[Single], slice], Tuple[slice, List[Single]]]
 """@private"""
 
 
