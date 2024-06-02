@@ -43,9 +43,9 @@ Canonical Workflow
 PyPlate assists with the design and execution of high-throughput experiments.
 
 1. Preparation: Create stock solutions (like substrate stocks) and initialize empty containers (like 96 well plates).  (By convention, these steps should be done outside of Recipes.)
-2. Specify Transfers: Transfer stock solutions and other raw materials to the plates by creating a Recipe.  All solid or liquid handling instructions should be defined within the context of the Recipe.
-3. Bake: Verify that the specified transfers are sensible using recipe.bake(). If they are indeed valid, then updated containers will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
-4. Visualize: The operations in each RecipeStep can be visualized using display(step) in a Jupyter Notebook using `step._repr_html()`.  (See :ref:`recipe_steps_visualizations`).
+2. Specify Transfers: Transfer stock solutions and other raw materials to the plates by creating a ``Recipe``.  All solid or liquid handling instructions should be defined within the context of the ``Recipe``.
+3. Bake: Verify that the specified transfers are sensible using `recipe.bake()`. If they are indeed valid, then updated containers will be generated. Once `recipe.bake()` has been called, no more instructions can be added and the ``Recipe`` is considered immutable.
+4. Visualize: The operations in each RecipeStep can be visualized using `display(step)` in a Jupyter Notebook or using `step._repr_html()` in a webpage.  (See :ref:`recipe_steps_visualizations`).
 
 Tip: For workflows involving liquid handlers, it may be useful to define "plates" in the shape of the liquid handler's deck.  Stock solutions can be stored there.  Subsequently, transfers can be made to reaction plates.  This tip allows the location of stock solutions to be codified and optimized for the logistics of liquid handling.
 
