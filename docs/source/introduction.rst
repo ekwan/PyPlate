@@ -40,17 +40,14 @@ Core Classes
 
 Canonical Workflow
 """"""""""""""""""
-``PyPlate`` assumes that you have a large set of experiments to plan and execute. Each experiment is a particular choice of experimental parameters (``Factors``) and may be considered to be a point in the ``ExperimentalSpace``. Each experiment is implemented as a series of solid and liquid handling instructions (``Recipe``). These instructions may be specified with or without explicitly defining an ``ExperimentalSpace``.
+PyPlate assists with the design and execution of high-throughput experiments.
 
-1. Optionally, define the ``Factors`` (substrate, solvent, temperature, etc.), the allowable levels for each Factor, the ``ExperimentalSpace`` to be explored, and a blocking strategy.
+1. Preparation: Create stock solutions (like substrate stocks) and initialize empty containers (like 96 well plates).  (By convention, these steps should be done outside of Recipes.)
+2. Specify Transfers: Transfer stock solutions and other raw materials to the plates by creating a Recipe.  All solid or liquid handling instructions should be defined within the context of the Recipe.
+3. Bake: Verify that the specified transfers are sensible using recipe.bake(). If they are indeed valid, then updated containers will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
+4. Visualize: The operations in each RecipeStep can be visualized using display(step) in a Jupyter Notebook using `step._repr_html()`.  (See :ref:`recipe_steps_visualizations`).
 
-2. Create stock solutions (like substrate stocks) and initialize empty containers (like 96 well plates).
-
-3. Create a ``Recipe`` and define all solid or liquid handling instructions in it.
-
-4. Call ``recipe.bake()``.  This method will ensure that all solid and liquid handling instructions are valid. If they are indeed valid, then the updated containers will be generated. Once recipe.bake() has been called, no more instructions can be added and the Recipe is considered immutable.
-
-5. Optionally, map ``Container``\ s to particular experiments.
+Tip: For workflows involving liquid handlers, it may be useful to define "plates" in the shape of the liquid handler's deck.  Stock solutions can be stored there.  Subsequently, transfers can be made to reaction plates.  This tip allows the location of stock solutions to be codified and optimized for the logistics of liquid handling.
 
 .. note:: By convention, stock solutions should be prepared outside of ``Recipe``\ s (even though ``PyPlate`` allows ``Container``\ s to be created inside or outside ``Recipe``\ s.) |br|
           Transfers between ``Container``\ s should be done outside of ``Recipe``\ s, but transfers between a ``Container`` and a ``Plate`` or between ``Plate``\ s should be done inside a ``Recipe``.

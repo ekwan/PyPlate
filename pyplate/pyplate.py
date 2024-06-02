@@ -1726,13 +1726,19 @@ class RecipeStep:
         if source_visual is None:
             return self.instructions + '<br/>' + destination_visual.to_html()
 
-        source_visual.set_table_attributes("style='display:inline; margin-right:20px'")
+        # source_visual.set_table_attributes("style='display:inline; margin-right:20px'")
+        source_visual.set_table_attributes("style='width: 40%'")
         if isinstance(self.frm[0], Plate):
             source_visual.set_caption(f"Source (initial) ({config.volume_display_unit}): {self.frm[0].name}")
         else:
             source_visual.set_caption(f"Source (initial): {self.frm[0].name}")
-        destination_visual.set_table_attributes("style='display:inline'")
-        return self.instructions + '<br/>' + source_visual.to_html() + destination_visual.to_html()
+        # destination_visual.set_table_attributes("style='display:inline'")
+        destination_visual.set_table_attributes("style='width: 40%'")
+        return (self.instructions + '<div style="display: flex; justify-content: space-evenly">' +
+                source_visual.to_html() +
+                destination_visual.to_html() + '</div>')
+
+        # return self.instructions + '<br/>' + source_visual.to_html() + destination_visual.to_html()
 
 
 class Recipe:

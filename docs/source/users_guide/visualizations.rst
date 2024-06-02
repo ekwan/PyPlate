@@ -120,6 +120,8 @@ If we want to visualize what happened to a plate during part or all of a recipe,
 .. image:: /images/recipe_visualization.png
 
 
+.. _recipe_steps_visualizations:
+
 Recipe Steps
 ------------
 
