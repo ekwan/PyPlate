@@ -1721,7 +1721,8 @@ class RecipeStep:
         if isinstance(destination_visual, pandas.DataFrame):
             destination_visual = destination_visual.style
 
-        label = f"Destination (delta) ({config.volume_display_unit}): " if isinstance(self.to[0], Plate) else "Destination: "
+        label = f"Destination (delta) ({config.volume_display_unit}): " if isinstance(self.to[0],
+                                                                                      Plate) else "Destination: "
         destination_visual.set_caption(label + self.to[0].name)
         if source_visual is None:
             return self.instructions + '<br/>' + destination_visual.to_html()
@@ -1739,6 +1740,67 @@ class RecipeStep:
                 destination_visual.to_html() + '</div>')
 
         # return self.instructions + '<br/>' + source_visual.to_html() + destination_visual.to_html()
+
+    def dataframe(self, data_source: str = 'destination', substance: str | Substance = 'all', mode: str = 'final',
+                  container_mode: str = 'data', unit: str = None) -> pandas.DataFrame:
+        """
+
+        Arguments:
+            data_source: Where to get data from. 'source' or 'destination'.
+            substance: Substance or 'all' to display.
+            mode: 'final' to display final state, 'delta' to display change.
+            container_mode: 'info' for information about the container, 'data' for a dataframe of the container.
+            unit: unit to display volumes in. Defaults to config.volume_display_unit.
+
+        Returns: Dataframe of quantities in each well.
+
+        Notes:
+            If 'info' is selected for container_mode, 'substance', 'mode', and 'unit' are ignored, and the final
+             state of the container is returned.
+
+        """
+
+        if unit is None:
+            unit = config.volume_display_unit
+
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+
+        if substance != 'all' and not isinstance(substance, Substance):
+            raise TypeError("Substance must be a Substance or 'all'.")
+
+        if data_source == 'source':
+            before = self.frm[0]
+            after = self.frm[1]
+        elif data_source == 'destination':
+            before = self.to[0]
+            after = self.to[1]
+        else:
+            raise ValueError("Invalid data source.")
+
+        if isinstance(before, Container):
+            if container_mode == 'info':
+                return after.dataframe()
+            elif container_mode == 'data':
+                if substance == 'all':
+                    before = pandas.DataFrame([before.get_volume(unit)], columns=[before.name])
+                    after = pandas.DataFrame([after.get_volume(unit)], columns=[after.name])
+                else:
+                    from_unit = 'U' if isinstance(substance, Substance) and substance.is_enzyme() else 'mol'
+                    before = pandas.DataFrame([Unit.convert_from(substance, before.contents.get(substance, 0), from_unit, unit)],
+                                              columns=[before.name])
+                    after = pandas.DataFrame([Unit.convert_from(substance, after.contents.get(substance, 0), from_unit, unit)],
+                                             columns=[after.name])
+        else:
+            before = before.dataframe(substance=substance, unit=unit).data
+            after = after.dataframe(substance=substance, unit=unit).data
+
+        if mode == 'final':
+            return after
+        elif mode == 'delta':
+            return after - before
+        else:
+            raise ValueError("Invalid mode.")
 
 
 class Recipe:
@@ -2763,7 +2825,6 @@ class PlateSlicer(Slicer):
             raise ValueError("Source and destination slices must be the same size and shape.")
 
         return frm.plate, to.plate
-
 
     def highlight_wells(self, styler: pandas.io.formats.style.Styler) -> pandas.io.formats.style.Styler:
         highlight_wells = []
