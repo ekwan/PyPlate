@@ -1660,12 +1660,17 @@ class RecipeStep:
     """
     Stores information about a single step in a recipe.
 
-    .. document private functions
-    .. automethod:: _repr_html_
+    Notes: The contents of this class are not meant to be consumed directly by users. Information about the step can be
+    extracted using the `dataframe` and `_repr_html_` methods. If a step is displayed in IPython (Jupyter),
+    `_repr_html_` will be called automatically.
+
     """
 
     def __init__(self, recipe: Recipe, operator: str, frm: Container | PlateSlicer | Plate,
                  to: Container | PlateSlicer | Plate, *operands):
+        """
+        Creates a new RecipeStep.
+        """
         self.frm_slice = None
         self.to_slice = None
         self.recipe = recipe
@@ -1680,9 +1685,7 @@ class RecipeStep:
 
     def _repr_html_(self):
         """
-
         Returns: HTML representation of the step.
-
         """
         precision = config.precisions[config.volume_display_unit] if config.volume_display_unit in config.precisions \
             else config.precisions['default']
@@ -1752,11 +1755,14 @@ class RecipeStep:
             container_mode: 'info' for information about the container, 'data' for a dataframe of the container.
             unit: unit to display volumes in. Defaults to config.volume_display_unit.
 
-        Returns: Dataframe of quantities in each well.
+        Returns: Dataframe of quantities in each well or the container.
 
-        Notes:
-            If 'info' is selected for container_mode, 'substance', 'mode', and 'unit' are ignored, and the final
-             state of the container is returned.
+        If the designated 'data_source' is a Container, 'container_mode' will designate what is returned.
+
+        If 'info' is selected for 'container_mode', an informational representation of the final state of the
+        Container will be returned. The 'substance', 'mode', and 'unit' arguments are ignored.
+
+        If 'data' is selected, a dataframe with one row and column will be returned.
 
         """
 
