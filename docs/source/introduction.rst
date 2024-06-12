@@ -20,15 +20,6 @@ Features
 
 Core Classes
 """"""""""""
-
-``PyPlate`` defines all experiment designs with three key nouns:
-
-- ``Factor``: A variable that is under the control of the experimenter
-- ``Experiment``: A particular combination of Factors. Generally implemented in a single well (Container) on a Plate.
-- ``ExperimentalSpace``: The set of all valid Experiments given a set of Factors.
-
-``PyPlate`` allows related experiments to be grouped together into blocks for the minimization of error.
-
 ``PyPlate`` defines all laboratory operations in terms of four key nouns:
 
 - ``Substance``: An abstract chemical or biological entity (e.g., reagent, enzyme, solvent, etc.).  This means that "water" qualifies, but not "5 mL of water" or "that beaker of water."
