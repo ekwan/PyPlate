@@ -1801,10 +1801,12 @@ class RecipeStep:
             before = before.dataframe(substance=substance, unit=unit).data
             after = after.dataframe(substance=substance, unit=unit).data
 
+        precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
+
         if mode == 'final':
-            return after
+            return after.round(precision)
         elif mode == 'delta':
-            return after - before
+            return (after - before).round(precision)
         else:
             raise ValueError("Invalid mode.")
 
