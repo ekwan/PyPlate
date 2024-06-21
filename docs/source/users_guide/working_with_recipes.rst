@@ -138,6 +138,43 @@ This transfer works because both plates are 8x12.
 
 .. figure:: /images/plate2.png
 
+Extracting data from RecipeSteps
+""""""""""""""""""""""""""""""""
+
+After baking, a recipe has a list of steps. You can extract data from these steps using `RecipeStep.dataframe()`
+
+During the second step, 10 uL of water is transferred from the water_stock container to plate1.
+
+Let's demonstrate how to extract the data from this step:
+
+>>> recipe.steps[1].dataframe(data_source='destination', mode='final', unit='uL')
+
+.. figure:: /images/plate_dataframe_10uL.png
+   :scale: 50%
+
+In the third step, 3 uL of water is transferred from plate1 to plate2.
+
+You can get the volume of each well in the source plate after the step:
+
+>>> recipe.steps[2].dataframe(data_source='source', mode='final', unit='uL')
+
+.. figure:: /images/plate_dataframe_7uL.png
+   :scale: 50%
+
+You can also get the volume of each well of the destination plate after the step:
+
+>>> recipe.steps[2].dataframe(data_source='destination', mode='final', unit='uL')
+
+.. figure:: /images/plate_dataframe_3uL.png
+   :scale: 50%
+
+We can query the amount of specific substances added in each step:
+
+>>> recipe.steps[2].dataframe(data_source='destination', mode='delta', substance=water, unit='umol')
+
+.. figure:: /images/plate_dataframe_water_umol.png
+   :scale: 50%
+
 .. _cross_coupling_liquid_handling:
 
 Using Source Plates
