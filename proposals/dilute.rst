@@ -56,6 +56,45 @@ This is an example of create_solution_from::
 
 5 mL of the 100mL of 1M solution was used to create a 10 mL 0.5M solution, leaving 95 mL of the 1M solution.
 
+This is an example of create_soution_from using a container for the solvent::
+
+water_stock = Container(name='water stock', initial_contents=[(water, '100 mL')])
+salt_water1M = Container.create_solution(name='salt water (1 M)', solute=salt, solvent=water, concentration='1 M', total_quantity='100 mL')
+
+salt_water1M, water_stock, salt_water500mM = Container.create_solution_from(name='salt water (0.5 M)', source=salt_water1M,
+                                                                            solute=salt, solvent=water_stock,
+                                                                            concentration='0.5 M', quantity='10 mL')
+
+>>> salt_water1M
++------------------+-----------+----------+-----------+-----+
+| salt water (1 M) |  Volume   |   Mass   |   Moles   |  U  |
++------------------+-----------+----------+-----------+-----+
+|  Maximum Volume  |     ∞     |    -     |     -     |  -  |
+|       NaCl       | 5.552 mL  | 5.552 g  | 95.0 mmol |  -  |
+|       H2O        | 89.448 mL | 89.448 g | 4.965 mol |  -  |
+|      Total       |  95.0 mL  |  95.0 g  | 5.06 mol  | 0 U |
++------------------+-----------+----------+-----------+-----+
+
+>>> water_stock
++----------------+---------+--------+-----------+-----+
+|  water stock   | Volume  |  Mass  |   Moles   |  U  |
++----------------+---------+--------+-----------+-----+
+| Maximum Volume |    ∞    |   -    |     -     |  -  |
+|      H2O       | 95.0 mL | 95.0 g | 5.273 mol |  -  |
+|     Total      | 95.0 mL | 95.0 g | 5.273 mol | 0 U |
++----------------+---------+--------+-----------+-----+
+
+>>> salt_water500mM
++--------------------+----------+----------+--------------+-----+
+| salt water (0.5 M) |  Volume  |   Mass   |    Moles     |  U  |
++--------------------+----------+----------+--------------+-----+
+|   Maximum Volume   |    ∞     |    -     |      -       |  -  |
+|        NaCl        | 292.0 uL | 292.2 mg |   5.0 mmol   |  -  |
+|        H2O         | 9.708 mL | 9.708 g  | 538.865 mmol |  -  |
+|       Total        | 10.0 mL  |  10.0 g  | 543.865 mmol | 0 U |
++--------------------+----------+----------+--------------+-----+
+
+5 mL of the 1 M salt water and 5mL of the water stock were combined to make the new solution.
 
 I propose the following:
 
@@ -71,6 +110,7 @@ I propose the following:
 - If quantity is provided, the container will be diluted to the specified quantity.
 - If the quantity is greater than the maximum volume, an exception will be raised.
 - The function will return an (new) updated version of the original container and the new container.
+- If a container is used as the solvent, the remainder of the solvent will be returned.
 
 The full dilute example will now be::
 
@@ -81,3 +121,10 @@ The partial dilute example will now be::
 
     salt_water1M = Container.create_solution(name='salt water (1 M)', solute=salt, solvent=water, concentration='1 M', total_quantity='100 mL')
     salt_water1M, salt_water500mM = salt_water1M.dilute(solute=salt, solvent=water, concentration='0.5 M', quantity='10 mL')
+
+The example with a container as the solvent will now be::
+
+    water_stock = Container(name='water stock', initial_contents=[(water, '100 mL')])
+    salt_water1M = Container.create_solution(name='salt water (1 M)', solute=salt, solvent=water, concentration='1 M', total_quantity='100 mL')
+
+    salt_water1M, water_stock, salt_water500mM = salt_water1M.dilute(solute=salt, solvent=water_stock, concentration='0.5 M', quantity='10 mL')
