@@ -128,3 +128,10 @@ The example with a container as the solvent will now be::
     salt_water1M = Container.create_solution(name='salt water (1 M)', solute=salt, solvent=water, concentration='1 M', total_quantity='100 mL')
 
     salt_water1M, water_stock, salt_water500mM = salt_water1M.dilute(solute=salt, solvent=water_stock, concentration='0.5 M', quantity='10 mL')
+
+A full dilute example with a container as the solvent::
+
+    water_stock = Container(name='water stock', initial_contents=[(water, '100 mL')])
+    salt_water1M = Container.create_solution(name='salt water (1 M)', solute=salt, solvent=water, concentration='1 M', total_quantity='100 mL')
+
+    _, water_stock, salt_water1M = salt_water1M.dilute(solute=salt, solvent=water_stock, concentration='0.5 M')
