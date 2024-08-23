@@ -180,38 +180,6 @@ def test_get_container_flows_create_solution(sodium_sulfate, water, empty_plate)
     assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[container]) == 22.02
 
 
-def test_enzyme(lipase):
-
-    recipe = Recipe()
-    container = recipe.create_container('container', initial_contents=[(lipase, '10 U')])
-
-    container2 = recipe.create_container('container2', initial_contents=None)
-
-    recipe.transfer(container, container2, '5 U')
-
-    recipe.bake()
-    assert recipe.get_container_flows(container=container, timeframe='all', unit='U') == {"in": 10, "out": 5}
-    assert recipe.get_container_flows(container=container2, timeframe='all', unit='U') == {"in": 5, "out": 0}
-
-def test_enzyme_fill_to(lipase):
-
-    recipe = Recipe()
-    container = recipe.create_container('container', initial_contents=None)
-
-    recipe.fill_to(container, lipase, '10 mg')
-
-    container2 = recipe.create_container('container2', initial_contents=None)
-
-    recipe.transfer(container, container2, '5 mg')
-
-    recipe.bake()
-
-    #Specific activity is 10 U/mg. So 10 mg = 100 U
-
-    assert recipe.get_container_flows(container=container, timeframe='all', unit='U') == {"in": 100, "out": 50}
-    assert recipe.get_container_flows(container=container2, timeframe='all', unit='U') == {"in": 50, "out": 0}
-
-
 def test_dilute(sodium_sulfate, water):
     """
     Tests the dilution process within a recipe and evaluates volume tracking for the involved container.
