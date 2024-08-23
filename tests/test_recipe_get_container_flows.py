@@ -184,6 +184,7 @@ def test_get_container_flows_create_solution(sodium_sulfate, water, empty_plate)
                                      destinations=[container]) == 22.02
 
 
+<<<<<<< HEAD
 def test_enzyme(lipase):
     recipe = Recipe()
     container = recipe.create_container('container', initial_contents=[(lipase, '10 U')])
@@ -215,6 +216,8 @@ def test_enzyme_fill_to(lipase):
     assert recipe.get_container_flows(container=container2, timeframe='all', unit='U') == {"in": 50, "out": 0}
 
 
+=======
+>>>>>>> development
 def test_dilute(sodium_sulfate, water):
     """
     Tests the dilution process within a recipe and evaluates volume tracking for the involved container.

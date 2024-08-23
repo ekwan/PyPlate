@@ -2,7 +2,7 @@ import pytest
 from pyplate.pyplate import Unit
 
 
-def test_convert(salt, water, lipase, dmso):
+def test_convert(salt, water, dmso):
     """
 
     Test internal conversion utilities.
@@ -15,16 +15,6 @@ def test_convert(salt, water, lipase, dmso):
         Unit.convert(salt, None, '')
     with pytest.raises(TypeError, match='Unit must be a str'):
         Unit.convert(salt, '10 mL', None)
-
-    with pytest.raises(ValueError, match='Only enzymes can be measured in activity units'):
-        Unit.convert(water, '1 U', 'mL')
-    # with pytest.raises(ValueError, match='Enzymes can only be measured in activity units'):
-    assert Unit.convert(lipase, '1 g', 'U') == 10. * 1000.  # 1 g * 1000 mg/g * 10 U/mg
-
-
-    # Only enzymes have activity units
-    assert Unit.convert(water, '1 mL', 'U') == 0
-    assert Unit.convert(lipase, '1 U', 'U') == 1
 
     # prefixes applied correctly
     assert Unit.convert(water, '1 mL', 'L') == 0.001

@@ -38,11 +38,6 @@ def triethylamine() -> Substance:
 
 
 @pytest.fixture
-def lipase() -> Substance:
-    return Substance.enzyme(name='lipase', specific_activity='10 U/mg')
-
-
-@pytest.fixture
 def empty_plate() -> Plate:
     return Plate('plate', '200 uL')  # 100 uL
 
