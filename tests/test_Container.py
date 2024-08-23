@@ -52,13 +52,13 @@ def test_Container_transfer(water, salt, water_stock, salt_water):
     initial_hashes = hash(water_stock), hash(salt_water)
     # water_stock is 10 mL, salt_water is 100 mL and 50 mmol
     salt_water_volume = Unit.convert_from_storage(salt_water.volume, 'mL')
-    container1, container2 = Container.transfer(salt_water, water_stock, f"{salt_water_volume*0.1} mL")
+    container1, container2 = Container.transfer(salt_water, water_stock, f"{salt_water_volume * 0.1} mL")
     # 10 mL of water and 5 mol of salt should have been transferred
     assert container1.volume == Unit.convert(water, '90 mL', config.volume_storage_unit) \
            + Unit.convert(salt, '45 mmol', config.volume_storage_unit)
     assert container1.contents[water] == Unit.convert(water, '90 mL', config.moles_storage_unit)
     assert container1.contents[salt] == Unit.convert(salt, '45 mmol', config.moles_storage_unit)
-    assert container2.volume == Unit.convert(water, '20 mL', config.volume_storage_unit)\
+    assert container2.volume == Unit.convert(water, '20 mL', config.volume_storage_unit) \
            + Unit.convert(salt, '5 mmol', config.volume_storage_unit)
     assert salt in container2.contents and container2.contents[salt] == \
            Unit.convert(salt, '5 mmol', config.moles_storage_unit)
@@ -212,12 +212,12 @@ def test_get_concentration(water, salt, dmso):
     assert stock.get_concentration(dmso) == 0
 
 
-def test_create_solution_from(water, salt):
+def test_dilute_with_quantity(water, salt):
     # Create a stock solution of 1 M salt water
     stock = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
 
     # Create a solution of 0.5 M salt water from the stock solution
-    stock, solution = Container.create_solution_from(stock, salt,'0.5 M', water, '50 mL')
+    stock, solution = Container.dilute(stock, salt, '0.5 M', water, '50 mL')
 
     # Should contain 25 mmol of salt and have a total volume of 50 mL
     assert pytest.approx(Unit.convert(salt, '25 mmol', config.moles_storage_unit)) == solution.contents[salt]
@@ -227,10 +227,10 @@ def test_create_solution_from(water, salt):
     # stock should have a volume of 75 mL and 75 mmol of salt
     # Try to create a solution with more volume than the source container holds
     with pytest.raises(ValueError, match='Not enough mixture left in source container'):
-        Container.create_solution_from(stock, salt, '1 M', water, '100 mL')
+        Container.dilute(stock, salt, '1 M', water, '100 mL')
+
 
 def test_create_solution(water, salt, sodium_sulfate):
-
     # create solution with just one solute
     simple_solution = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
 
@@ -253,7 +253,6 @@ def test_create_solution(water, salt, sodium_sulfate):
 
     # create solvent container with solute in it
     invalid_solvent_container = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
-
 
     ## verify simple solution
     # verify solute amount

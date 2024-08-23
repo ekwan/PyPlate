@@ -1197,9 +1197,9 @@ class Container:
             return result
 
     @staticmethod
-    def create_solution_from(source: Container, solute: Substance, concentration: str, solvent: Substance | Container,
-                             quantity: str, name=None) -> (Tuple[Container, Container] |
-                                                           Tuple[Container, Container, Container]):
+    def _dilute_to_quantity(source: Container, solute: Substance, concentration: str, solvent: Substance | Container,
+                            quantity: str, name=None) -> (Tuple[Container, Container] |
+                                                            Tuple[Container, Container, Container]):
         """
         Create a diluted solution from an existing solution or solutions.
 
@@ -1361,29 +1361,36 @@ class Container:
             new_container.instructions += f"Remove all {what.name}s."
         return new_container
 
-    def dilute(self, solute: Substance, concentration: str, solvent: Substance, name=None) -> Container:
+    def dilute(self, solute: Substance, concentration: str, solvent: (Substance | Container),
+               quantity=None, name=None) -> Container:
         """
         Dilutes `solute` in solution to `concentration`.
 
         Args:
             solute: Substance which is subject to dilution.
             concentration: Desired concentration.
-            solvent: What to dilute with.
+            solvent: What to dilute with. Can be a Substance or a Container.
+            quantity: Optional total quantity of solution.
             name: Optional name for new container.
 
-        Returns: A new container containing a solution with the desired concentration of `solute`.
+        Returns: A new (updated) container with the remainder of the original container, and the diluted solution.
+
+        If solvent is a container, the remainder of the solvent will also be returned.
 
         """
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
         if not isinstance(concentration, str):
             raise TypeError("Concentration must be a str.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a substance.")
+        if not isinstance(solvent, Substance) and not isinstance(solvent, Container):
+            raise TypeError("Solvent must be a substance or container.")
         if name and not isinstance(name, str):
             raise TypeError("New name must be a str.")
         if solute not in self.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
+
+        if quantity is not None:
+            return self._dilute_to_quantity(self, solute, concentration, solvent, quantity, name)
 
         new_ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
 
@@ -1403,6 +1410,21 @@ class Container:
         if new_ratio > current_ratio:
             raise ValueError("Desired concentration is higher than current concentration.")
 
+        original_solvent = solvent
+        if isinstance(solvent, Container):
+            # Calculate mol_weight and density of solvent
+            # get total mass of solvent
+            total_mass = sum(Unit.convert_from(substance, amount, 'U' if substance.is_enzyme() else 'mol', 'g')
+                             for substance, amount in solvent.contents.items())
+            total_moles = Unit.convert_from_storage(sum(amount for substance, amount in solvent.contents.items()),
+                                                    'mol')
+            total_volume = solvent.get_volume('mL')
+            if total_moles == 0 or total_volume == 0:
+                raise ValueError("Solvent must contain a non-zero amount of substance.")
+            # mol_weight = g/mol, density = g/mL
+            solvent = Substance.liquid('fake solvent',
+                                       mol_weight=total_mass / total_moles, density=total_mass / total_volume)
+
         current_umoles = Unit.convert_from_storage(self.contents.get(solvent, 0), 'umol')
         required_umoles = Unit.convert_from_storage(self.contents[solute], 'umol') / new_ratio - current_umoles
         new_volume = self.volume + Unit.convert(solvent, f"{required_umoles} umol", config.volume_storage_unit)
@@ -1416,9 +1438,14 @@ class Container:
             destination.name = name
         else:
             destination = self
+
         needed_umoles = f"{required_umoles} umol"
-        result = destination._add(solvent, needed_umoles)
-        needed_volume, unit = Unit.get_human_readable_unit(Unit.convert(solvent, needed_umoles, 'L'), 'L')
+        needed_volume = Unit.convert(solvent, needed_umoles, 'L')
+        if isinstance(original_solvent, Container):
+            result = Container.transfer(original_solvent, destination, f"{needed_volume} L")
+        else:
+            result = destination._add(solvent, needed_umoles)
+        needed_volume, unit = Unit.get_human_readable_unit(needed_volume, 'L')
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         result.instructions += f"\nDilute with {round(needed_volume, precision)} {unit} of {solvent.name}."
         return result
@@ -1801,10 +1828,12 @@ class RecipeStep:
                     after = pandas.DataFrame([after.get_volume(unit)], columns=[after.name])
                 else:
                     from_unit = 'U' if isinstance(substance, Substance) and substance.is_enzyme() else 'mol'
-                    before = pandas.DataFrame([Unit.convert_from(substance, before.contents.get(substance, 0), from_unit, unit)],
-                                              columns=[before.name])
-                    after = pandas.DataFrame([Unit.convert_from(substance, after.contents.get(substance, 0), from_unit, unit)],
-                                             columns=[after.name])
+                    before = pandas.DataFrame(
+                        [Unit.convert_from(substance, before.contents.get(substance, 0), from_unit, unit)],
+                        columns=[before.name])
+                    after = pandas.DataFrame(
+                        [Unit.convert_from(substance, after.contents.get(substance, 0), from_unit, unit)],
+                        columns=[after.name])
         else:
             before = before.dataframe(substance=substance, unit=unit).data
             after = after.dataframe(substance=substance, unit=unit).data
@@ -2017,62 +2046,14 @@ class Recipe:
         if ('concentration' in kwargs) + ('total_quantity' in kwargs) + ('quantity' in kwargs) != 2:
             raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
 
-        solute_names = ', '.join(substance.name for substance in solute) if isinstance(solute, Iterable) else solute.name
+        solute_names = ', '.join(substance.name for substance in solute) if isinstance(solute,
+                                                                                       Iterable) else solute.name
         if name is None:
             name = f"solution of {solute_names} in {solvent.name}"
 
         new_container = Container(name)
         self.uses(new_container)
         self.steps.append(RecipeStep(self, 'solution', None, new_container, solute, solvent, kwargs))
-
-        return new_container
-
-    def create_solution_from(self, source: Container, solute: Substance, concentration: str, solvent: Substance,
-                             quantity: str, name=None) -> Container:
-        """
-        Adds a step to create a diluted solution from an existing solution.
-
-
-        Arguments:
-            source: Solution to dilute.
-            solute: What to dissolve.
-            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
-            solvent: What to dissolve with.
-            quantity: Desired total quantity. ('3 mL', '10 g')
-            name: Optional name for new container.
-
-        Returns:
-            A new Container so that it may be used in later recipe steps.
-        """
-
-        if not isinstance(source, Container):
-            raise TypeError("Source must be a Container.")
-        if not isinstance(solute, Substance):
-            raise TypeError("Solute must be a Substance.")
-        if not isinstance(concentration, str):
-            raise TypeError("Concentration must be a str.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a Substance.")
-        if not isinstance(quantity, str):
-            raise TypeError("Quantity must be a str.")
-        if name and not isinstance(name, str):
-            raise TypeError("Name must be a str.")
-
-        quantity_value, quantity_unit = Unit.parse_quantity(quantity)
-        if quantity_value <= 0:
-            raise ValueError("Quantity must be positive.")
-
-        if not name:
-            name = f"solution of {solute.name} in {solvent.name}"
-
-        new_ratio, numerator, denominator = Unit.calculate_concentration_ratio(solute, concentration, solvent)
-        if new_ratio <= 0:
-            raise ValueError("Solution is impossible to create.")
-
-        new_container = Container(name, max_volume=f"{source.max_volume} {config.volume_storage_unit}")
-        self.uses(new_container)
-        self.steps.append(RecipeStep(self, 'solution_from', source, new_container,
-                                     solute, concentration, solvent, quantity))
 
         return new_container
 
@@ -2097,7 +2078,8 @@ class Recipe:
         self.steps.append(RecipeStep(self, 'remove', None, destination, what))
 
     def dilute(self, destination: Container, solute: Substance,
-               concentration: str, solvent: Substance, new_name=None) -> None:
+               concentration: str, solvent: (Substance | Container),
+               quantity=None, new_name=None) -> None:
         """
         Adds a step to dilute `solute` in `destination` to `concentration`.
 
@@ -2106,6 +2088,7 @@ class Recipe:
             solute: Substance which is subject to dilution.
             concentration: Desired concentration in mol/L.
             solvent: What to dilute with.
+            quantity: Optional total quantity of solution.
             new_name: Optional name for new container.
         """
 
@@ -2113,26 +2096,22 @@ class Recipe:
             raise TypeError("Solute must be a Substance.")
         if not isinstance(concentration, str):
             raise TypeError("Concentration must be a float.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a substance.")
+        if not isinstance(solvent, Substance) and not isinstance(solvent, Container):
+            raise TypeError("Solvent must be a substance or Container.")
         if new_name and not isinstance(new_name, str):
             raise TypeError("New name must be a str.")
         if not isinstance(destination, Container):
             raise TypeError("Destination must be a container.")
         if destination.name not in self.results:
             raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
-        # if solute not in destination.contents:
-        #     raise ValueError(f"Container does not contain {solute.name}.")
 
-        ratio, *_ = Unit.calculate_concentration_ratio(solute, concentration, solvent)
-        if ratio <= 0:
-            raise ValueError("Concentration is impossible to create.")
+        if quantity is not None:
+            quantity_value, quantity_unit = Unit.parse_quantity(quantity)
+            if quantity_value <= 0:
+                raise ValueError("Quantity must be positive.")
 
-        if solute.is_enzyme():
-            # TODO: Support this.
-            raise ValueError("Not currently supported.")
-
-        self.steps.append(RecipeStep(self, 'dilute', None, destination, solute, concentration, solvent, new_name))
+        self.steps.append(RecipeStep(self, 'dilute', None,
+                                     destination, solute, concentration, solvent, quantity, new_name))
 
     def fill_to(self, destination: Container | Plate | PlateSlicer, solvent: Substance, quantity: str) -> None:
         """
@@ -2247,7 +2226,8 @@ class Recipe:
                 step.frm.append(None)
                 solute, solvent, kwargs = step.operands
 
-                solute_names = ', '.join([solute.name for solute in solute]) if isinstance(solute, Iterable) else solute.name
+                solute_names = ', '.join([solute.name for solute in solute]) if isinstance(solute,
+                                                                                           Iterable) else solute.name
                 # kwargs should have two out of concentration, quantity, and total_quantity
                 if 'concentration' in kwargs and 'total_quantity' in kwargs:
                     step.instructions = f"""Create a solution of '{solute_names}' in '{solvent.name
@@ -2321,11 +2301,12 @@ class Recipe:
             elif operator == 'dilute':
                 dest = step.to[0]
                 dest_name = dest.name
-                solute, concentration, solvent, new_name = step.operands
+                solute, concentration, solvent, new_name, quantity = step.operands
                 step.frm.append(None)
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
-                self.results[dest_name] = self.results[dest_name].dilute(solute, concentration, solvent, new_name)
+                self.results[dest_name] = self.results[dest_name].dilute(solute, concentration,
+                                                                         solvent, quantity, new_name)
                 amount_added = self.results[dest_name].contents[solvent] - step.to[0].contents.get(solvent, 0)
                 amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'L')
                 amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')

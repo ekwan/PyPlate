@@ -3,6 +3,7 @@ from pyplate.pyplate import Recipe, Container, Substance
 
 import pytest
 
+
 # def test_simple_volume_used(salt_water, water):
 #     container = Container('container', initial_contents=[(water, '20 mL')])
 #     recipe = Recipe()
@@ -10,17 +11,16 @@ import pytest
 #     recipe.transfer(salt_water, container, '10 mL')
 #     #recipe.transfer
 #     recipe.bake()
-    
+
 #     #Assertions
 #     assert recipe.volume_used(container, 'all', 'mL') == 100
 
 def test_container_flows(sodium_sulfate, water):
-    
     recipe = Recipe()
     dest_container = Container('dest_container', initial_contents=None)
     recipe.uses(dest_container)
 
-    stock_solution = recipe.create_solution(solute=sodium_sulfate, 
+    stock_solution = recipe.create_solution(solute=sodium_sulfate,
                                             solvent=water, concentration='0.5 M', total_quantity='50 mL')
     recipe.start_stage('stage 1')
     recipe.transfer(stock_solution, dest_container, '10 mL')
@@ -34,9 +34,10 @@ def test_container_flows(sodium_sulfate, water):
 
     recipe.bake()
 
-    assert recipe.get_container_flows(container=stock_solution, 
+    assert recipe.get_container_flows(container=stock_solution,
                                       timeframe='all', unit='g') == {"in": 50, "out": 10}
-    assert recipe.get_container_flows(container=dest_container, timeframe='stage 2', unit='mL') == {"out": 9.29, "in": 0}
+    assert recipe.get_container_flows(container=dest_container, timeframe='stage 2', unit='mL') == {"out": 9.29,
+                                                                                                    "in": 0}
 
 
 def test_fill_to(salt, water):
@@ -65,6 +66,7 @@ def test_fill_to(salt, water):
 
     assert recipe.get_container_flows(container=water_container, timeframe='all', unit='mL') == {"in": 10.0, "out": 0.0}
 
+
 def test_volume_used_container_to_plate(dmso, empty_plate):
     """
     Tests the transfer of a specified volume from a container to a plate and checks the volume tracking functionality.
@@ -91,7 +93,7 @@ def test_volume_used_container_to_plate(dmso, empty_plate):
     transfer_volume = '200 uL'
 
     initial_contents = [(dmso, initial_volume)]
-    container = recipe.create_container('container', max_volume = '100 mL', initial_contents= initial_contents)
+    container = recipe.create_container('container', max_volume='100 mL', initial_contents=initial_contents)
 
     assert container.volume == 0
 
@@ -109,7 +111,8 @@ def test_volume_used_container_to_plate(dmso, empty_plate):
 
     #Assertions
     assert pytest.approx(container.volume) == 800
-    assert recipe.get_container_flows(container=container, timeframe='all', unit = 'mL') == {"in": 20, "out": 19.2}
+    assert recipe.get_container_flows(container=container, timeframe='all', unit='mL') == {"in": 20, "out": 19.2}
+
 
 def test_get_container_flows_create_solution(sodium_sulfate, water, empty_plate):
     """
@@ -137,10 +140,10 @@ def test_get_container_flows_create_solution(sodium_sulfate, water, empty_plate)
     - water (Substance): The solvent used in the solution, representing water.
     """
 
-
     recipe = Recipe()
 
-    container = recipe.create_solution(solute=sodium_sulfate, solvent=water, concentration='0.5 M', total_quantity='50 mL')
+    container = recipe.create_solution(solute=sodium_sulfate, solvent=water, concentration='0.5 M',
+                                       total_quantity='50 mL')
 
     recipe.uses(empty_plate)
     recipe.start_stage('stage 1')
@@ -150,17 +153,16 @@ def test_get_container_flows_create_solution(sodium_sulfate, water, empty_plate)
     #recipe.transfer(container, empty_plate, '10 mg')
     recipe.end_stage('stage 1')
 
-    container2 = Container('container2', initial_contents=[(water, '20 mL')], max_volume = '100 mL')
+    container2 = Container('container2', initial_contents=[(water, '20 mL')], max_volume='100 mL')
     recipe.start_stage('stage 2')
     recipe.uses(container2)
     recipe.transfer(container, container2, '5 mL')
-    
+
     recipe.end_stage('stage 2')
 
     recipe.bake()
 
     #Assertions
-    
 
     #Calculations : 50 mL * 0.5 M = 25 mmol
     #Transferred = 10*10^-3 * 0.5 = 5*10^-3 mmol
@@ -168,20 +170,21 @@ def test_get_container_flows_create_solution(sodium_sulfate, water, empty_plate)
     #Total = 5*10^-3 * 96 = 0.48 mmol
     #Remaining = 25 - 0.48 = 24.52 mmol
     expected_amount = 24.52
-    assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='stage 1', unit='mmol', destinations=[empty_plate]) == 0.48
-    assert recipe.get_container_flows(container=container, timeframe='stage 1', unit= 'mL') == {"in": 0, "out": 0.96}
+    assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='stage 1', unit='mmol',
+                                     destinations=[empty_plate]) == 0.48
+    assert recipe.get_container_flows(container=container, timeframe='stage 1', unit='mL') == {"in": 0, "out": 0.96}
 
     #Do we want container to only be a container? Should we expand it to plates as well? 
     #assert recipe.get_container_flows(container=empty_plate, timeframe='all', unit= 'mL') == {"in": 0.96, "out": 0}
 
     #When using mg, it converts it with the density
-    assert recipe.get_container_flows(container=container, timeframe='all', unit= 'mL') == {"in": 50, "out": 5.96}
-    assert recipe.get_container_flows(container=container2, timeframe='stage 2', unit= 'mL') == {"in": 5, "out": 0}
-    assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol', destinations=[container]) == 22.02
+    assert recipe.get_container_flows(container=container, timeframe='all', unit='mL') == {"in": 50, "out": 5.96}
+    assert recipe.get_container_flows(container=container2, timeframe='stage 2', unit='mL') == {"in": 5, "out": 0}
+    assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='all', unit='mmol',
+                                     destinations=[container]) == 22.02
 
 
 def test_enzyme(lipase):
-
     recipe = Recipe()
     container = recipe.create_container('container', initial_contents=[(lipase, '10 U')])
 
@@ -193,8 +196,8 @@ def test_enzyme(lipase):
     assert recipe.get_container_flows(container=container, timeframe='all', unit='U') == {"in": 10, "out": 5}
     assert recipe.get_container_flows(container=container2, timeframe='all', unit='U') == {"in": 5, "out": 0}
 
-def test_enzyme_fill_to(lipase):
 
+def test_enzyme_fill_to(lipase):
     recipe = Recipe()
     container = recipe.create_container('container', initial_contents=None)
 
@@ -242,23 +245,23 @@ def test_dilute(sodium_sulfate, water):
 
     recipe.uses(container)
 
-    sodium_sulfate_solution = recipe.create_solution(sodium_sulfate, water,concentration= '1 M', total_quantity = '10 mL' )
-    
-    recipe.transfer(sodium_sulfate_solution,container, '5 mL')
+    sodium_sulfate_solution = recipe.create_solution(sodium_sulfate, water, concentration='1 M', total_quantity='10 mL')
 
-    recipe.dilute(container, solute=sodium_sulfate, concentration = '0.25 M', solvent = water)
+    recipe.transfer(sodium_sulfate_solution, container, '5 mL')
+
+    recipe.dilute(container, solute=sodium_sulfate, concentration='0.25 M', solvent=water)
     recipe.bake()
 
     #steps = recipe.steps[-1]
 
     assert container.volume == 0
 
-    assert pytest.approx(recipe.get_container_flows(container = container, timeframe='all', unit = 'mL')) == {"in": 20.0, "out":0.0}
+    assert pytest.approx(recipe.get_container_flows(container=container, timeframe='all', unit='mL')) == {"in": 20.0,
+                                                                                                          "out": 0.0}
     #assert recipe.volume_used(container = container, timeframe='all', unit = 'mL') == {"in": 20, "out":0.0}
 
 
-def test_example1(water, sodium_sulfate): 
-
+def test_example1(water, sodium_sulfate):
     recipe = Recipe()
     container = recipe.create_container('container', initial_contents=None)
 
@@ -269,4 +272,5 @@ def test_example1(water, sodium_sulfate):
     recipe.bake()
 
     assert recipe.get_container_flows(container=stock_solution, timeframe='all', unit='mL') == {"in": 50, "out": 10}
-    assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='all', destinations=[container], unit='mmol') == 5.0
+    assert recipe.get_substance_used(substance=sodium_sulfate, timeframe='all', destinations=[container],
+                                     unit='mmol') == 5.0
