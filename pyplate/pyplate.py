@@ -1112,6 +1112,10 @@ class Container:
                 concentration = [concentration] * len(solute)
             elif not isinstance(concentration, Iterable):
                 raise TypeError("Concentration(s) must be a str.")
+
+            if len(concentration) != n:
+                raise ValueError("Number of concentrations must match number of solutes.")
+
             bottom_arrays = {}
             for i, (c, substance) in enumerate(zip(concentration, solute)):
                 if not isinstance(c, str):
@@ -1136,6 +1140,10 @@ class Container:
                 quantity = [quantity] * len(solute)
             elif not isinstance(quantity, Iterable):
                 raise TypeError("Quantity(s) must be a str.")
+
+            if len(quantity) != n:
+                raise ValueError("Number of quantities must match number of solutes.")
+
             for i, (q, substance) in enumerate(zip(quantity, solute)):
                 if not isinstance(q, str):
                     raise TypeError("Quantity(s) must be a str.")
@@ -1979,24 +1987,39 @@ class Recipe:
             A new Container so that it may be used in later recipe steps.
         """
 
-        if not isinstance(solute, Substance):
-            raise TypeError("Solute must be a Substance.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a Substance.")
-        if name and not isinstance(name, str):
+        if not isinstance(solvent, (Substance, Container)):
+            raise TypeError("Solvent must be a Substance or a Container.")
+        if name is not None and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
-        if 'concentration' in kwargs and not isinstance(kwargs['concentration'], str):
-            raise TypeError("Concentration must be a str.")
-        if 'quantity' in kwargs and not isinstance(kwargs['quantity'], str):
-            raise TypeError("Quantity must be a str.")
+        if not isinstance(solute, Substance):
+            if not isinstance(solute, Iterable):
+                raise TypeError("Solute must be a Substance or an iterable of Substances.")
+            elif any(not isinstance(substance, Substance) for substance in solute):
+                raise TypeError("Solute must be a Substance or an iterable of Substances.")
+
+        if 'concentration' in kwargs:
+            if not isinstance(kwargs['concentration'], str):
+                if not isinstance(kwargs['concentration'], Iterable):
+                    raise TypeError("Concentration must be a str or an iterable of strs.")
+                elif any(not isinstance(concentration, str) for concentration in kwargs['concentration']):
+                    raise TypeError("Concentration must be a str or an iterable of strs.")
+
+        if 'quantity' in kwargs:
+            if not isinstance(kwargs['quantity'], str):
+                if not isinstance(kwargs['quantity'], Iterable):
+                    raise TypeError("Quantity must be a str or an iterable of strs.")
+                elif any(not isinstance(quantity, str) for quantity in kwargs['quantity']):
+                    raise TypeError("Quantity must be a str or an iterable of strs.")
+
         if 'total_quantity' in kwargs and not isinstance(kwargs['total_quantity'], str):
             raise TypeError("Total quantity must be a str.")
         if ('concentration' in kwargs) + ('total_quantity' in kwargs) + ('quantity' in kwargs) != 2:
             raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
 
-        if not name:
-            name = f"solution of {solute.name} in {solvent.name}"
+        solute_names = ', '.join(substance.name for substance in solute) if isinstance(solute, Iterable) else solute.name
+        if name is None:
+            name = f"solution of {solute_names} in {solvent.name}"
 
         new_container = Container(name)
         self.uses(new_container)
@@ -2223,23 +2246,30 @@ class Recipe:
                 dest_name = dest.name
                 step.frm.append(None)
                 solute, solvent, kwargs = step.operands
+
+                solute_names = ', '.join([solute.name for solute in solute]) if isinstance(solute, Iterable) else solute.name
                 # kwargs should have two out of concentration, quantity, and total_quantity
                 if 'concentration' in kwargs and 'total_quantity' in kwargs:
-                    step.instructions = f"""Create a solution of '{solute.name}' in '{solvent.name
+                    step.instructions = f"""Create a solution of '{solute_names}' in '{solvent.name
                     }' with a concentration of {kwargs['concentration']
                     } and a total quantity of {kwargs['total_quantity']}."""
                 elif 'concentration' in kwargs and 'quantity' in kwargs:
-                    step.instructions = f"""Create a solution of '{solute.name}' in '{solvent.name
+                    step.instructions = f"""Create a solution of '{solute_names}' in '{solvent.name
                     }' with a concentration of {kwargs['concentration']
                     } and a quantity of {kwargs['quantity']}."""
                 elif 'quantity' in kwargs and 'total_quantity' in kwargs:
-                    step.instructions = f"""Create a solution of '{solute.name}' in '{solvent.name
+                    step.instructions = f"""Create a solution of '{solute_names}' in '{solvent.name
                     }' with a total quantity of {kwargs['total_quantity']
                     } and a quantity of {kwargs['quantity']}."""
 
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
-                self.results[dest_name] = Container.create_solution(solute, solvent, dest_name, **kwargs)
+                results = Container.create_solution(solute, solvent, dest_name, **kwargs)
+                if isinstance(solvent, Container):
+                    self.used.add(solvent.name)
+                    self.results[solvent.name], self.results[dest_name] = results
+                else:
+                    self.results[dest_name] = results
                 step.substances_used = self.results[dest_name].get_substances()
                 step.to.append(self.results[dest_name])
             elif operator == 'solution_from':

@@ -304,8 +304,6 @@ def test_create_solution(water, salt, sodium_sulfate):
     assert (pytest.approx(Unit.convert_from(water, 100, 'mL', config.volume_storage_unit)) ==
             qaunt_total_quant_solution.volume)
 
-
-    # TODO: Update with actual error
     with pytest.raises(ValueError, match="Solution is impossible to create."):
         # create solution with solute in solvent container
         invalid_container_solution = Container.create_solution([salt, sodium_sulfate], invalid_solvent_container,
