@@ -1,5 +1,5 @@
 import numpy as np
-from pyplate.pyplate import Recipe, Container, Substance
+from pyplate import Recipe, Container
 
 import pytest
 

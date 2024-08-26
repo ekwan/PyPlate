@@ -1,6 +1,6 @@
 import numpy as np
 import pdb
-from pyplate.pyplate import Recipe, Container, Plate
+from pyplate import Recipe, Container
 import pytest
 import logging
 

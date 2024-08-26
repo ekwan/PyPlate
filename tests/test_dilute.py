@@ -1,6 +1,6 @@
 from itertools import product
 import pytest
-from pyplate.pyplate import Container, Unit, config
+from pyplate import Container, Unit, config
 
 
 def test_dilute(salt, sodium_sulfate, triethylamine, water, dmso):

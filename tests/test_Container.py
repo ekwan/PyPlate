@@ -1,6 +1,5 @@
 import pytest
-from pyplate import Container
-from pyplate.pyplate import config, Unit
+from pyplate import Container, Unit, config
 
 
 def test_make_Container(water, salt):

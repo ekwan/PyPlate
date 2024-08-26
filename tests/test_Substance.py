@@ -1,5 +1,5 @@
 import pytest
-from pyplate.pyplate import Substance
+from pyplate import Substance
 
 
 def test_make_solid():

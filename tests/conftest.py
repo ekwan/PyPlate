@@ -1,5 +1,5 @@
 import pytest
-from pyplate.pyplate import Substance, Container, Plate
+from pyplate import Substance, Container, Plate
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 from operator import itemgetter
 
-from pyplate.pyplate import Substance, Container, Plate, Recipe
+from pyplate import Substance, Container, Plate, Recipe
 
 # testing #
 

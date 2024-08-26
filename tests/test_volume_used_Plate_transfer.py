@@ -1,4 +1,4 @@
-from pyplate.pyplate import Plate, Container, Recipe
+from pyplate import Plate, Container, Recipe
 
 
 def test_transfer_between_plates(salt, water):

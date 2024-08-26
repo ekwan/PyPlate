@@ -1,6 +1,6 @@
 import pytest
 import numpy
-from pyplate.pyplate import Plate, Unit, config, Container
+from pyplate import Plate, Unit, config, Container
 
 
 def test_make_Plate():
