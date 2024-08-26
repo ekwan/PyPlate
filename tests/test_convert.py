@@ -1,5 +1,5 @@
 import pytest
-from pyplate.pyplate import Unit
+from pyplate import Unit
 
 
 def test_convert(salt, water, dmso):

@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from pyplate import Recipe, Container, Substance, Plate
+from pyplate import Recipe, Container, Plate
 
 def test_amount_remaining_simple(water, salt):
     recipe = Recipe()

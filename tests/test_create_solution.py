@@ -1,6 +1,6 @@
 import math
 from itertools import product
-from pyplate.pyplate import Unit, Container, config
+from pyplate import Unit, Container, config
 
 epsilon = 1e-3
 

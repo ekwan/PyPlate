@@ -1,49 +1,39 @@
-from pathlib import Path
-import os
-import yaml
+"""
+pyplate: a tool for designing chemistry experiments in plate format
 
+Substance: An abstract chemical or biological entity (e.g., reagent, solvent, etc.).
+           Immutable. 
 
-class Config:
-    def __init__(self):
-        file_path = None
-        for path in [Path(os.environ.get('PYPLATE_CONFIG', '')), Path.home(), Path(os.path.dirname(__file__))]:
-            path = path.joinpath('pyplate.yaml')
-            if path.is_file():
-                file_path = path
-                break
+Container: Stores specified quantities of Substances in a vessel with a given maximum volume. Immutable.
 
-        if file_path is None:
-            raise RuntimeError("pyplate.yaml not found.")
+Plate: A spatially ordered collection of Containers, like a 96 well plate.
+       The spatial arrangement must be rectangular. Immutable.
 
-        try:
-            with file_path.open('r') as config_file:
-                yaml_config = yaml.safe_load(config_file)
-        except yaml.YAMLError as exc:
-            raise RuntimeError("Config file could not be read.") from exc
+Recipe: A list of instructions for transforming one set of containers into another.
 
-        self.internal_precision = yaml_config['internal_precision']
-        self.moles_storage_unit = yaml_config['moles_storage_unit']
-        assert self.moles_storage_unit[-3:] == 'mol'
-        self.moles_display_unit = yaml_config['moles_display_unit']
-        assert self.moles_display_unit[-3:] == 'mol'
-        self.volume_storage_unit = yaml_config['volume_storage_unit']
-        assert self.volume_storage_unit[-1] == 'L'
-        self.volume_display_unit = yaml_config['volume_display_unit']
-        assert self.volume_display_unit[-1] == 'L'
+Storage format is defined in pyplate.yaml for volumes and moles.
 
-        self.concentration_display_unit = yaml_config['concentration_display_unit']
-        # we can't use Unit to do a full check of the unit, so we just do a cursory check
-        assert ('/' in self.concentration_display_unit or self.concentration_display_unit[-1] == 'm' or
-                self.concentration_display_unit[-1] == 'M')
-        self.default_solid_density = float(yaml_config['default_solid_density'])
-        self.default_enzyme_density = float(yaml_config['default_enzyme_density'])
-        self.default_weight_volume_units = yaml_config['default_weight_volume_units']
+    Example:
+        # 1e-6 means we will store volumes as microliters
+        volume_storage: 'uL'
 
-        self.default_colormap = yaml_config['default_colormap']
-        self.default_diverging_colormap = yaml_config['default_diverging_colormap']
-        self.precisions = yaml_config['precisions']
+        # 1e-6 means we will store moles as micromoles.
+        moles_storage: 'umol'
 
+All classes in this package are friends and use private methods of other classes freely.
 
-# This has to be imported after Config is defined, otherwise there will be a circular import.
-from .pyplate import Substance, Container, Plate, Recipe, Unit, RecipeStep  # noqa: E402
-__all__ = ['Substance', 'Container', 'Plate', 'Recipe', 'Unit', 'Config', 'RecipeStep']
+All internal computations are rounded to config.internal_precision to maintain sanity.
+    Rounding errors quickly compound.
+All values returned to the user are rounded to config.precisions for ease of use.
+"""
+
+# This is necessary to instantiate the config instance; the unit tests fail without it
+from pyplate.config import config, Config
+
+from pyplate.container import Container
+from pyplate.plate import Plate
+from pyplate.recipe import Recipe, RecipeStep
+from pyplate.substance import Substance
+from pyplate.unit import Unit 
+  # noqa: E402
+__all__ = ['Substance', 'Container', 'Plate', 'Recipe', 'Unit', 'RecipeStep']
