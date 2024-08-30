@@ -6,6 +6,7 @@ from typing import Iterable, Tuple, Dict, TYPE_CHECKING
 from functools import cache
 from copy import deepcopy, copy
 
+import math
 import numpy as np
 import pandas
 from tabulate import tabulate
@@ -42,21 +43,37 @@ class Container:
             max_volume: Maximum volume that can be stored in the container in mL
             initial_contents: (optional) Iterable of tuples of the form (Substance, quantity)
         """
+
+        # Ensure name argument satisfies type and value pre-conditions
         if not isinstance(name, str):
             raise TypeError("Name must be a str.")
         if len(name) == 0:
             raise ValueError("Name must not be empty.")
-
+        if len(name.strip()) == 0:
+            raise ValueError("Name must contain non-whitespace characters.")
+        
+        # Ensure max volume satisfies type requirement
         if not isinstance(max_volume, str):
             raise TypeError("Maximum volume must be a str, ('10 mL').")
-        max_volume, _ = Unit.parse_quantity(max_volume)
-        if max_volume <= 0:
+        
+        # Attempt to parse max_volume argument into a quantity 
+        # (raises ValueError on failure)
+        max_volume, max_volume_unit = Unit.parse_quantity(max_volume)
+        
+        # Ensure the quantity represents a valid volume for a container
+        if max_volume_unit != 'L':
+            raise ValueError("Maximum volume must have volume units (e.g. L, mL, uL, etc.).")
+        if not max_volume > 0:
             raise ValueError("Maximum volume must be positive.")
+        
+        # Set container attributes based on arguments
         self.name = name
         self.contents: Dict[Substance, float] = {}
         self.volume = 0.0
         self.max_volume = Unit.convert_to_storage(max_volume, 'L')
         self.experimental_conditions = {}
+
+        # Set starting state of container based on the initial contents
         if initial_contents:
             if not isinstance(initial_contents, Iterable):
                 raise TypeError("Initial contents must be iterable.")
@@ -109,17 +126,47 @@ class Container:
             quantity: How much to add. ('10 mol')
 
         """
+        # Check argument types
         if not isinstance(source, Substance):
             raise TypeError("Source must be a Substance.")
         if not isinstance(quantity, str):
             raise TypeError("Quantity must be a str.")
 
+        # Parse the quantity and get the volume/amount to be added. Round to the 
+        # internal precision to avoid float-precision bugs
         volume_to_add = Unit.convert(source, quantity, config.volume_storage_unit)
+        volume_to_add = round(volume_to_add, config.internal_precision)
+
         amount_to_add = Unit.convert(source, quantity, config.moles_storage_unit)
+        amount_to_add = round(amount_to_add, config.internal_precision)
+
+        # Ensure the quantity to add is finite.
+        if not math.isfinite(volume_to_add):
+            raise ValueError("Cannot add a non-finite amount of a substance." + \
+                            f" Quantity: {quantity}")
+
+        # Ensure that the quantity to be transferred is either positive or zero.
+        if volume_to_add < 0:
+            raise ValueError("Cannot add a negative amount of a substance." + \
+                             f" Quantity: {quantity}")
+
+        # Ensure the volume to add does not exceed the maximum volume .
         if self.volume + volume_to_add > self.max_volume:
             raise ValueError("Exceeded maximum volume")
+        
+        # If the volume rounds to 0, return without adding anything to the 
+        # container's contents.
+        if round(volume_to_add, config.internal_precision) == 0:
+            return
+
+        # Set the volume to the sum of the previous volume and the new volume
+        # to be added
         self.volume = round(self.volume + volume_to_add, config.internal_precision)
-        self.contents[source] = round(self.contents.get(source, 0) + amount_to_add, config.internal_precision)
+        
+        # Adjust the container's contents to reflect the resulting amount of the
+        # newly added substance
+        self.contents[source] = round(self.contents.get(source, 0) + amount_to_add, 
+                                      config.internal_precision)
 
     def _transfer(self, source_container: Container, quantity: str) -> Tuple[Container, Container]:
         """
@@ -131,66 +178,235 @@ class Container:
 
         Returns: New source and destination container.
         """
-
+        # Check argument types to ensure they are correct.
         if not isinstance(source_container, Container):
             raise TypeError("Invalid source type.")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be str.")
+
+        # Parse quantity into value-unit pair.
         quantity_to_transfer, unit = Unit.parse_quantity(quantity)
 
-        if unit == 'L':
-            volume_to_transfer = Unit.convert_to_storage(quantity_to_transfer, 'L')
-            volume_to_transfer = round(volume_to_transfer, config.internal_precision)
+        # Ensure the quantity to add is finite.
+        if not math.isfinite(quantity_to_transfer):
+            raise ValueError("Cannot transfer a non-finite amount of a substance." + \
+                            f" Quantity: {quantity}")
 
-            if volume_to_transfer > source_container.volume:
-                raise ValueError(f"Not enough mixture left in source container ({source_container.name}). " +
-                                 f"Only {Unit.convert_from_storage(source_container.volume, 'mL')} mL available, " +
-                                 f"{Unit.convert_from_storage(volume_to_transfer, 'mL')} mL needed.")
-            ratio = volume_to_transfer / source_container.volume
+        # Ensure that the quantity to be transferred is either positive or zero.
+        if quantity_to_transfer < 0:
+            raise ValueError("Cannot transfer a negative amount of a substance." + \
+                             f" Quantity: {quantity}")
+
+        # Define an error raising hlper function for cases where the transfer
+        # quantity exceeds the total quantity of the container's contents.
+        def transfer_exceeds_contents_error_helper(container_quantity : float,
+                                                   quantity_to_transfer : float,
+                                                   unit : str):
+            precision = config.precisions['default']
+            raise ValueError( 
+                    f"Not enough mixture left in source container" +
+                    f"'{source_container.name}'. Only " +
+                    f"{container_quantity, precision} {unit} available, but " + 
+                    f"{quantity_to_transfer, precision} {unit} needed."
+                    )
+
+        # Compute the fraction of the container's total contents that will be
+        # transferred (different logic for volume vs. mass vs. moles).
+        #
+        # NOTE: These three branches are very similar, there may be a way to 
+        # refactor this into a simpler structure.
+        if unit == 'L':
+            # Convert the volume to transfer into storage volume units
+            volume_to_transfer = Unit.convert_to_storage(quantity_to_transfer, 'L')
+
+            # Ensure the 'volume to transfer' does not exceed the total volume 
+            # of the container's current contents (round to avoid float 
+            # arithmetic errors).
+            volume_delta = volume_to_transfer - source_container.volume
+            if round(volume_delta, config.internal_precision) > 0:
+                # Get readable representation of container volume.
+                container_volume, unit = Unit.get_human_readable_unit(source_container.volume, 
+                                                                    config.volume_storage_unit)
+                # Convert 'volume to transfer' to equivalent unit.
+                volume_to_transfer = Unit.convert_from_storage(volume_to_transfer, unit)
+
+                # Round to reading-friendly precision
+                volume_to_transfer = round(volume_to_transfer, config.precisions['default'])
+
+                # Raise error which describes the reason for the failure to transfer
+                transfer_exceeds_contents_error_helper(container_volume,
+                                                       volume_to_transfer, 
+                                                       unit)
+            
+            # Compute the fraction of the container's contents that need to be
+            # transferred based on the volume to transfer and the total volume
+            # of the container's contents.
+            ratio = min(volume_to_transfer / source_container.volume, 1)
 
         elif unit == 'g':
+            # Round the transfer quantity to avoid float arithmetic errors.
             mass_to_transfer = round(quantity_to_transfer, config.internal_precision)
+
+            # Compute the total mass of the container's current contents in grams.
             total_mass = 0
             for substance, amount in source_container.contents.items():
-                total_mass += Unit.convert_from(substance, amount, config.moles_storage_unit, "g")
-            ratio = mass_to_transfer / total_mass
-        elif unit == 'mol':
-            moles_to_transfer = Unit.convert_to_storage(quantity_to_transfer, 'mol')
-            total_moles = sum(amount for _, amount in source_container.contents.items())
-            ratio = moles_to_transfer / total_moles
-        else:
-            raise ValueError("Invalid quantity unit.")
+                total_mass += Unit.convert_from(substance, amount, 
+                                                config.moles_storage_unit, "g")
 
+            # Ensure the 'mass to transfer' does not exceed the total mass of
+            # the container's current contents (round to avoid float arithmetic
+            # errors).
+            mass_delta = mass_to_transfer - total_mass
+            if round(mass_delta, config.internal_precision) > 0:
+                # Get readable representation of container mass.
+                container_mass, new_unit = Unit.get_human_readable_unit(total_mass, 
+                                                                    "g")
+
+                # Convert 'mass to transfer' to equivalent unit.
+                mass_to_transfer /= Unit.convert_prefix_to_multiplier(new_unit[:-1])
+
+                # Round to 'reading-friendly' precision
+                mass_to_transfer = round(mass_to_transfer, config.precisions['default'])
+
+                # Raise error which describes the reason for the failure to transfer
+                transfer_exceeds_contents_error_helper(container_mass,
+                                                       mass_to_transfer, 
+                                                       unit)
+
+            # Compute the fraction of the container's contents that need to be
+            # transferred based on the 'mass to transfer' and the total mass of
+            # the container's contents.
+            ratio = min(mass_to_transfer / total_mass, 1)
+
+        elif unit == 'mol':
+            # Compute the 'storage unit equivalent' for the moles to transfer.
+            # E.g. if the storage units for molar amount is set to 'umol', this 
+            # would multiply by 1e6
+            moles_to_transfer = Unit.convert_to_storage(quantity_to_transfer, 'mol')
+
+            # Compute the total moles of the container's current contents.
+            total_moles = sum(amount for _, amount in source_container.contents.items())
+
+            # Ensure the 'moles to transfer' does not exceed the total moles of
+            # the container's current contents (round to avoid float arithmetic
+            # errors).
+            moles_delta = moles_to_transfer - total_moles
+            if round(moles_delta, config.internal_precision) > 0:
+                # Get readable representation of container moles.
+                container_moles, unit = Unit.get_human_readable_unit(total_moles, 
+                                                                    "mol")
+                # Convert 'moles to transfer' to equivalent unit.
+                moles_to_transfer /= Unit.convert_prefix_to_multiplier(unit[:-3])
+
+                # Raise error which describes the reason for the failure to transfer
+                transfer_exceeds_contents_error_helper(container_moles,
+                                                       moles_to_transfer, 
+                                                       unit)
+
+            # Compute the fraction of the container's contents that need to be
+            # transferred based on the 'moles to transfer' and the total moles
+            # of the container's contents.
+            # 
+            # NOTE: This value is capped at 1 to avoid float arithmetic errors
+            ratio = min(moles_to_transfer / total_moles, 1)
+
+        # If the units are not among the base units, raise an errorr. This
+        # should never be encountered in practice, as this would have been 
+        # caught by the earlier call to Unit.parse_quantity().
+        else:
+            raise ValueError(f"Invalid quantity unit '{unit}'.")
+
+        # Make copies of the source container and destination container which
+        # will be modified based on the transfer results and returned to the
+        # user
         source_container, to = deepcopy(source_container), deepcopy(self)
+
+        # Create a list for storing substances that should be removed from the
+        # source container's contents.
+        substances_to_remove = []
+
+        # Loop through each substance in the container and transfer the
+        # appropriate amount of that substance
         for substance, amount in source_container.contents.items():
+            # Compute the amount of the current substance that needs to be 
+            # transferred to the new container
             to_transfer = amount * ratio
+            
+            # Compute the new amount for the substance in the destination container
+            # based on the starting amount (0 if the substance was not present in
+            # the destination container) and the amount to transfer (round to 
+            # avoid float arithmetic errors)
             to.contents[substance] = round(to.contents.get(substance, 0) + to_transfer,
                                            config.internal_precision)
+
+            # Compue the new amount for the substance in the source container based
+            # on the starting amount and the amount to transfer
             source_container.contents[substance] = round(source_container.contents[substance] - to_transfer,
                                                          config.internal_precision)
-            # if quantity to remove is the same as the current amount plus a very small delta,
-            # we will get a negative 0 answer.
-            if source_container.contents[substance] == -0.0:
-                source_container.contents[substance] = 0.0
+            
+            # Ensure that the contents of the source container never get below
+            # zero. If so raise a ValueError. This error should never happen.
+            if source_container.contents[substance] < 0:
+                # pragma: no cover
+                raise ValueError(f"Transfer resulted in negative quantity of " + \
+                                 f"{substance} in source container. This " + \
+                                 "error should never be encountered. If you " + \
+                                 "are reading this, please report the issue " + \
+                                 "at https://github.com/ekwan/PyPlate/issues.")
+            
+            # If all of the substance has been removed from the container, 
+            # add it to the list of substances to be removed from the contents
+            # of the source container
+            if source_container.contents[substance] == 0.0:
+                substances_to_remove.append(substance)
+
+        # Remove all substances from the source container which were flagged
+        # during the loop
+        for substance in substances_to_remove:
+            source_container.contents.pop(substance)
+
+        # If the source container contains a liquid, the transfer will be recorded 
+        # in terms of volume. Compute the transfer volume in reader-friendly units.
         if source_container.has_liquid():
             transfer = Unit.convert_from_storage(ratio * source_container.volume, 'L')
             transfer, unit = Unit.get_human_readable_unit(transfer, 'L')
+        
+        # Otherwise, the transfer will be recorded in terms of mass. Compute 
+        # the transfer mass in reader-friendly units.
         else:
-            # total mass in source container times ratio
+            # Compute the total mass by summing the masses of the individual components of the
+            # original source container.
             mass = sum(Unit.convert(substance, f"{amount} {config.moles_storage_unit}", "mg") \
                                     for substance, amount in source_container.contents.items())
+            
+            # Compute the transfer mass as the product of the total mass of the 
+            # components and the previously computed ratio.
             transfer, unit = Unit.get_human_readable_unit(mass * ratio, 'mg')
+
+        # Report the transfer instructions in terms of unit-specific precision
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         to.instructions += f"\nTransfer {round(transfer, precision)} {unit} of {source_container.name} to {to.name}"
+        
+        # Compute the total volume of the contents of the post-transfer 
+        # destination container. Round to the internal precision.
         to.volume = 0
         for substance, amount in to.contents.items():
             to.volume += Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
         to.volume = round(to.volume, config.internal_precision)
+
+        # If the total volume exceeds the maxmimum volume of the container,
+        # raise a ValueError.
         if to.volume > to.max_volume:
             raise ValueError(f"Exceeded maximum volume in {to.name}.")
+        
+        # Compute the total volume of the contents of the post-transfer source
+        # container. Round to the internal precision.
         source_container.volume = 0
         for substance, amount in source_container.contents.items():
             source_container.volume += Unit.convert(substance, f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
         source_container.volume = round(source_container.volume, config.internal_precision)
 
+        # Return the post-transfer source and destination containers.
         return source_container, to
 
     def _transfer_slice(self, source_slice: Plate | PlateSlicer, quantity: str) -> Tuple[Plate, Container]:
@@ -322,7 +538,12 @@ class Container:
             from pyplate.plate import Plate, PlateSlicer
         
         if not isinstance(destination, Container):
-            raise TypeError("You can only use Container.transfer into a Container")
+            if isinstance(destination, Plate):
+                message = "Destination must be a Container. " + \
+                          "Use 'Plate.transfer()' to transfer to a Plate."
+            else:
+                message = "Destination must be a Container."
+            raise TypeError(message)
         if isinstance(source, Container):
             return destination._transfer(source, quantity)
         if isinstance(source, (Plate, PlateSlicer)):
@@ -763,37 +984,77 @@ class Container:
         result.instructions += f"\nDilute with {round(needed_volume, precision)} {unit} of {solvent.name}."
         return result
 
-    def fill_to(self, solvent: Substance, quantity: str) -> Container:
+    def fill_to(self, substance: Substance, quantity: str) -> Container:
         """
-        Fills container with `solvent` up to `quantity`.
+        Fills container with `substance` up to `quantity`.
 
         Args:
-            solvent: Substance to use to fill.
+            substance: Substance to use to fill.
             quantity: Desired final quantity in container.
 
         Returns: New Container with desired final `quantity`
 
         """
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a Substance.")
+        # Check that the argument types are correct.
+        if not isinstance(substance, Substance):
+            raise TypeError("Argument 'substance' must be a Substance.")
         if not isinstance(quantity, str):
             raise TypeError("Quantity must be a str.")
 
+        # Parse the quantity as a value-unit pair
         quantity, quantity_unit = Unit.parse_quantity(quantity)
-        if quantity <= 0:
+
+        # Check that the quantity value is positive
+        #
+        # 'Not greater than' is preferred over 'less than or equal to' because
+        # it will handle 'nan' values correctly ('nan' values should be caught 
+        # during quantity parsing, but it is worth making sure this behaves
+        # properly in the case that they are not caught).
+        if not quantity > 0:
             raise ValueError("Quantity must be positive.")
+        
+        # Check that the unit is valid
         if quantity_unit not in ('L', 'g', 'mol'):
-            raise ValueError("We can only fill to mass or volume.")
+            raise ValueError("Invalid quantity unit.")
 
-        current_quantity = sum(Unit.convert(substance, f"{value} {config.moles_storage_unit}", quantity_unit)
-                               for substance, value in self.contents.items())
+        # Compute the total amount of substances currently in the container.
+        current_quantity = sum(Unit.convert(subst, 
+                                            f"{value} {config.moles_storage_unit}", 
+                                            quantity_unit) 
+                                for subst, value in self.contents.items())
 
-        required_quantity = quantity - current_quantity
-        result = self._add(solvent, f"{required_quantity} {quantity_unit}")
-        required_volume = Unit.convert(solvent, f"{required_quantity} {quantity_unit}", 'L')
-        required_volume, unit = Unit.get_human_readable_unit(required_volume, 'L')
+        # Compute the amount of the substance that would need to be added to
+        # reached the specified 'fill to' quantity.
+        #
+        # Rounding is done here to avoid throwing errors for values that are
+        # 'effectively zero' e.g. -4.12...e-17
+        required_quantity = round(quantity - current_quantity, 
+                                  config.internal_precision)
+
+        # Ensure that the quantity needed is either positive or zero.
+        #
+        # 'Not greater than or equal to' is preferred over 'less than' because
+        # it will handle 'nan' values correctly ('nan' values should be caught 
+        # during quantity parsing, but it is worth making sure this behaves
+        # properly in the case that they are not caught).
+        if not required_quantity >= 0:
+            raise ValueError(f"Argument quantity '{quantity} {quantity_unit}'" + \
+                             " must be greater than the current quantity within" + \
+                             f" the container '{current_quantity} {quantity_unit}'.")
+
+        # If the required volume needed is 0, return the same container without 
+        # adding anything to it.
+        if required_quantity == 0:
+            return self
+
+        # Add the required quantity to the container
+        result = self._add(substance, f"{required_quantity} {quantity_unit}")
+
+        # Update the container's instructions with this filling step.
+        required_quantity, unit = Unit.get_human_readable_unit(required_quantity, quantity_unit)
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-        result.instructions += f"\nFill with {round(required_volume, precision)} {unit} of {solvent.name}."
+        result.instructions += f"\nFill with {round(required_quantity, precision)} {unit} of {substance.name}."
+        
         return result
     
 

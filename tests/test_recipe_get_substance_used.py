@@ -582,7 +582,7 @@ def test_substance_used_fill_to_plate(salt, water):
     salt_water = recipe.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
     for x, row in enumerate(plate.row_names):
         for y, col in enumerate(plate.column_names):
-            recipe.transfer(salt_water, plate[row, col], f"{x * y} uL")
+            recipe.transfer(salt_water, plate[row, col], f"{max(x * y, 0.001)} uL")
     recipe.fill_to(plate, solvent=water, quantity='1 mL')
     recipe.bake()
 

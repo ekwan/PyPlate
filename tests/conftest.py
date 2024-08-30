@@ -13,6 +13,11 @@ def water() -> Substance:
 
 
 @pytest.fixture
+def empty_container() -> Container:
+    return Container('empty')
+
+
+@pytest.fixture
 def water_stock(water) -> Container:
     return Container('water', initial_contents=((water, '10 mL'),))
 
@@ -39,5 +44,9 @@ def triethylamine() -> Substance:
 
 @pytest.fixture
 def empty_plate() -> Plate:
-    return Plate('plate', '200 uL')  # 100 uL
+    return Plate('plate', '200 uL')
 
+
+@pytest.fixture
+def water_plate(water, empty_plate) -> Plate:
+    return empty_plate.fill_to(water, '100 uL')

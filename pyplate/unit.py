@@ -1,19 +1,86 @@
 from typing import Tuple
 
+import math
+import re
+
 from pyplate.config import config
 from pyplate.substance import Substance
+
 
 class Unit:
     """
     Provides unit conversion utility functions.
     """
 
+    BASE_UNITS = ["g", "L", "mol"]
+    
+    BASE_UNITS_PLUS_CONCENTRATION = BASE_UNITS.copy()
+    BASE_UNITS_PLUS_CONCENTRATION.append("M")
+
+    PREFIXES = {'n': 1e-9, 
+                'u': 1e-6, 'µ': 1e-6, 
+                'm': 1e-3, 
+                'c': 1e-2, 
+                'd': 1e-1, 
+                '': 1, 
+                'da': 1e1, 
+                'k': 1e3, 
+                'M': 1e6}
+    
+    _PREFIX_LOOKUP = {v: k for k, v in PREFIXES.items()}
+
+    # The primary regular expression for parsing quantities can be broken down into the following pieces:
+    #
+    #  ^\s* -> Matching must start at the beginning of the string, and allows any 
+    #          amount of whitespace characters before the start of the quantity.
+    #
+    # ([-\d\.]+) -> First capture group; captures value half of the quantity.
+    #                       
+    #                       Matches one or more digits, decimal point characters,
+    #                       or hypen (minus sign) characters.
+    #
+    # \s* -> Between the first and second catpure groups, allow for zero or more 
+    #        whitespace characters.
+    #
+    # ([a-zA-Z]+) -> Second capture group; captures the unit (prefix + base unit)
+    #                half of the quantity. 
+    #   
+#                       Matches one or more alphabetical characters.
+    #
+    # \s*$ -> Requires that matching include the end of the string, and allows 
+    #         any amount of whitespace between the unit and the end of the string.
+    _PRIMARY_QUANTITY_PATTERN = r'^\s*([-\d\.]+)\s*([a-zA-Z]+)\s*$'
+    _PRIMARY_QUANTITY_PATTERN_COMPILED = re.compile(_PRIMARY_QUANTITY_PATTERN)
+
+    # The secondary regular expression for parsing quantities can be broken down into the following pieces:
+    #
+    #  ^\s* -> Matching must start at the beginning of the string, and allows any
+    #          amount of whitespace before the start of the quantity.
+    #
+    # ([^\s]+) -> First capture group; captures the value half of the quantity. 
+    #             
+    #               Matches one or more non-whitespace characters. 
+    #
+    # \s+ -> Between the second catpure group, allow for one or more whitespaces.
+    #           NOTE: Unlike the primary regular expression, there MUST be at least
+    #           one whitespace in between the value and unit.
+    #
+    # ([a-zA-Z]+) -> Second capture group; captures the unit (prefix + base
+    #                unit). 
+    # 
+    #                   Matches one or more alphabetical characters.
+    #
+    # \s*$ -> Matching must end at the end of the string, and allows any amount
+    #         of whitespace between the unit and the end of the string.
+    _SECONDARY_QUANTITY_PATTERN = r'^\s*([^\s]+)\s+([a-zA-Z]+)\s*$' 
+    _SECONDARY_QUANTITY_PATTERN_COMPILED = re.compile(_SECONDARY_QUANTITY_PATTERN)
+
     @staticmethod
     def convert_prefix_to_multiplier(prefix: str) -> float:
         """
-
         Converts an SI prefix into a multiplier.
-        Example: "m" -> 1e-3, "u" -> 1e-6
+
+        Examples: "m" -> 1e-3, "u" -> 1e-6
 
         Arguments:
             prefix:
@@ -22,13 +89,42 @@ class Unit:
              Multiplier (float)
 
         """
+        # Check type of prefix argument
         if not isinstance(prefix, str):
             raise TypeError("SI prefix must be a string.")
-        prefixes = {'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, '': 1, 'da': 1e1, 'k': 1e3,
-                    'M': 1e6}
-        if prefix in prefixes:
-            return prefixes[prefix]
+        
+        # If the prefix is support, return the associated multiplier
+        if prefix in Unit.PREFIXES:
+            return Unit.PREFIXES[prefix]
+        
+        # Otherwise, raise an error
         raise ValueError(f"Invalid prefix: {prefix}")
+    
+    @staticmethod
+    def convert_multiplier_to_prefix(multiplier: float) -> str:
+        """
+        Converts multiplier into an SI prefix. Multipliers will be floored
+        to the nearest power of ten for the conversion.
+
+        Examples: 1e-3 -> 'm', 2.5e3 -> 1e3 -> 'k'
+
+        Arguments:
+            prefix:
+
+        Returns:
+             Multiplier (float)
+
+        """
+        # Check type of multiplier argument
+        if not isinstance(multiplier, (float, int)):
+            raise TypeError("Multiplier must be a number.")
+        
+        # Determine the nearest floored power of ten
+        multiplier = 10 ** math.floor(math.log10(multiplier))
+
+        if multiplier in Unit._PREFIX_LOOKUP:
+            return Unit._PREFIX_LOOKUP[multiplier]
+        raise ValueError(f"Invalid multiplier: {multiplier}")
 
     @staticmethod
     def parse_quantity(quantity: str) -> Tuple[float, str]:
@@ -44,27 +140,55 @@ class Unit:
          and the str will be the unit ('L', 'mol', 'g', etc.).
 
         """
+        
+        # Ensure that the quantity is a string
         if not isinstance(quantity, str):
             raise TypeError("Quantity must be a string.")
 
-        if quantity.count(' ') != 1:
-            raise ValueError("Value and unit must be separated by a single space.")
+        # Match the primary regular expression against the quantity string
+        match = Unit._PRIMARY_QUANTITY_PATTERN_COMPILED.match(quantity)
 
-        value, unit = quantity.split(' ')
+        # If matching fails, try to match with the secondary regular expression
+        if not match:
+            match = Unit._SECONDARY_QUANTITY_PATTERN_COMPILED.match(quantity)
+
+            # If matching fails again, fail to parse the quantity and raise a ValueError
+            if not match:
+                raise ValueError(f"Could not parse '{quantity}' into a valid value-unit pair.")
+            
+        # Extract the value-unit pair from the capture groups
+        value, unit = match.group(1), match.group(2)
+
+        # Attempt to parse the value as a float
         try:
             value = float(value)
+        # Raise a ValueError if float-parsing fails
         except ValueError as exc:
-            raise ValueError("Value is not a valid float.") from exc
+            raise ValueError(f"Value '{value}' is not a valid float.") from exc
+        
+        if math.isnan(value):
+            raise ValueError("'NaN' values are forbidden for quantities.")
 
-        for base_unit in ['mol', 'g', 'L', 'M']:
+        # Check to see if the extracted unit is a valid unit.
+        for base_unit in Unit.BASE_UNITS_PLUS_CONCENTRATION:
+
+            # Check if the unit ends with a base unit
             if unit.endswith(base_unit):
+                # Set the prefix to the what precedes the base unit 
                 prefix = unit[:-len(base_unit)]
+                # Parse the prefix (will raise a ValueError if it fails)
+                # and multiply the value by the associated multiplier
+                # (e.g. m -> 1e-3)
                 value = value * Unit.convert_prefix_to_multiplier(prefix)
+                # Return the value and base unit
                 return value, base_unit
-        raise ValueError("Invalid unit {base_unit}.")
+            
+        # If no base units matched the end of the unit string, the unit must
+        # be invalid. Raise a ValueError stating as much.
+        raise ValueError(f"Invalid unit '{unit}'.")
 
     @staticmethod
-    def parse_concentration(concentration) -> Tuple[float, str, str]:
+    def parse_concentration(concentration : str) -> Tuple[float, str, str]:
         """
         Parses concentration string to (value, numerator, denominator).
         Args:
@@ -317,23 +441,39 @@ class Unit:
         Returns: Tuple of new value and unit
 
         """
+        # If the value is zero, return early with the provided unit
         if value == 0:
             return value, unit
-        value = abs(value)
+        
+        # Convert argument 'unit' into the corresponding base unit, and adjust 
+        # value by the multiplier corresponding to the provided unit's prefix.
         if unit[-1] == 'L':
+            value *= Unit.convert_prefix_to_multiplier(unit[:-1])
             unit = 'L'
         elif unit[-3:] == 'mol':
+            value *= Unit.convert_prefix_to_multiplier(unit[:-3])
             unit = 'mol'
         elif unit[-1] == 'g':
+            value *= Unit.convert_prefix_to_multiplier(unit[:-1])
             unit = 'g'
+
+        # Determine the 1e3-scale multiplier needed to put 'value' in the range
+        # 1 to 1000. This multiplier cannot exceed 1e6 ('M' prefix) and cannot 
+        # be lower than 1e-9 ('n' prefix).
         multiplier = 1.0
-        while value < 1:
+
+        # Compute multiplier for values less than one
+        while value < 1 and multiplier > 1e-9:
             value *= 1e3
             multiplier /= 1e3
 
-        multiplier = max(multiplier, 1e-6)
+        # Compute multiplier for values greater than 1000
+        while value > 1000 and multiplier < 1e6:
+            value /= 1e3
+            multiplier *= 1e3
 
-        return value, {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
+        return round(value, config.precisions['default']), \
+                Unit.convert_multiplier_to_prefix(multiplier) + unit
 
     @staticmethod
     def calculate_concentration_ratio(solute: Substance, concentration: str, solvent: Substance) \
