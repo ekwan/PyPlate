@@ -1039,7 +1039,7 @@ def test_Container__transfer(water, dmso, salt, sodium_sulfate,
 
 
     # ==========================================================================
-    # Success Case: Transfer to an non-empty container with non-overlapping
+    # Success Case: Transfer to an non-empty container with overlapping
     #               substances (partial and full transfer tested)
     # ==========================================================================
 
