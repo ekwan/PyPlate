@@ -1,5 +1,6 @@
 import pytest
 from itertools import product
+from copy import deepcopy
 
 from pyplate import Container, Substance, Unit, config
 
@@ -227,7 +228,6 @@ def test_Container__init__(water, salt):
     # 4. Success case: name, max_volume, and initial_contents are provided
     # =========================================================================
     #
-
     for test_name in test_names:
         for test_volume, (test_value, test_unit) in zip(test_positive_volumes, 
                                                         parsed_test_volumes):
@@ -260,9 +260,134 @@ def test_Container__init__(water, salt):
                     assert test_container.contents[substance] == pytest.approx(umols_substance)
 
 
-def test_Container__self_add(water, dmso, salt, sodium_sulfate):
+def test_Container___eq__(empty_container, empty_plate, water, dmso):
+    """
+    Unit Test for the function Container.__eq__()
+
+    This test checks the following scenarios:
+    - Comparison between Container and non-container second argument
+    - Comparison between two identical empty containers
+    - Comparison between two identical non-empty containers
+    - Comparison between two containers which are identical except for each of
+      the following attributes:
+      - Name
+      - Max Volume
+      - Current Volume
+      - Contents (multiple variations tested)
     """
 
+    # ==========================================================================
+    # False Case: Non-container second argument
+    # ==========================================================================
+    for non_container in [None, False, 1, "str", 
+                        [empty_container], [empty_container, empty_container],
+                        (empty_container,), (empty_container, empty_container),
+                        {"0": empty_container},
+                        empty_plate]:
+        assert not (empty_container == non_container), \
+            f"Non-container object treated as equal! Object: {type(non_container)}"
+
+
+    # Create an empty container with the same name as the 'empty_container'
+    # fixture for test cases that follow
+    test_container_empty = Container(empty_container.name)
+
+
+    # ==========================================================================
+    # True Case: First and second arguments are the same Python object
+    # ==========================================================================
+    assert empty_container == empty_container
+
+
+    # ==========================================================================
+    # True Case: First and second arguments are dentical empty containers
+    # ==========================================================================
+    assert empty_container == test_container_empty
+
+
+    # Create non-empty containers for test cases that follow
+    test_container_water_1 = Container('water_stock', '10 mL', 
+                                       initial_contents=[(water, '10 mL')])
+    test_container_water_2 = Container('water_stock', '10 mL', 
+                                       initial_contents=[(water, '10 mL')])
+
+    # ==========================================================================
+    # True Case: First and second arguments are dentical non-empty containers
+    # ==========================================================================
+    assert test_container_water_1 == test_container_water_2
+
+
+    # ==========================================================================
+    # False Case: First and second arguments have different names
+    # ==========================================================================
+    test_container_water_1.name = "water_solution"
+    assert not (test_container_water_1 == test_container_water_2)
+    # Reset name for future tests
+    test_container_water_1.name = test_container_water_2.name
+
+
+    # ==========================================================================
+    # False Case: First and second arguments have different maximum volumes
+    #             (both finite and infinite volumes are tested)
+    # ==========================================================================
+
+    # Test finite amounts for both containers
+    test_container_water_1.max_volume = 20
+    assert not (test_container_water_1 == test_container_water_2)
+
+    # Test infinite maximum volume for one container and finite maximum volume
+    # for the other container
+    test_container_water_1.max_volume = float('inf')
+    assert not (test_container_water_1 == test_container_water_2)
+    assert not (test_container_water_2 == test_container_water_1)
+    # Reset max volume for future tests
+    test_container_water_1.max_volume = test_container_water_2.max_volume
+
+    # NOTE: Infinite amounts for both containers was tested with the empty
+    #       container equality check.
+
+
+    # ==========================================================================
+    # False Case: First and second arguments have different current volumes
+    # ==========================================================================
+    test_container_water_1.volume = 20
+    assert not (test_container_water_1 == test_container_water_2)
+    # Reset current volume to match again for future tests
+    test_container_water_1.volume = test_container_water_2.volume
+
+
+    # ==========================================================================
+    # False Case: First and second arguments have different contents
+    # ==========================================================================
+    
+    # Test for conditions where the contents have different amounts of entries.
+    # Both directions are tested.
+    test_container_water_1.contents.pop(water)
+    assert not (test_container_water_1 == test_container_water_2)
+    assert not (test_container_water_2 == test_container_water_1)
+
+    # Test for conditions where the contents have the same number of entries,
+    # but have different substances. Both directions are tested.
+    test_container_water_1.contents[dmso] = test_container_water_2.contents[water]
+    assert not (test_container_water_1 == test_container_water_2)
+    assert not (test_container_water_2 == test_container_water_1)
+    # Reset contents to match again for future tests (need to use deepcopy
+    # to avoid linking the containers' contents to the same object)
+    test_container_water_1.contents = deepcopy(test_container_water_2.contents)
+
+    # Test for conditions where the contents have the same number of entries,
+    # but have different substances. Both directions are tested.
+    test_container_water_1.contents[water] += 1
+    assert not (test_container_water_1 == test_container_water_2)
+    assert not (test_container_water_2 == test_container_water_1)
+    # Reset contents to match again for future tests (need to use deepcopy
+    # to avoid linking the containers' contents to the same object)
+    test_container_water_1.contents = deepcopy(test_container_water_2.contents)
+
+
+
+def test_Container__self_add(water, dmso, salt, sodium_sulfate):
+    """
     Unit Test for the function `Container._self_add()`.
 
     This unit test checks the following scenarios:
@@ -280,12 +405,15 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
       4. Substance is added to a non-empty container that did already contain
          some amount of the substance as well as other substances.
            
-      The tests check that the substance is in the container, that the amount
+      The tests above check that the substance is in the container, that the amount
       of the substance in the container matches the amount specified to be added,
       that any other pre-existing substances also have the correct amounts,
       and that the overall volume of the container matches the total amount
       of substances that have been added.
 
+    - Edge case: zero quantity addition of a substance does not add the substance
+      to the container's contents if it is not already present, and does not
+      change the amount of the substance if it is already present. 
     """
     # Create a new container for use in argument type/value checking
     container = Container('container', max_volume='5 mL')
@@ -340,10 +468,10 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
         assert pytest.approx(container.volume) == Unit.convert_to_storage(5, 'mL')
 
 
-    # ==================================================================
+    # ==========================================================================
     # 2. Success case: substance added to non-empty container 
     #                   (substance to-be-added is not in the container)
-    # ==================================================================
+    # ==========================================================================
     #
     for old_substance in substance_list:
         for new_substance in substance_list:
@@ -372,11 +500,12 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
             assert pytest.approx(container.volume) == \
                 Unit.convert_to_storage(15, 'mL')
             
-    # =======================================================================
-    # 3. Success case: substance added to non-empty container 
-    #                   (substance to-be-added is already in the container;
-    #                    no other substances are present)
-    # =======================================================================
+
+    # ==========================================================================
+    # 3. Success Case: Substance added to non-empty container (substance to-be-
+    #                  added is already in the container; no other substances 
+    #                  are present)
+    # ==========================================================================
     #
     for substance in substance_list:
         # Create a new container with an initial amount of the substance
@@ -395,18 +524,19 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
         assert pytest.approx(container.volume) == \
             Unit.convert_to_storage(15, 'mL')
 
-    # =======================================================================
-    # 4. Success case: substance added to non-empty container 
-    #                   (substance to-be-added is already in the container;
-    #                    other substances are also present)
-    # =======================================================================
+
+    # ==========================================================================
+    # 4. Success Case: Substance added to non-empty container (substance to-be-
+    #                  added is already in the container and other substances 
+    #                  are also present)
+    # ==========================================================================
     #
     for old_substance in substance_list:
         for new_substance in substance_list:
             if new_substance is old_substance: 
                 continue
 
-            # Create a new empty container
+            # Create a new container with both the old and new substance present
             container = Container('container', max_volume='30 mL', 
                                 initial_contents=[(old_substance, '10 mL'),
                                                   (new_substance, '7.5 mL')])
@@ -427,9 +557,39 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
             # Check that the overall volume of the container is correct
             assert pytest.approx(container.volume) == \
                 Unit.convert_to_storage(22.5, 'mL')
+            
+    # ==========================================================================
+    # 5. Success Case: Zero quantity of substance added to empty/non-empty 
+    #                  container
+    # ==========================================================================
+    #
+    for substance in substance_list:
+        for unit in test_units:
+            # Create a new empty container
+            container = Container('container')
+
+            # Use the _self_add method to add the substance to the container
+            container._self_add(substance, f'0 {unit}')
+
+            # Ensure that the substance was correctly left out of the container
+            assert new_substance not in container.contents
+            assert container.volume == 0
+            
+            # Create a new non-empty container, containing the substance
+            container = Container('container', 
+                                initial_contents=[(substance, '5 mL')])
+
+            # Use the _self_add method to add the new substance to the container
+            container._self_add(substance, f"0 {unit}")
+
+            # Ensure that the substance amount is unchanged as a result of the 
+            # zero-quantity addition
+            assert Unit.convert_from_storage(container.volume, 'mL') == 5
+        
 
 
-def test_Container__transfer(water, empty_container, empty_plate):
+def test_Container__transfer(water, dmso, salt, sodium_sulfate, 
+                             empty_container, empty_plate):
     """
     Unit Test for the function `Container._transfer()`
     
@@ -442,15 +602,16 @@ def test_Container__transfer(water, empty_container, empty_plate):
     - Transfers which would exceed the maximum volume of the destination
       container raise a `ValueError`.
     
-    This unit test checks the permutations of the following success scenarios:
+    This unit test checks the following success scenarios:
     - All unit types (each base unit covered, as well as various prefixes)
     - Partial transfer vs. full transfer of source container contents
     - Finite volume vs. infinite volume source/destination containers
-      - Specifically check for transfer results which completely fill the max
-        volume of the destination container
-    - Empty destination container vs. non-empty destination container (no 
-      overlapping substances) vs. non-empty destination container (overlapping 
-      substances)
+      - Subcases for finite volume: transfer fills the entire container vs. 
+        transfer does not fill the entire container
+    - Empty destination container vs. non-empty destination container 
+      - Subcases for non-empty destination container: no overlapping substances
+        with source container vs. one or more overlapping substances with source
+        container.
     """
 
     # Create containers to use for type-checking and illegal argument value tests
@@ -458,7 +619,10 @@ def test_Container__transfer(water, empty_container, empty_plate):
                            initial_contents=[(water, '10 mL')])
     container2 = Container('container2', '10 mL')
 
-    # Argument types checked
+    # ==========================================================================
+    # Failure Case: Invalid argument type(s)
+    # ==========================================================================
+    
     with pytest.raises(TypeError, match='Invalid source type\\.'):
         container1._transfer(1, '10 mL')
     with pytest.raises(TypeError, match='Invalid source type\\.'):
@@ -483,7 +647,11 @@ def test_Container__transfer(water, empty_container, empty_plate):
     with pytest.raises(TypeError, match='Quantity must be str\\.'):
         container1._transfer(empty_container, empty_plate)
 
-    # Failure case: negative transfer quantity 
+
+    # ==========================================================================
+    # Failure Case: Negative transfer quantity 
+    # ==========================================================================
+    
     for test_volume in test_negative_quantities:
         # Wildcard added because negative infinite quantities are included in
         # the negative volumes list, which will trigger the non-finite error
@@ -493,16 +661,21 @@ def test_Container__transfer(water, empty_container, empty_plate):
             container2._transfer(container1, test_volume)
 
 
-    # Failure case: non-finite transfer quantity
+    # ==========================================================================
+    # Failure Case: Non-finite transfer quantity
+    # ==========================================================================
+    
     for unit in test_base_units:
         with pytest.raises(ValueError, 
                 match='Cannot transfer a non-finite amount of a substance\\.'):
             container2._transfer(container1, 'inf ' + unit)
 
 
-    # Failure case: quantity with invalid unit (mocking used for 
+    # ==========================================================================
+    # Failure Case: Quantity with invalid unit (mocking used for 
     #               Unit.parse_quantity() to reach the error)
-
+    # ==========================================================================
+    
     # Save a copy of the real Unit.parse_quantity so it can be reselt at the end
     # of this test.
     real_parse_quantity = Unit.parse_quantity
@@ -521,8 +694,10 @@ def test_Container__transfer(water, empty_container, empty_plate):
     Unit.parse_quantity = real_parse_quantity
 
 
-    # Failure case: transfer quantity exceeds amount in source container
-
+    # ==========================================================================
+    # Failure Case: transfer quantity exceeds amount in source container
+    # ==========================================================================
+    #
     # TODO: This test includes a fairly flexible regular expression to ensure 
     #       that the appropriate error messages are being generated, but to 
     #       properly test this failure case, the message-checking should be 
@@ -546,9 +721,11 @@ def test_Container__transfer(water, empty_container, empty_plate):
                 container2._transfer(test_container, '20 ' + unit)
     
 
-    # Failure case: transfer of the specified quantity would exceed the maximum
+    # ==========================================================================
+    # Failure Case: Transfer of the specified quantity would exceed the maximum
     #               volume of the destination container
-    # 
+    # ==========================================================================
+    #
     # TODO: Improve this failure case. It relies on the principle that, because
     #       the density of water is 1 g/mL, 1.01 * any of the base units will
     #       always be greater than 1 mL (1.01 g > 1 mL, 1.01 L > 1 mL, and 
@@ -563,13 +740,14 @@ def test_Container__transfer(water, empty_container, empty_plate):
             test_container2._transfer(test_container, '1.01 ' + unit)
 
 
-    # ========================================================================
-    # Success Case: Transfer to an empty container with infinite volume 
+    # ==========================================================================
+    # Success Case: Transfer to an empty container with infinite volume
     #               (partial and full transfer tested)
-    # ========================================================================
+    # ==========================================================================
     
     # Define a helper function for generating the assert statements (assumes
-    # the container only contains one substance)
+    # the container only contains one substance; used in the next success case
+    # too)
     def assert_contents_helper(container : Container, sub : Substance, 
                                amount : float, unit : str):
         # Assert that the recorded moles of the substance in the container
@@ -609,7 +787,7 @@ def test_Container__transfer(water, empty_container, empty_plate):
         assert_contents_helper(c2_prime, water, 2, unit)
 
         # Ensure that the substance was correctly transferred from the new 
-        # object representing the post-transfer second container
+        # object representing the post-transfer first container
         assert_contents_helper(c1_prime, water, 3, unit)
 
         # Full Transfer
@@ -632,9 +810,325 @@ def test_Container__transfer(water, empty_container, empty_plate):
         assert_contents_helper(c2_prime, water, 5, unit)
 
         # Ensure that the substance was correctly transferred from the new 
-        # object representing the post-transfer second container
+        # object representing the post-transfer first container
         assert water not in c1_prime.contents
         assert_contents_helper(c1_prime, water, 0, unit)
+
+
+
+    # ========================================================================
+    # Success Case: Transfer to an empty container with finite volume
+    #               (partial and full transfer tested)
+    # ========================================================================
+
+    # Test all unit variations
+    for idx, unit in enumerate(test_units):
+        # Construct the source container with a quantity of water as its
+        # starting contents
+        container1 = Container('container1', 
+                            initial_contents=[(water, f"5 {unit}")])
+            
+        # Use the "evenness" of the loop index to create two different cases
+        # within the base units as a way to test different variations for 
+        # max volume:
+        #   1. If odd, create the container such that the maximum volume is
+        #      exactly the transfer quantity
+        #   2. If even, create the container such that the maximum volume is
+        #      twice the transfer quantity
+        #
+        # NOTE: This creates a dependency on Unit.convert(). Ideally, this unit
+        # test interdependency should be removed, but because the mock function
+        # would essentially need to be a copy of the real function, mocking it 
+        # did not seem like the right decision.
+        if (idx) % 2:
+            max_vol = Unit.convert(water, f"5 {unit}", 'L')
+        else:
+            max_vol = Unit.convert(water, f"10 {unit}", 'L')
+        max_vol = f"{max_vol} L"
+
+        # Construct the destination container, ensuring the volume is set
+        # high enough to contain the contents of the first container.
+        container2 = Container('container2', max_volume=max_vol)
+        
+        # Partial Transfer
+        # ------------------
+        #
+        # Use _transfer() to transfer some (but not all) of the first 
+        # container's contents to the second container.
+        c1_prime, c2_prime = container2._transfer(container1, f"2 {unit}")
+
+        # Ensure that the original source container is unchanged
+        assert_contents_helper(container1, water, 5, unit)
+
+        # Ensure that the original destination container is unchanged
+        assert water not in container2.contents
+        assert_contents_helper(container2, water, 0, unit)
+
+        # Ensure that the substance was correctly transferred to the new 
+        # object representing the post-transfer second container 
+        assert water in c2_prime.contents
+        assert_contents_helper(c2_prime, water, 2, unit)
+
+        # Ensure that the substance was correctly transferred from the new 
+        # object representing the post-transfer first container
+        assert_contents_helper(c1_prime, water, 3, unit)
+
+        # Full Transfer
+        # ------------------
+        #
+        # Use _transfer() to transfer all of the first container's contents to
+        # the second container.
+        c1_prime, c2_prime = container2._transfer(container1, f"5 {unit}")
+
+        # Ensure that the original source container is unchanged
+        assert_contents_helper(container1, water, 5, unit)
+
+        # Ensure that the original destination container is unchanged
+        assert water not in container2.contents
+        assert_contents_helper(container2, water, 0, unit)
+
+        # Ensure that the substance was correctly transferred to the new object 
+        # representing the post-transfer second container 
+        assert water in c2_prime.contents
+        assert_contents_helper(c2_prime, water, 5, unit)
+
+        # Ensure that the substance was correctly transferred from the new 
+        # object representing the post-transfer first container
+        assert water not in c1_prime.contents
+        assert_contents_helper(c1_prime, water, 0, unit)
+
+
+
+    # ==========================================================================
+    # Success Case: Transfer to an non-empty container with non-overlapping
+    #               substances (partial and full transfer tested)
+    # ==========================================================================
+
+    # Define a helper function for generating the assert statements for
+    # the container's contents (this has been modified to remove the 'total
+    # volume' assertion that was present in the helper function used in the 
+    # tests of the last two success cases).
+    def assert_contents_helper(container : Container, sub : Substance, 
+                               amount : float, unit : str, msg : str = ""):
+        
+        if amount > 0:
+            # Assert that the substance is in the container's contents 
+            assert sub in container.contents, msg
+        else:
+            # Assert that the substance is NOT in the container's contents
+            assert sub not in container.contents, msg
+        
+        # Assert that the recorded moles of the substance in the container
+        # matches the specified amount  
+        amount = round(Unit.convert(sub, f"{amount} {unit}", 
+                                    config.moles_storage_unit), 
+                                    config.internal_precision)
+        
+        # TODO: Remove the 'rel' parameter and fix precision issue
+        assert pytest.approx(container.contents.get(sub, 0), rel=0.001) == \
+            amount, msg
+
+    # Test all unit variations
+    for idx, unit in enumerate(test_units):
+        # Construct the source container with a quantity of water and salt as 
+        # its starting contents
+        container1 = Container('container1', 
+                            initial_contents=[(water, f"5 {unit}"), 
+                                              (salt, f"5 {unit}")])
+            
+        # Construct the non-empty destination container with non-overlapping 
+        # substances (dmso and sodium sulfate).
+        container2 = Container('container2', 
+                            initial_contents=[(dmso, f"20 {unit}"), 
+                                              (sodium_sulfate, f"1 {unit}")])
+        
+        # Partial Transfer
+        # ------------------
+        #
+        # Use _transfer() to transfer some (but not all) of the first 
+        # container's contents to the second container.
+        c1_prime, c2_prime = container2._transfer(container1, f"2 {unit}")
+
+        # Ensure that the original source container is unchanged
+        assert_msg = "Transfer incorrectly mutated the input source " + \
+                     "container object!"
+        assert_contents_helper(container1, water, 5, unit, assert_msg)
+        assert_contents_helper(container1, salt, 5, unit, assert_msg)
+
+        # Ensure that the original destination container is unchanged
+        assert_msg = "Transfer incorrectly mutated the input destination " + \
+                     "container object!"
+        assert_contents_helper(container2, dmso, 20, unit, assert_msg)
+        assert_contents_helper(container2, sodium_sulfate, 1, unit, assert_msg)
+        assert water not in container2.contents, assert_msg
+        assert salt not in container2.contents, assert_msg
+
+        # Ensure that the contents of the source container were correctly
+        # transferred to the new object representing the post-transfer 
+        # second container
+        assert_msg = "New post-transfer destination container contents do " + \
+                     "not contain the correct amounts of the substances " + \
+                     "transferred from the source container!"
+        assert_contents_helper(c2_prime, water, 1, unit, assert_msg)
+        assert_contents_helper(c2_prime, salt, 1, unit, assert_msg)
+
+        # Ensure that the original contents of the destination container were 
+        # maintained in the new object representing the post-transfer
+        # second container 
+        assert_msg = "New post-transfer destination container contents did " + \
+                     "not maintain the correct amounts for its pre-existing" + \
+                     " contents!"
+        assert_contents_helper(c2_prime, dmso, 20, unit, assert_msg)
+        assert_contents_helper(c2_prime, sodium_sulfate, 1, unit, assert_msg)
+
+        # Ensure that the substance was correctly transferred from the new 
+        # object representing the post-transfer first container
+        assert_msg = "New post-transfer source container contents do not " + \
+                     "contain the correct amounts of the substances left " + \
+                     "over from the transfer!"
+        assert_contents_helper(c1_prime, water, 4, unit, assert_msg)
+        assert_contents_helper(c1_prime, salt, 4, unit, assert_msg)
+
+        # Full Transfer
+        # ------------------
+        #
+        # Use _transfer() to transfer all of the first container's contents to
+        # the second container.
+        c1_prime, c2_prime = container2._transfer(container1, f"10 {unit}")
+
+        # Ensure that the original source container is unchanged
+        assert_msg = "Transfer incorrectly mutated the input source " + \
+                     "container object!"
+        assert_contents_helper(container1, water, 5, unit, assert_msg)
+        assert_contents_helper(container1, salt, 5, unit, assert_msg)
+
+        # Ensure that the original destination container is unchanged
+        assert_msg = "Transfer incorrectly mutated the input destination " + \
+                     "container object!"
+        assert_contents_helper(container2, dmso, 20, unit, assert_msg)
+        assert_contents_helper(container2, sodium_sulfate, 1, unit, assert_msg)
+        assert water not in container2.contents
+        assert salt not in container2.contents
+
+        # Ensure that the contents of the source container were correctly
+        # transferred to the new object representing the post-transfer 
+        # second container
+        assert_msg = "New post-transfer destination container contents do " + \
+                     "not contain the correct amounts of the substances " + \
+                     "transferred from the source container!"
+        assert_contents_helper(c2_prime, water, 5, unit, assert_msg)
+        assert_contents_helper(c2_prime, salt, 5, unit, assert_msg)
+
+        # Ensure that the original contents of the destination container were 
+        # maintained in the new object representing the post-transfer
+        # second container 
+        assert_msg = "New post-transfer destination container contents did " + \
+                     "not maintain the correct amounts for its pre-existing" + \
+                     " contents!"
+        assert_contents_helper(c2_prime, dmso, 20, unit, assert_msg)
+        assert_contents_helper(c2_prime, sodium_sulfate, 1, unit, assert_msg)
+
+        # Ensure that the substance was correctly transferred from the new 
+        # object representing the post-transfer first container
+        assert_msg = "New post-transfer source container contents were not " + \
+                     "entirely removed after a full transfer of the source " + \
+                     "container's contents!"
+        assert_contents_helper(c1_prime, water, 0, unit)
+        assert_contents_helper(c1_prime, salt, 0, unit)
+        assert c1_prime.volume == 0, assert_msg
+
+
+    # ==========================================================================
+    # Success Case: Transfer to an non-empty container with non-overlapping
+    #               substances (partial and full transfer tested)
+    # ==========================================================================
+
+    # Test all unit variations
+    for idx, unit in enumerate(test_units):
+        # Construct the source container with a quantity of water and salt as 
+        # its starting contents
+        container1 = Container('container1', 
+                            initial_contents=[(water, f"5 {unit}"), 
+                                              (salt, f"5 {unit}")])
+            
+        # Construct the non-empty destination container with overlapping 
+        # substances (water and salt).
+        container2 = Container('container2', 
+                            initial_contents=[(water, f"20 {unit}"), 
+                                              (salt, f"1 {unit}")])
+        
+        # Partial Transfer
+        # ------------------
+        #
+        # Use _transfer() to transfer some (but not all) of the first 
+        # container's contents to the second container.
+        c1_prime, c2_prime = container2._transfer(container1, f"2 {unit}")
+
+        # Ensure that the original source container is unchanged
+        assert_msg = "Transfer incorrectly mutated the input source " + \
+                     "container object!"
+        assert_contents_helper(container1, water, 5, unit, assert_msg)
+        assert_contents_helper(container1, salt, 5, unit, assert_msg)
+
+        # Ensure that the original destination container is unchanged
+        assert_msg = "Transfer incorrectly mutated the input destination " + \
+                     "container object!"
+        assert_contents_helper(container2, water, 20, unit, assert_msg)
+        assert_contents_helper(container2, salt, 1, unit, assert_msg)
+
+        # Ensure that the contents of the source container were correctly
+        # transferred to the new object representing the post-transfer 
+        # second container
+        assert_msg = "New post-transfer destination container contents do " + \
+                     "not contain the correct amounts of the substances " + \
+                     "transferred from the source container!"
+        assert_contents_helper(c2_prime, water, 21, unit, assert_msg)
+        assert_contents_helper(c2_prime, salt, 2, unit, assert_msg)
+
+        # Ensure that the substance was correctly transferred from the new 
+        # object representing the post-transfer first container
+        assert_msg = "New post-transfer source container contents do not " + \
+                     "contain the correct amounts of the substances left " + \
+                     "over from the transfer!"
+        assert_contents_helper(c1_prime, water, 4, unit, assert_msg)
+        assert_contents_helper(c1_prime, salt, 4, unit, assert_msg)
+
+        # Full Transfer
+        # ------------------
+        #
+        # Use _transfer() to transfer all of the first container's contents to
+        # the second container.
+        c1_prime, c2_prime = container2._transfer(container1, f"10 {unit}")
+
+        # Ensure that the original source container is unchanged
+        assert_msg = "Transfer incorrectly mutated the input source " + \
+                     "container object!"
+        assert_contents_helper(container1, water, 5, unit, assert_msg)
+        assert_contents_helper(container1, salt, 5, unit, assert_msg)
+
+        # Ensure that the original destination container is unchanged
+        assert_msg = "Transfer incorrectly mutated the input destination " + \
+                     "container object!"
+        assert_contents_helper(container2, water, 20, unit, assert_msg)
+        assert_contents_helper(container2, salt, 1, unit, assert_msg)
+
+        # Ensure that the contents of the source container were correctly
+        # transferred to the new object representing the post-transfer 
+        # second container
+        assert_msg = "New post-transfer destination container contents do " + \
+                     "not contain the correct amounts of the substances " + \
+                     "transferred from the source container!"
+        assert_contents_helper(c2_prime, water, 25, unit, assert_msg)
+        assert_contents_helper(c2_prime, salt, 6, unit, assert_msg)
+
+        # Ensure that the substance was correctly transferred from the new 
+        # object representing the post-transfer first container
+        assert_msg = "New post-transfer source container contents were not " + \
+                     "entirely removed after a full transfer of the source " + \
+                     "container's contents!"
+        assert_contents_helper(c1_prime, water, 0, unit)
+        assert_contents_helper(c1_prime, salt, 0, unit)
+        assert c1_prime.volume == 0, assert_msg
 
 
 

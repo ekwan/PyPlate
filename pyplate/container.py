@@ -18,7 +18,7 @@ from pyplate.unit import Unit
 # Allows for proper type checking of Plate and PlateSlicer parameters without
 # creating circular references during module loading
 if TYPE_CHECKING:
-    from pyplate.plate import Plate, PlateSlicer
+    from pyplate.plate import Plate, PlateSlicer # pragma: no cover
 else:
     Plate = PlateSlicer = None
 
@@ -54,7 +54,7 @@ class Container:
         
         # Ensure max volume satisfies type requirement
         if not isinstance(max_volume, str):
-            raise TypeError("Maximum volume must be a str, ('10 mL').")
+            raise TypeError("Maximum volume must be a str.")
         
         # Attempt to parse max_volume argument into a quantity 
         # (raises ValueError on failure)
@@ -75,6 +75,7 @@ class Container:
 
         # Set starting state of container based on the initial contents
         if initial_contents:
+            # If the initial contents are not iterable, raise a type error
             if not isinstance(initial_contents, Iterable):
                 raise TypeError("Initial contents must be iterable.")
             for entry in initial_contents:
@@ -345,14 +346,15 @@ class Container:
                                                          config.internal_precision)
             
             # Ensure that the contents of the source container never get below
-            # zero. If so raise a ValueError. This error should never happen.
+            # zero. If so raise a ValueError. This error should never happen,
+            # so it is excluded from code coverage.
             if source_container.contents[substance] < 0:
-                # pragma: no cover
                 raise ValueError(f"Transfer resulted in negative quantity of " + \
                                  f"{substance} in source container. This " + \
                                  "error should never be encountered. If you " + \
                                  "are reading this, please report the issue " + \
-                                 "at https://github.com/ekwan/PyPlate/issues.")
+                                 "at https://github.com/ekwan/PyPlate/issues.") \
+                                 # pragma: no cover
             
             # If all of the substance has been removed from the container, 
             # add it to the list of substances to be removed from the contents
@@ -409,7 +411,8 @@ class Container:
         # Return the post-transfer source and destination containers.
         return source_container, to
 
-    def _transfer_slice(self, source_slice: Plate | PlateSlicer, quantity: str) -> Tuple[Plate, Container]:
+    def _transfer_slice(self, source_slice: Plate | PlateSlicer, 
+                        quantity: str) -> Tuple[Plate, Container]:
         """
         Move quantity ('10 mL', '5 mg') from each well in a slice to self.
 
@@ -420,15 +423,16 @@ class Container:
         Returns:
             A new plate and a new container, both modified.
         """
-        # These lines are needed to ensure that the calls to 'is_instance()' inside this function will work correctly. 
-        # By the time this function is called, the modules have already been loaded, so no circular dependencies 
-        # are created.
+        # These lines are needed to ensure that the calls to 'isinstance()' 
+        # inside this function will work correctly. By the time this function 
+        # is called, the modules have already been loaded, so no circular 
+        # dependencies are created.
         if not TYPE_CHECKING:
             from pyplate.plate import Plate, PlateSlicer
 
         def helper_func(elem):
             """ Moves volume from elem to to_array[0]"""
-            elem, to_array[0] = Container.transfer(elem, to_array[0], quantity)
+            elem, to_array[0] = to_array[0]._transfer(elem, quantity)
             return elem
 
         if isinstance(source_slice, Plate):
@@ -517,8 +521,9 @@ class Container:
         return destination
 
     @staticmethod
-    def transfer(source: Container | Plate | PlateSlicer, destination: Container, quantity: str) \
-            -> Tuple[Container | Plate | PlateSlicer, Container]:
+    def transfer(source: Container | Plate | PlateSlicer, 
+                 destination: Container, quantity: str) \
+                    -> Tuple[Container | Plate | PlateSlicer, Container]:
         """
         Move quantity ('10 mL', '5 mg') from source to destination container,
         returning copies of the objects with amounts adjusted accordingly.
@@ -531,9 +536,10 @@ class Container:
         Returns:
             A tuple of (T, Container) where T is the type of the source.
         """
-        # These lines are needed to ensure that the calls to 'is_instance()' inside this function will work correctly. 
-        # By the time this function is called, the modules have already been loaded, so no circular dependencies 
-        # are created.
+        # These lines are needed to ensure that the calls to 'isinstance()' 
+        # inside this function will work correctly. By the time this function 
+        # is called, the modules have already been loaded, so no circular 
+        # dependencies are created.
         if not TYPE_CHECKING:
             from pyplate.plate import Plate, PlateSlicer
         
