@@ -186,6 +186,8 @@ def test_substance_used_remove(salt):
     # Assertions
     # All of 50 mmol is removed
     expected_salt_amount = 50.0
+    # TODO: Fix the substance tracking behavior when creating unit tests for it
+    # in a separate branch.
     assert recipe.get_substance_used(substance=salt, destinations=[container], unit='mmol') == expected_salt_amount
 
 

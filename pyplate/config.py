@@ -25,10 +25,14 @@ class Config:
         assert self.moles_storage_unit[-3:] == 'mol'
         self.moles_display_unit = yaml_config['moles_display_unit']
         assert self.moles_display_unit[-3:] == 'mol'
+        
         self.volume_storage_unit = yaml_config['volume_storage_unit']
         assert self.volume_storage_unit[-1] == 'L'
         self.volume_display_unit = yaml_config['volume_display_unit']
         assert self.volume_display_unit[-1] == 'L'
+
+        self.mass_display_unit = yaml_config['mass_display_unit']
+        assert self.mass_display_unit[-1] == 'g'
 
         self.concentration_display_unit = yaml_config['concentration_display_unit']
         # we can't use Unit to do a full check of the unit, so we just do a cursory check
