@@ -119,7 +119,7 @@ Diluting Stock Solutions
 
 In the previous examples, we made a solution by dissolving a solid into a liquid. You can also create a solution by diluting part of a stock solution::
 
-    salt_water1M = Container.create_solution(name='salt water (1 M)', solute=salt, solvent=water, concentration='1 M', quantity='100 mL')
+    salt_water1M = Container.create_solution(name='salt water (1 M)', solute=salt, solvent=water, concentration='1 M', total_quantity='100 mL')
 
     salt_water1M, salt_water500mM = Container.create_solution_from(name='salt water (0.5 M)', source=salt_water1M, solute=salt,
                                                                    solvent=water, concentration='0.5 M', quantity='10 mL')
