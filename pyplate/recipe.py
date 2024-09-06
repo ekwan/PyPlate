@@ -273,158 +273,6 @@ class Recipe:
             destination = destination[:]
         self.steps.append(RecipeStep(self, 'transfer', source, destination, quantity))
 
-    def create_container(self, name: str, max_volume: str = 'inf L',
-                         initial_contents: Iterable[tuple[Substance, str]] | None = None) -> Container:
-
-        """
-        Adds a step to the recipe which creates a container.
-
-        Arguments:
-            name: Name of container
-            max_volume: Maximum volume that can be stored in the container. ('10 mL')
-            initial_contents: (optional) Iterable of tuples of the form (Substance, quantity)
-
-        Returns:
-            A new Container so that it may be used in later recipe steps.
-        """
-        if self.locked:
-            raise RuntimeError("This recipe is locked.")
-        if not isinstance(name, str):
-            raise TypeError("Name must be a str.")
-        if not isinstance(max_volume, str):
-            raise TypeError("Maximum volume must be a str.")
-
-        if initial_contents:
-            if not isinstance(initial_contents, Iterable):
-                raise TypeError("Initial contents must be iterable.")
-            if not all(isinstance(elem, tuple) and len(elem) == 2 for elem in initial_contents):
-                raise TypeError("Elements of initial_contents must be of the form (Substance, quantity.)")
-            for substance, quantity in initial_contents:
-                if not isinstance(substance, Substance):
-                    raise TypeError("Containers can only be created from substances.")
-                if not isinstance(quantity, str):
-                    raise TypeError("Quantity must be a str. ('10 mL')")
-        new_container = Container(name, max_volume)
-        self.uses(new_container)
-        self.steps.append(RecipeStep(self, 'create_container', None, new_container, max_volume, initial_contents))
-
-        return new_container
-
-    def create_solution(self, solute: Substance | Iterable[Substance], solvent: Substance | Container,
-                        name=None, **kwargs) -> Container:
-        """
-        Adds a step to the recipe which creates a solution.
-
-        Two out of concentration, quantity, and total_quantity must be specified.
-
-        Multiple solutes can be, optionally, provided as a list. Each solute will have the desired concentration
-        or quantity in the final solution.
-
-        If one value is specified for concentration or quantity and multiple solutes are provided, the value will be
-        used for all solutes.
-
-        Arguments:
-            solute: What to dissolve. Can be a single Substance or an iterable of Substances.
-            solvent: What to dissolve with. Can be a Substance or a Container.
-            name: Optional name for new container.
-            concentration: Desired concentration(s). ('1 M', '0.1 umol/10 uL', etc.)
-            quantity: Desired quantity of solute(s). ('3 mL', '10 g')
-            total_quantity: Desired total quantity. ('3 mL', '10 g')
-
-
-        Returns:
-            A new Container so that it may be used in later recipe steps.
-        """
-
-        if not isinstance(solvent, (Substance, Container)):
-            raise TypeError("Solvent must be a Substance or a Container.")
-        if name is not None and not isinstance(name, str):
-            raise TypeError("Name must be a str.")
-
-        if not isinstance(solute, Substance):
-            if not isinstance(solute, Iterable):
-                raise TypeError("Solute must be a Substance or an iterable of Substances.")
-            elif any(not isinstance(substance, Substance) for substance in solute):
-                raise TypeError("Solute must be a Substance or an iterable of Substances.")
-
-        if 'concentration' in kwargs:
-            if not isinstance(kwargs['concentration'], str):
-                if not isinstance(kwargs['concentration'], Iterable):
-                    raise TypeError("Concentration must be a str or an iterable of strs.")
-                elif any(not isinstance(concentration, str) for concentration in kwargs['concentration']):
-                    raise TypeError("Concentration must be a str or an iterable of strs.")
-
-        if 'quantity' in kwargs:
-            if not isinstance(kwargs['quantity'], str):
-                if not isinstance(kwargs['quantity'], Iterable):
-                    raise TypeError("Quantity must be a str or an iterable of strs.")
-                elif any(not isinstance(quantity, str) for quantity in kwargs['quantity']):
-                    raise TypeError("Quantity must be a str or an iterable of strs.")
-
-        if 'total_quantity' in kwargs and not isinstance(kwargs['total_quantity'], str):
-            raise TypeError("Total quantity must be a str.")
-        if ('concentration' in kwargs) + ('total_quantity' in kwargs) + ('quantity' in kwargs) != 2:
-            raise ValueError("Must specify two values out of concentration, quantity, and total quantity.")
-
-        solute_names = ', '.join(substance.name for substance in solute) if isinstance(solute, Iterable) else solute.name
-        if name is None:
-            name = f"solution of {solute_names} in {solvent.name}"
-
-        new_container = Container(name)
-        self.uses(new_container)
-        self.steps.append(RecipeStep(self, 'solution', None, new_container, solute, solvent, kwargs))
-
-        return new_container
-
-    def create_solution_from(self, source: Container, solute: Substance, concentration: str, solvent: Substance,
-                             quantity: str, name=None) -> Container:
-        """
-        Adds a step to create a diluted solution from an existing solution.
-
-
-        Arguments:
-            source: Solution to dilute.
-            solute: What to dissolve.
-            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
-            solvent: What to dissolve with.
-            quantity: Desired total quantity. ('3 mL', '10 g')
-            name: Optional name for new container.
-
-        Returns:
-            A new Container so that it may be used in later recipe steps.
-        """
-
-        if not isinstance(source, Container):
-            raise TypeError("Source must be a Container.")
-        if not isinstance(solute, Substance):
-            raise TypeError("Solute must be a Substance.")
-        if not isinstance(concentration, str):
-            raise TypeError("Concentration must be a str.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a Substance.")
-        if not isinstance(quantity, str):
-            raise TypeError("Quantity must be a str.")
-        if name and not isinstance(name, str):
-            raise TypeError("Name must be a str.")
-
-        quantity_value, quantity_unit = Unit.parse_quantity(quantity)
-        if quantity_value <= 0:
-            raise ValueError("Quantity must be positive.")
-
-        if not name:
-            name = f"solution of {solute.name} in {solvent.name}"
-
-        new_ratio = Unit.calculate_concentration_ratio(solute, concentration, solvent)[0]
-        if new_ratio <= 0:
-            raise ValueError("Solution is impossible to create.")
-
-        new_container = Container(name, max_volume=f"{source.max_volume} {config.volume_storage_unit}")
-        self.uses(new_container)
-        self.steps.append(RecipeStep(self, 'solution_from', source, new_container,
-                                     solute, concentration, solvent, quantity))
-
-        return new_container
-
     def remove(self, destination: Container | Plate | PlateSlicer, what=Substance.LIQUID) -> None:
         """
         Adds a step to removes substances from destination.
@@ -444,40 +292,6 @@ class Recipe:
             raise TypeError(f"Invalid destination type: {type(destination)}")
 
         self.steps.append(RecipeStep(self, 'remove', None, destination, what))
-
-    def dilute(self, destination: Container, solute: Substance,
-               concentration: str, solvent: Substance, new_name=None) -> None:
-        """
-        Adds a step to dilute `solute` in `destination` to `concentration`.
-
-        Args:
-            destination: Container to dilute.
-            solute: Substance which is subject to dilution.
-            concentration: Desired concentration in mol/L.
-            solvent: What to dilute with.
-            new_name: Optional name for new container.
-        """
-
-        if not isinstance(solute, Substance):
-            raise TypeError("Solute must be a Substance.")
-        if not isinstance(concentration, str):
-            raise TypeError("Concentration must be a float.")
-        if not isinstance(solvent, Substance):
-            raise TypeError("Solvent must be a substance.")
-        if new_name and not isinstance(new_name, str):
-            raise TypeError("New name must be a str.")
-        if not isinstance(destination, Container):
-            raise TypeError("Destination must be a container.")
-        if destination.name not in self.results:
-            raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
-        # if solute not in destination.contents:
-        #     raise ValueError(f"Container does not contain {solute.name}.")
-
-        ratio = Unit.calculate_concentration_ratio(solute, concentration, solvent)[0]
-        if ratio <= 0:
-            raise ValueError("Concentration is impossible to create.")
-
-        self.steps.append(RecipeStep(self, 'dilute', None, destination, solute, concentration, solvent, new_name))
 
     def fill_to(self, destination: Container | Plate | PlateSlicer, solvent: Substance, quantity: str) -> None:
         """
@@ -533,18 +347,7 @@ class Recipe:
             step.to_slice = step.to[0] if isinstance(step.to[0], PlateSlicer) else None
 
             operator = step.operator
-            if operator == 'create_container':
-                dest = step.to[0]
-                dest_name = dest.name
-                step.frm.append(None)
-                max_volume, initial_contents = step.operands
-                step.to[0] = self.results[dest_name]
-                self.used.add(dest_name)
-                self.results[dest_name] = Container(dest_name, max_volume, initial_contents)
-                step.substances_used = self.results[dest_name].get_substances()
-                step.to.append(self.results[dest_name])
-                step.instructions = f"Create container '{dest_name}'."
-            elif operator == 'transfer':
+            if operator == 'transfer':
                 source = step.frm[0]
                 source_name = source.plate.name if isinstance(source, PlateSlicer) else source.name
                 dest = step.to[0]
@@ -586,55 +389,6 @@ class Recipe:
 
                 step.frm.append(self.results[source_name])
                 step.to.append(self.results[dest_name])
-            elif operator == 'solution':
-                dest = step.to[0]
-                dest_name = dest.name
-                step.frm.append(None)
-                solute, solvent, kwargs = step.operands
-
-                solute_names = ', '.join([solute.name for solute in solute]) if isinstance(solute, Iterable) else solute.name
-                # kwargs should have two out of concentration, quantity, and total_quantity
-                if 'concentration' in kwargs and 'total_quantity' in kwargs:
-                    step.instructions = f"""Create a solution of '{solute_names}' in '{solvent.name
-                    }' with a concentration of {kwargs['concentration']
-                    } and a total quantity of {kwargs['total_quantity']}."""
-                elif 'concentration' in kwargs and 'quantity' in kwargs:
-                    step.instructions = f"""Create a solution of '{solute_names}' in '{solvent.name
-                    }' with a concentration of {kwargs['concentration']
-                    } and a quantity of {kwargs['quantity']}."""
-                elif 'quantity' in kwargs and 'total_quantity' in kwargs:
-                    step.instructions = f"""Create a solution of '{solute_names}' in '{solvent.name
-                    }' with a total quantity of {kwargs['total_quantity']
-                    } and a quantity of {kwargs['quantity']}."""
-
-                step.to[0] = self.results[dest_name]
-                self.used.add(dest_name)
-                results = Container.create_solution(solute, solvent, dest_name, **kwargs)
-                if isinstance(solvent, Container):
-                    self.used.add(solvent.name)
-                    self.results[solvent.name], self.results[dest_name] = results
-                else:
-                    self.results[dest_name] = results
-                step.substances_used = self.results[dest_name].get_substances()
-                step.to.append(self.results[dest_name])
-            elif operator == 'solution_from':
-                source = step.frm[0]
-                source_name = source.name
-                dest = step.to[0]
-                dest_name = dest.name
-                solute, concentration, solvent, quantity = step.operands
-                step.frm[0] = self.results[source_name]
-                step.to[0] = self.results[dest_name]
-                step.instructions = f"""Create {quantity} of a {concentration} solution of '{solute.name
-                }' in '{solvent.name}' from '{source_name}'."""
-                self.used.add(source_name)
-                self.used.add(dest_name)
-                source = self.results[source_name]
-                self.results[source_name], self.results[dest_name] = \
-                    Container.create_solution_from(source, solute, concentration, solvent, quantity, dest.name)
-                step.substances_used = self.results[dest_name].get_substances()
-                step.frm.append(self.results[source_name])
-                step.to.append(self.results[dest_name])
             elif operator == 'remove':
                 dest = step.to[0]
                 step.frm.append(None)
@@ -663,22 +417,6 @@ class Recipe:
                     for well in step.to[0].wells.flatten():
                         for substance in step.substances_used:
                             step.trash[substance] = step.trash.get(substance, 0.) + well.contents.get(substance, 0.)
-            elif operator == 'dilute':
-                dest = step.to[0]
-                dest_name = dest.name
-                solute, concentration, solvent, new_name = step.operands
-                step.frm.append(None)
-                step.to[0] = self.results[dest_name]
-                self.used.add(dest_name)
-                self.results[dest_name] = self.results[dest_name].dilute(solute, concentration, solvent, new_name)
-                amount_added = self.results[dest_name].contents[solvent] - step.to[0].contents.get(solvent, 0)
-                amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'L')
-                amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
-                precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-                step.instructions = (f"Dilute '{solute.name}' in '{dest_name}' to {concentration}" +
-                                     f" by adding {round(amount_added, precision)} {unit} of '{solvent.name}'.")
-                step.substances_used.add(solvent)
-                step.to.append(self.results[dest_name])
             elif operator == 'fill_to':
                 dest = step.to[0]
                 dest_name = dest.plate.name if isinstance(dest, PlateSlicer) else dest.name

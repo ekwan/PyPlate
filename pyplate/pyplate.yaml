@@ -19,6 +19,9 @@ moles_storage_unit: umol
 # umol means we will return moles as micromoles
 moles_display_unit: umol
 
+# g means we will return mass as grams
+mass_display_unit: g
+
 # Default concentration unit for get_concentration()
 concentration_display_unit: M
 
