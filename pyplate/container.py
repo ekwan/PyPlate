@@ -1445,14 +1445,6 @@ class Container:
         else:
             solvent_conc = solvent.get_concentration(solute, target_units)
 
-        print("Solute:", solute)
-        print("Solvent:", solvent)
-        print("Target Conc:", target_conc)
-        print("Source Conc:", source_conc)
-        print("Solvent Conc:", solvent_conc)
-        print("Num Unit:", num_unit)
-        print("Denom Unit:", denom_unit)
-
         # These two checks are placed BEFORE the early return because they are
         # for conditions that should NEVER arise in the container. 
         # 
@@ -1554,12 +1546,6 @@ class Container:
 
         if name:
             diluted_solution.name = name
-
-        
-        print("Ratio:", ratio)
-        print("Source Amt:", self.get_quantity(denom_unit))
-        print("Solvent Amt:", solvent_amt)
-        print("Solvent Volume:", solvent_volume)
 
         # Set the instructions attribute of the diluted container based on the
         # details of the dilution.
