@@ -19,7 +19,7 @@ def test_dilute(salt, sodium_sulfate, triethylamine, water, dmso):
             for solvent in solvents:
                 con = Container.create_solution(solute, solvent, concentration=f"0.001 {numerator}/{denominator}",
                                                 total_quantity=f"10 {quantity_unit}")
-                con2 = con.dilute(solute, f'0.0005 {numerator}/{denominator}', solvent)
+                con2 = con.dilute_in_place(solute, f'0.0005 {numerator}/{denominator}', solvent)
                 new_concentration = Unit.convert(solute, f"{con2.contents[solute]} {config.moles_storage_unit}", numerator) / \
                                     sum(Unit.convert(substance, f"{value} {config.moles_storage_unit}", denominator)
                                         for substance, value in con2.contents.items())

@@ -302,8 +302,8 @@ class Container:
         return destination
 
     @staticmethod
-    def transfer(source: Container | Plate | PlateSlicer, destination: Container, quantity: str) \
-            -> Tuple[Container | Plate | PlateSlicer, Container]:
+    def transfer(source: Container | Plate | PlateSlicer, destination: Container, 
+                 quantity: str) -> Tuple[Container | Plate | PlateSlicer, Container]:
         """
         Move quantity ('10 mL', '5 mg') from source to destination container,
         returning copies of the objects with amounts adjusted accordingly.
@@ -348,7 +348,8 @@ class Container:
 
         mult, *units = Unit.parse_concentration('1 ' + units)
 
-        numerator = Unit.convert_from(solute, self.contents.get(solute, 0), config.moles_storage_unit, units[0])
+        numerator = Unit.convert_from(solute, self.contents.get(solute, 0), 
+                                      config.moles_storage_unit, units[0])
 
         if numerator == 0:
             return 0
@@ -358,7 +359,9 @@ class Container:
         else:
             denominator = 0
             for substance, amount in self.contents.items():
-                denominator += Unit.convert_from(substance, amount, config.moles_storage_unit, units[1])
+                denominator += Unit.convert_from(substance, amount, 
+                                                 config.moles_storage_unit,
+                                                   units[1])
 
         return round(numerator / denominator / mult, config.internal_precision)
 
@@ -404,13 +407,15 @@ class Container:
 
     def get_volume(self, unit: str = None) -> float:
         """
-        Get the volume of the container.
+        Get the total volume of the container's contents.
+
+        NOTE: This is NOT the maximum volume of the container.
 
         Args:
             unit: Unit to return volume in. Defaults to volume_display_unit 
             from config.
 
-        Returns: Volume of the container.
+        Returns: Total volume of the container's contents.
 
         """
         if unit is None:
@@ -420,6 +425,26 @@ class Container:
             raise TypeError("Unit must be a str.")
 
         return Unit.convert_from_storage(self.volume, unit)
+    
+    def get_quantity(self, unit: str):
+        """
+        Get the total quantity of the container's contents in terms of the
+        specified unit. Depending on the unit, this can be the mass,
+        moles, or volume of the container's contents.
+
+        Args:
+            unit: Unit in which to return the quantity.
+        
+        Returns: Total quantity of the container's contents.
+        """
+        if unit[-3:].lower() == 'mol':
+            return self.get_moles(unit)
+        elif unit[-1:].lower() == 'g':
+            return self.get_mass(unit)
+        elif unit[-1:].upper() == 'L':
+            return self.get_volume(unit)
+        else:
+            raise ValueError(f"Invalid unit: {unit}")
 
     def _auto_generate_solution_name(solute : Iterable[Substance],
                                      solvent : Substance | Container):
@@ -1011,12 +1036,13 @@ class Container:
             return result
 
     @staticmethod
-    def _dilute_to_quantity(source: Container, solute: Substance, 
+    def create_dilution(source: Container, solute: Substance, 
                             concentration: str, solvent: Substance | Container,
                             quantity: str, name=None) -> (Tuple[Container, Container] |
                                                           Tuple[Container, Container, Container]):
         """
-        Create a diluted solution from an existing solution or solutions.
+        Create a diluted solution from an existing source solution and a 
+        solvent.
 
         Arguments:
             source: Solution to dilute.
@@ -1033,7 +1059,6 @@ class Container:
         Raises:
             ValueError: If the solution is impossible to create.
         """
-        # Check argument types
         if not isinstance(source, Container):
             raise TypeError("Source must be a Container.")
         if not isinstance(solute, Substance):
@@ -1047,24 +1072,16 @@ class Container:
         if name is not None and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
-        # Parse the quantity as a value-unit pair
         quantity_value, quantity_unit = Unit.parse_quantity(quantity)
         
-        # Ensure that the quantity value is finite
         if not math.isfinite(quantity_value):
             raise ValueError("Quantity must be finite.")
         
-        # Ensure that the quantity value is positive.
         if not quantity_value > 0:
             raise ValueError("Quantity must be positive.")
         
-        # Ensure the solute is part of the source container's contents.
         if solute not in source.contents:
             raise ValueError(f"Source container does not contain {solute.name}.")
-
-        # Ensure that the solute and solvent are not the same Substance.
-        if solvent == solute:
-            raise ValueError("Solute and solvent must be different.")
 
         # TODO: Possibly rework this name geneeation to include the name/
         #       contents of the source container. Currently, only the solute and
@@ -1075,8 +1092,6 @@ class Container:
         # For the following blocks of code, 'x' represents the source solution,
         # 's' represents the solute, and 'y' represents the solvent.
 
-        # Compute the total mass, moles, and volume of all the substances in the 
-        # source solution
         mass = source.get_mass()
         moles = source.get_moles()
         volume = Unit.convert_from_storage(source.volume, 'mL')
@@ -1095,16 +1110,14 @@ class Container:
         # If the solvent is a Container, compute the 'effective' properties as 
         # is done for the source solution.
         if isinstance(solvent, Container):
-            # Compute the total mass, moles, and volume of all the substances in 
-            # the solvent
             mass = solvent.get_mass()
             moles = solvent.get_moles('mol')
             volume = Unit.convert_from_storage(solvent.volume, 'mL')
 
             # Compute the 'effective density', 'effective molecular weight', and
-            # 'effective molar concentration' of the solvent. Density is in
-            # units of 'g/mL', molecular weight is in terms of 'g/mol', and 
-            # molar concentration is in terms of 'M' or 'mol/L'.
+            # 'effective molar concentration of solute' of the solvent. Density 
+            # is in units of 'g/mL', molecular weight is in terms of 'g/mol', 
+            # and molar concentration is in terms of 'M' or 'mol/L'.
             d_y = mass / volume
             mw_y = mass / moles
             m_y = Unit.convert_from_storage(solvent.contents.get(solute, 0), 'mol') / (volume / 1000)
@@ -1113,15 +1126,16 @@ class Container:
         else:
             d_y = solvent.density
             mw_y = solvent.mol_weight
-            m_y = 0  # There is no solute present in the case of a pure solvent
+            # Edge case: If the solvent and the solute are the same, then the
+            # molar concentration of solute in the solvent is just the molar
+            # density of the solvent. Otherwise, the concentration is 0.
+            m_y = 0 if solvent != solute else solvent.density / solvent.mol_weight
 
         # Get the molecular weight and density of the solute (the shorter names 
         # will be useful for condensing later lines of code)
         mw_s = solute.mol_weight
         d_s = solute.density
 
-        # Parse the specified concentration into a concentration, numerator, and
-        # denominator triplet
         concentration, numerator, denominator = Unit.parse_concentration(concentration)
 
         # Define a blank system of equations that will be filled with values 
@@ -1187,7 +1201,16 @@ class Container:
         # 
         #   C * (q_x + q_y) - (p_x + p_y) = 0
         #   C * (s_x * V_x + s_y * V_y) - (r_x * V_x + r_y * V_y) = 0
-        #   (C * s_x - r_x) * V_x + (C * s_y - r_y) * V_y = 0  
+        #   (C * s_x - r_x) * V_x + (C * s_y - r_y) * V_y = 0 
+        # 
+        # If we define 'top' and 'bottom' as shown below:
+        # 
+        #   top = r_x * V_x + r_y * V_y 
+        #   bottom = s_x * V_x + s_y * V_y
+        #  
+        # Then we can write the equation derived above as:
+        #
+        #   C * bottom - top = 0
         #
         # This is the form of the equation that will be used to solve for the 
         # dilution volumes. The various conversion factors are enumerated in the 
@@ -1255,22 +1278,23 @@ class Container:
         quantity_value, quantity_unit = Unit.parse_quantity(quantity)
 
         # Determine the appropriate conversion factors (s_x and s_y) to convert
-        # from mL of solution to (mol/g/L) of solution. Units other than mol, g,
-        # or L in the quantity argument will raise an error.
+        # from mL of solution to (mol/g/L) of solution, and set the values of 
+        # the left-hand side of the equation accordingly. Units other than mol, 
+        # g, or L in the quantity argument will raise an error.
         if quantity_value == 'mol':
-            # Compute 'moles of solution' per 'mL of solution'
+            # Compute 'moles of solution' per 'mL of solution'.
             a[1] = np.array([d_x / mw_x, d_y / mw_y])
         elif quantity_unit == 'g':
-            # Compute 'grams of solution' per 'mL of solution'
+            # Compute 'grams of solution' per 'mL of solution'.
             a[1] = np.array([d_x, d_y])
         elif quantity_unit == 'L':
             # Compute 'liters of solution' per 'mL of solution'
-            # (this one is just a simple conversion ratio from mL to L)
+            # (this one is just a simple conversion ratio from mL to L).
             a[1] = np.array([1 / 1000., 1 / 1000.])
         else:
             raise ValueError("Invalid quantity unit.")
 
-        # Set b[1] to the total quantity
+        # Set the right-hand side of the equation to the total quantity.
         b[1] = quantity_value
 
         # Solve the system of equations to compute the mL of source & solvent 
@@ -1357,87 +1381,193 @@ class Container:
             new_container.instructions += f"Remove all {what.name}s."
         return new_container
 
-    def dilute(self, solute: Substance, concentration: str, solvent: (Substance | Container),
-               quantity=None, name=None) -> Container:
+    def dilute_in_place(self, solute: Substance, concentration: str, 
+                        solvent: (Substance | Container), 
+                        name=None) -> Container:
         """
-        Dilutes `solute` in solution to `concentration`.
+        Dilutes this container with `solvent` until the concentration of 
+        `solute` matches `concentration`.
 
         Args:
-            solute: Substance which is subject to dilution.
-            concentration: Desired concentration.
+            solute: Substance which is the subject of the dilution.
+            concentration: Desired concentration of the solute.
             solvent: What to dilute with. Can be a Substance or a Container.
-            quantity: Optional total quantity of solution.
             name: Optional name for new container.
 
-        Returns: A new (updated) container with the remainder of the original container, and the diluted solution.
+        Returns: A new (updated) container with the remainder of the original 
+        container, and the diluted solution.
 
-        If solvent is a container, the remainder of the solvent will also be returned.
-
+        If `solvent` is a Container, a new container with the remainder of the
+        solvent will be returned as well.
         """
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
         if not isinstance(concentration, str):
             raise TypeError("Concentration must be a str.")
-        if not isinstance(solvent, Substance) and not isinstance(solvent, Container):
-            raise TypeError("Solvent must be a substance or container.")
+        if not isinstance(solvent, (Substance, Container)):
+            raise TypeError("Solvent must be a Substance or a Container.")
         if name and not isinstance(name, str):
             raise TypeError("New name must be a str.")
+        
         if solute not in self.contents:
             raise ValueError(f"Container does not contain {solute.name}.")
+        
+        # Save whether the solvent is a pure Substance to a local variable to 
+        # avoid costlier calls to isinstance().
+        is_pure_solvent = isinstance(solvent, Substance)
 
-        if quantity is not None:
-            return self._dilute_to_quantity(self, solute, concentration, solvent, quantity, name)
+        # Parse the target concentration for the dilution and specified units 
+        # from the concentration argument. The target units are combined for 
+        # use in the later calls to get_concentration().
+        target_conc, num_unit, denom_unit = Unit.parse_concentration(concentration)
+        target_units = f"{num_unit}/{denom_unit}"
 
-        new_ratio = Unit.calculate_concentration_ratio(solute, concentration, solvent)[0]
+        # Compute the concentration of solute in the starting source solution in
+        # terms of the target units.
+        source_conc = self.get_concentration(solute, target_units)
 
-        current_ratio = self.contents[solute] / sum(self.contents.values())
+        # Compute the concentration of solute in the solvent in terms of the
+        # target units.
+        if is_pure_solvent:
+            if solvent != solute:
+                # If the solvent is NOT the same as the solute, then the solute
+                # concentration in the solvent is 0.
+                solvent_conc = 0
+            else:
+                # Edge case: If the solvent IS the same as the solute, then the
+                # solute concentration in the solvent in terms of the target 
+                # units is the conversion factor between the denominator units 
+                # and the numerator units.
+                #   E.g. If concentration = 0.25 mol/L and the solute & solvent 
+                #        are both water, then the solvent concentration is
+                #        1 / 18.0153 mol/mL.
+                solvent_conc = Unit.convert_from(solvent, 1, denom_unit, num_unit)
+        else:
+            solvent_conc = solvent.get_concentration(solute, target_units)
 
-        if new_ratio <= 0:
-            raise ValueError("Solution is impossible to create.")
+        print("Solute:", solute)
+        print("Solvent:", solvent)
+        print("Target Conc:", target_conc)
+        print("Source Conc:", source_conc)
+        print("Solvent Conc:", solvent_conc)
+        print("Num Unit:", num_unit)
+        print("Denom Unit:", denom_unit)
 
-        if abs(new_ratio - current_ratio) <= 1e-6:
-            return deepcopy(self)
+        # These two checks are placed BEFORE the early return because they are
+        # for conditions that should NEVER arise in the container. 
+        # 
+        # In the scenario where the target concentration and source 
+        # concentration are identical, but they both match one of the failure 
+        # cases below, it is better to alert the user to the existence of a 
+        # problem by throwing an error than it is to silently succeed.
 
-        if new_ratio > current_ratio:
-            raise ValueError("Desired concentration is higher than current concentration.")
+        if not math.isfinite(target_conc):
+            raise ValueError("Target concentration cannot be non-finite!" +
+                             f"Target: {concentration}")
 
-        original_solvent = solvent
-        if isinstance(solvent, Container):
-            # Calculate mol_weight and density of solvent
-            # get total mass of solvent
-            total_mass = sum(Unit.convert_from(substance, amount, 'mol', 'g')
-                             for substance, amount in solvent.contents.items())
-            total_moles = Unit.convert_from_storage(sum(solvent.contents.values()), 'mol')
-            total_volume = solvent.get_volume('mL')
-            if total_moles == 0 or total_volume == 0:
-                raise ValueError("Solvent must contain a non-zero amount of substance.")
-            # mol_weight = g/mol, density = g/mL
-            solvent = Substance.liquid('fake solvent',
-                                       mol_weight=total_mass / total_moles, density=total_mass / total_volume)
+        if target_conc < 0:
+            raise ValueError("Target concentration cannot be negative." + 
+                             f"Target: {concentration}")
+        
+        # If the current mole fraction of the solute is already within a small 
+        # tolerance of the desired mole fraction, return the current container.
+        # 
+        # NOTE: This was changed from being a copy of the container as it seemed
+        # unnecessary to copy the Container if no changes were made. May need to
+        # be changed back if problems arise.        
+        if abs(source_conc - target_conc) <= target_conc * 1e-6:
+            return self
 
-        current_umoles = Unit.convert_from_storage(self.contents.get(solvent, 0), 'umol')
-        required_umoles = Unit.convert_from_storage(self.contents[solute], 'umol') / new_ratio - current_umoles
-        new_volume = self.volume + Unit.convert(solvent, f"{required_umoles} umol", config.volume_storage_unit)
+        # The remaining checks are placed AFTER the previous two lines of code 
+        # so that otherwise invalid dilutions will succeed the container
+        # already has the required concentration. 
 
-        if new_volume > self.max_volume:
-            raise ValueError("Dilute solution will not fit in container.")
+        if target_conc == 0:
+            raise ValueError("The target concentration for the solute cannot " +
+                             "be zero if the source concentration is non-zero.")
+        
+        # Compute the ratio of solvent to source solution needed for the
+        # dilution. This ratio is in terms of the denominator unit from the 
+        # concentration argument, hereafter called "denom_units". If a zero-
+        # division error is raised, this means that the target and solvent
+        # concentrations are equal, which results in an impossible dilution.
+        try:
+            ratio = (source_conc - target_conc) / (target_conc - solvent_conc)
+        except ZeroDivisionError as zde:
+            raise ValueError("The target concentration for the solute cannot " +
+                             "match its concentration in the solvent." + 
+                             f"Target: {concentration}  " +
+                             f"Solvent: {solvent_conc} {target_units}")
+
+        # If the ratio is negative, then the target concentration lies outside
+        # of the range between the source concentration and the solute 
+        # concentration.
+        if ratio < 0:
+            raise ValueError("The target concentration for the solute must " + 
+                             "lie between the source concentration and the " +
+                             f"solvent concentration. Target: {concentration}" +
+                             f"  Source: {source_conc} {target_units}  " + 
+                             f"  Solvent: {source_conc} {target_units}")
+        
+        # NOTE: the case of ratio = 0 means that the source and target 
+        # concentrations are identical, which would already result in early 
+        # termination from the check above. 
+
+
+        # Compute the volume of solvent needed for the dilution. This requires
+        # two steps. 
+        
+        # First, the amount of solvent in "denom_units" is computed as the 
+        # product of the amount of source solution in "denom units" and the 
+        # previously computed ratio. 
+        try:
+            solvent_amt = self.get_quantity(denom_unit) * ratio
+
+        # If this fails, the get_quantity() error does not specify that the
+        # denominator unit of the concentration was the problem, so a new error
+        # is raised to include these details.
+        except ValueError as e:
+            raise ValueError("Invalid unit in concentration denominator: " + 
+                             f"{denom_unit}")
+        
+        # Second, the amount of solvent in "denom units" is multiplied by the 
+        # "volume of solvent per denom unit".
+        if is_pure_solvent:
+            vol_per_qty = Unit.convert_from(solvent, 1, denom_unit, 'L')
+            solvent_volume = solvent_amt * vol_per_qty
+        else:
+            vol_per_qty = solvent.get_volume('L') / solvent.get_quantity(denom_unit)
+            solvent_volume = solvent_amt * vol_per_qty
+
+        
+        # Ensure the computed volume can fit in this container.
+        if self.volume + solvent_volume > self.max_volume:
+            raise ValueError("Dilute solution will not fit in the container.")
+
+        # Add the solvent to this container to produce the diluted solution.
+        if is_pure_solvent:
+            result = self._add(solvent, f"{solvent_volume} L")
+        else:
+            result = Container.transfer(solvent, self, f"{solvent_volume} L")
+
+        diluted_solution = result if is_pure_solvent else result[1]
 
         if name:
-            # Note: this copies the container twice
-            destination = deepcopy(self)
-            destination.name = name
-        else:
-            destination = self
+            diluted_solution.name = name
 
-        needed_umoles = f"{required_umoles} umol"
-        needed_volume = Unit.convert(solvent, needed_umoles, 'L')
-        if isinstance(original_solvent, Container):
-            result = Container.transfer(original_solvent, destination, f"{needed_volume} L")
-        else:
-            result = destination._add(solvent, needed_umoles)
-        needed_volume, unit = Unit.get_human_readable_unit(needed_volume, 'L')
+        
+        print("Ratio:", ratio)
+        print("Source Amt:", self.get_quantity(denom_unit))
+        print("Solvent Amt:", solvent_amt)
+        print("Solvent Volume:", solvent_volume)
+
+        # Set the instructions attribute of the diluted container based on the
+        # details of the dilution.
+        solvent_volume, unit = Unit.get_human_readable_unit(solvent_volume, 'L')
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-        result.instructions += f"\nDilute with {round(needed_volume, precision)} {unit} of {solvent.name}."
+        diluted_solution.instructions += f"\nDilute with {round(solvent_volume, precision)}" + \
+                                    f"{unit} of {solvent.name}."
+        
         return result
 
     def fill_to(self, solvent: Substance, quantity: str) -> Container:

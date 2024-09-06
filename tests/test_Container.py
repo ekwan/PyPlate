@@ -216,7 +216,7 @@ def test_dilute_with_quantity(water, salt):
     stock = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
 
     # Create a solution of 0.5 M salt water from the stock solution
-    stock, solution = Container.dilute(stock, salt, '0.5 M', water, '50 mL')
+    stock, solution = Container.create_dilution(stock, salt, '0.5 M', water, '50 mL')
 
     # Should contain 25 mmol of salt and have a total volume of 50 mL
     assert pytest.approx(Unit.convert(salt, '25 mmol', config.moles_storage_unit)) == solution.contents[salt]
@@ -226,7 +226,7 @@ def test_dilute_with_quantity(water, salt):
     # stock should have a volume of 75 mL and 75 mmol of salt
     # Try to create a solution with more volume than the source container holds
     with pytest.raises(ValueError, match='Not enough mixture left in source container'):
-        Container.dilute(stock, salt, '1 M', water, '100 mL')
+        Container.create_dilution(stock, salt, '1 M', water, '100 mL')
 
 
 def test_create_solution(water, salt, sodium_sulfate):
