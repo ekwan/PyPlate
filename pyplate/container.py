@@ -286,6 +286,155 @@ class Container:
         """
         return set(self.contents.keys())
 
+    @cache
+    def get_mass(self, unit: str = 'g', substance: Substance = None) -> float:
+        """
+        Returns the mass of the container's contents or a specific substance
+        in the specified unit.
+  
+        Args:
+            unit (str, optional): The unit in which the mass should be returned (default: 'g').
+            substance (Substance, optional): The specific substance for which to retrieve the mass.
+                                           If not provided, returns the total mass.
+    
+        Returns:
+            float: The mass in the specified unit.
+        """
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+        if substance is not None and not isinstance(substance, Substance):
+            raise TypeError("Substance argument must be a Substance or None.")
+        
+        # Ensure the unit is a valid mass unit.
+        if unit[-1:] != 'g':
+            raise ValueError(f"Invalid mass unit '{unit}'.")
+
+        return self.get_quantity(unit, substance)
+
+    @cache
+    def get_moles(self, unit: str = 'mol', substance: Substance = None) -> float:
+        """
+        Returns the moles of the container's contents or a specific substance
+        in the specified unit.
+  
+        Args:
+            unit (str, optional): The unit in which the moles should be returned (default: 'mol').
+            substance (Substance, optional): The specific substance for which to retrieve the moles.
+                                           If not provided, returns the total moles.
+    
+        Returns:
+            float: The moles in the specified unit.
+        """
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+        if substance is not None and not isinstance(substance, Substance):
+            raise TypeError("Substance argument must be a Substance or None.")
+        
+        # Ensure the unit is a valid mole unit.
+        if unit[-3:] != 'mol':
+            raise ValueError(f"Invalid mole unit '{unit}'.")
+
+        # Get either the specific amount of the substance if it is specified, or
+        # the total amount in the container by summing all its contents.
+        amount = self.contents.get(substance, 0) if substance else \
+                    sum(self.contents.values())
+        
+        return Unit.convert_from_storage(amount, unit)
+
+    @cache
+    def get_volume(self, unit: str = 'L', substance: Substance = None) -> float:
+        """
+        Returns the volume of the container's contents or a specific substance
+        in the specified unit.
+  
+        Args:
+            unit (str, optional): The unit in which the volume should be returned (default: 'L').
+            substance (Substance, optional): The specific substance for which to retrieve the volume.
+                                           If not provided, returns the total volume.
+    
+        Returns:
+            float: The volume in the specified unit.
+        """
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+        if substance is not None and not isinstance(substance, Substance):
+            raise TypeError("Substance argument must be a Substance or None.")
+        
+        # Ensure the unit is a valid volume unit.
+        if unit[-1:].upper() != 'L' or unit[-3:].lower() == "mol":
+            raise ValueError(f"Invalid volume unit '{unit}'.")
+
+        if not substance:
+            return Unit.convert_from_storage(self.volume, unit)
+        
+        return Unit.convert_from(substance, self.contents.get(substance,0),
+                                     config.moles_storage_unit, unit)
+    
+    @cache
+    def get_quantity(self, unit: str, substance : Substance = None):
+        """
+        Returns the quantity of the container's contents or a specific substance
+        in the specified unit.
+  
+        Args:
+            unit (str, optional): The unit in which the quantity should be returned.
+            substance (Substance, optional): The specific substance for which to retrieve the quantity.
+                                           If not provided, returns the total quantity of the container's
+                                           contents.
+    
+        Returns:
+            float: The quantity in the specified unit.
+        """
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+        if substance is not None and not isinstance(substance, Substance):
+            raise TypeError("Substance argument must be a Substance or None.")
+        
+        if not substance:
+            return sum(
+                Unit.convert_from(sub, value, config.moles_storage_unit, unit)
+                    for sub, value in self.contents.items()
+                )
+        else:
+            return Unit.convert_from(substance, self.contents.get(substance,0),
+                                     config.moles_storage_unit, unit)
+
+    @cache
+    def get_concentration(self, solute: Substance, units: str = 'M') -> float:
+        """
+        Get the concentration of solute in the current solution.
+
+        Args:
+            solute: Substance interested in.
+            units: Units to return concentration in, defaults to Molar.
+
+        Returns: Concentration
+
+        """
+        if not isinstance(solute, Substance):
+            raise TypeError("Solute must be a Substance.")
+        if not isinstance(units, str):
+            raise TypeError("Units must be a str.")
+
+        mult, *units = Unit.parse_concentration('1 ' + units)
+
+        numerator = Unit.convert_from(solute, self.contents.get(solute, 0), 
+                                      config.moles_storage_unit, units[0])
+
+        if numerator == 0:
+            return 0
+
+        if units[1].endswith('L'):
+            denominator = self.get_volume(units[1])
+        else:
+            denominator = 0
+            for substance, amount in self.contents.items():
+                denominator += Unit.convert_from(substance, amount, 
+                                                 config.moles_storage_unit,
+                                                   units[1])
+
+        return round(numerator / denominator / mult, config.internal_precision)
+    
     def _add(self, source: Substance, quantity: str) -> Container:
         """
         Add the given quantity ('10 mol') of the source substance to the container.
@@ -329,122 +478,6 @@ class Container:
         if isinstance(source, (Plate, PlateSlicer)):
             return destination._transfer_slice(source, quantity)
         raise TypeError("Invalid source type.")
-
-    def get_concentration(self, solute: Substance, units: str = 'M') -> float:
-        """
-        Get the concentration of solute in the current solution.
-
-        Args:
-            solute: Substance interested in.
-            units: Units to return concentration in, defaults to Molar.
-
-        Returns: Concentration
-
-        """
-        if not isinstance(solute, Substance):
-            raise TypeError("Solute must be a Substance.")
-        if not isinstance(units, str):
-            raise TypeError("Units must be a str.")
-
-        mult, *units = Unit.parse_concentration('1 ' + units)
-
-        numerator = Unit.convert_from(solute, self.contents.get(solute, 0), 
-                                      config.moles_storage_unit, units[0])
-
-        if numerator == 0:
-            return 0
-
-        if units[1].endswith('L'):
-            denominator = self.get_volume(units[1])
-        else:
-            denominator = 0
-            for substance, amount in self.contents.items():
-                denominator += Unit.convert_from(substance, amount, 
-                                                 config.moles_storage_unit,
-                                                   units[1])
-
-        return round(numerator / denominator / mult, config.internal_precision)
-
-
-    def get_mass(self, unit: str = None) -> float:
-        """
-        Get the total mass of all contents of the container.
-
-        Args:
-            unit: Unit to return the mass in. Defaults to mass_display_unit 
-            from config.
-
-        Returns: Total mass of all contents in the container.
-        """
-        if unit is None:
-            unit = config.mass_display_unit
-
-        if not isinstance(unit, str):
-            raise TypeError("Unit must be a str.")
-        
-        return sum(
-            Unit.convert_from(sub, value, config.moles_storage_unit, unit)
-                for sub, value in self.contents.items()
-        )
-
-
-    def get_moles(self, unit: str = None) -> float:
-        """
-        Get the total moles of all contents of the container.
-
-        Args:
-            unit: Unit to return the moles in. Defaults to 'mol'.
-
-        Returns: Total moles of all contents in the container.
-        """
-        if unit is None:
-            unit = "mol"
-
-        if not isinstance(unit, str):
-            raise TypeError("Unit must be a str.")
-        
-        return Unit.convert_from_storage(sum(self.contents.values()), unit)
-
-    def get_volume(self, unit: str = None) -> float:
-        """
-        Get the total volume of the container's contents.
-
-        NOTE: This is NOT the maximum volume of the container.
-
-        Args:
-            unit: Unit to return volume in. Defaults to volume_display_unit 
-            from config.
-
-        Returns: Total volume of the container's contents.
-
-        """
-        if unit is None:
-            unit = config.volume_display_unit
-
-        if not isinstance(unit, str):
-            raise TypeError("Unit must be a str.")
-
-        return Unit.convert_from_storage(self.volume, unit)
-    
-    def get_quantity(self, unit: str):
-        """
-        Get the total quantity of the container's contents in terms of the
-        specified unit. Depending on the unit, this can be the mass,
-        moles, or volume of the container's contents.
-
-        Args:
-            unit: Unit in which to return the quantity.
-        
-        Returns: Total quantity of the container's contents.
-        """
-        if unit[-3:].lower() == 'mol':
-            return self.get_moles(unit)
-        elif unit[-1:].lower() == 'g':
-            return self.get_mass(unit)
-        elif unit[-1:].upper() == 'L':
-            return self.get_volume(unit)
-        else:
-            raise ValueError(f"Invalid unit: {unit}")
 
     def _auto_generate_solution_name(solute : Iterable[Substance],
                                      solvent : Substance | Container):

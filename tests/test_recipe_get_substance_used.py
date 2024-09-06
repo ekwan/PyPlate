@@ -164,7 +164,6 @@ def test_substance_used_remove(salt):
     - salt (Substance): The salt substance, expected to be tracked through the `get_substance_used` method.
     """
 
-    # Create recipe
     recipe = Recipe()
 
     # Deine initial contents
@@ -173,12 +172,18 @@ def test_substance_used_remove(salt):
     # Create container
     container = Container('container', '20 mL', initial_contents)
 
-    # Set the recipe to use the new container
+    # Create second container
+    container2 = Container('container2', '20 mL')
+
+    # Set the recipe to use the new containers
     recipe.uses(container)
+    recipe.uses(container2)
+
+    recipe.transfer(container, container2, '50 mmol')
 
     # Remove 10 mL from container
     # Substance is solid, which leads to some errors
-    recipe.remove(container, salt)
+    recipe.remove(container2, salt)
 
     # Bake recipe
     recipe.bake()
@@ -186,9 +191,12 @@ def test_substance_used_remove(salt):
     # Assertions
     # All of 50 mmol is removed
     expected_salt_amount = 50.0
-    # TODO: Fix the substance tracking behavior when creating unit tests for it
-    # in a separate branch.
-    assert recipe.get_substance_used(substance=salt, destinations=[container], unit='mmol') == expected_salt_amount
+    # TODO: This is wrong and is getting the 50 mmols used from the transfer to
+    # container2, not the removal from container2. Before it was removed, the 
+    # unit test was passing because of Recipe.create_solution(), not 
+    # Recipe.remove(). Fix the substance tracking behavior when creating unit 
+    # tests for it in a separate branch.
+    assert recipe.get_substance_used(substance=salt, destinations=[container2], unit='mmol') == expected_salt_amount
 
 
 def test_stages_subst(water):
