@@ -1,6 +1,6 @@
 import numpy as np
 import pdb
-from pyplate import Recipe, Container, Plate
+from pyplate import Recipe, Container, Plate, config
 import pytest
 import logging
 
@@ -469,7 +469,6 @@ def test_substance_used_incorrect_timeframe(salt_water, salt, empty_plate):
 
 
 def test_substance_used_fill_to_plate(salt, water):
-    
     # Create the plate that will be used for the recipe
     plate = Plate('plate', max_volume_per_well='2 mL')
 
@@ -488,11 +487,14 @@ def test_substance_used_fill_to_plate(salt, water):
     for x, row in enumerate(plate.row_names):
         for y, col in enumerate(plate.column_names):
             recipe.transfer(salt_water, plate[row, col], f"{max(x * y, 0.001)} uL")
+            salt_used += max(x * y, 0.001) / 1000
     recipe.fill_to(plate, solvent=water, quantity='1 mL')
 
     # Bake the recipe to lock it
     recipe.bake()
 
-    # TODO: THIS IS MEGA WRONG
+    # Ensure the correct amount of salt has been used
+    unit = 'mmol'
+    precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
     assert recipe.get_substance_used(substance=salt, timeframe='all', 
-                                     unit='mmol') == round(salt_used, 10) # TODO: Change this to config.precision
+                                     unit=unit) == round(salt_used, precision)

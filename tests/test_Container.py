@@ -1226,11 +1226,11 @@ def test_create_solution(water, dmso,
         Container.create_solution('salt', water, concentration='0.5 M', total_quantity='100 mL')
 
     with pytest.raises(TypeError, match='Name must be a str\\.'):
-        Container.create_solution(1, salt, water, conventration='0.5 M', total_quantity='100 mL')
+        Container.create_solution(salt, water, 1, conventration='0.5 M', total_quantity='100 mL')
     with pytest.raises(TypeError, match='Name must be a str\\.'):
-        Container.create_solution([], salt, water, conventration='0.5 M', total_quantity='100 mL')
+        Container.create_solution(salt, water, [], conventration='0.5 M', total_quantity='100 mL')
     with pytest.raises(TypeError, match='Name must be a str\\.'):
-        Container.create_solution(False, salt, water, conventration='0.5 M', total_quantity='100 mL')
+        Container.create_solution(salt, water, False, conventration='0.5 M', total_quantity='100 mL')
     
     with pytest.raises(TypeError, match='Solvent must be a Substance or a Container\\.'):
         Container.create_solution(salt, 'water', concentration='0.5 M', total_quantity='100 mL')
