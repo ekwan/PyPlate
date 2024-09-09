@@ -21,7 +21,7 @@ from .unit_test_constants import epsilon, \
                             test_negative_quantities, \
                             test_zero_quantities
 
-from .mock_functions import mock_parse_quantity
+from .common_mock_functions import mock_parse_quantity
 
 
 def test_Container__init__(water, salt):
