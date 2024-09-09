@@ -1,6 +1,8 @@
 # Allow typing reference while still building classes
 from __future__ import annotations
 
+import warnings
+
 from pyplate.config import config
 
 class Substance:
@@ -82,19 +84,27 @@ class Substance:
 
     @staticmethod
     def solid(name: str, mol_weight: float, 
-              density: float, molecule=None) -> Substance:
+              density: float = None, molecule=None) -> Substance:
         """
         Creates a solid substance.
 
         Arguments:
             name: Name of substance.
             mol_weight: Molecular weight in g/mol
-            density: Density in g/mL
+            density: Density in g/mL. If not provided, a warning will be raised,
+                     and a default value will be used.
             molecule: (optional) A cctk.Molecule
 
         Returns: A new solid substance with the specified properties.
-
         """
+        if density is None:
+            warning_msg = (
+                f"Density not provided; using default value of {config.default_solid_density} g/mL. "
+                "This may result in unexpected volumes for quantities of this substance and "
+                "solutions containing it."
+            )
+            warnings.warn(warning_msg, stacklevel=2)
+            density = config.default_solid_density
         return Substance(name, Substance.SOLID, mol_weight, density, molecule)
 
 
