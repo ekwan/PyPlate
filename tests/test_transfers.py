@@ -36,12 +36,12 @@ def test_transfer_between_containers(solution1, solution2, water, salt, dmso, so
     assert solution1.volume == Unit.convert_to_storage(solution1_volume, 'mL')
     assert solution2.volume == Unit.convert_to_storage(solution2_volume, 'mL')
     # 10 mL of water and 5 moles of salt should have been transferred
-    assert solution3.get_volume(unit='mL') == solution1_volume * 0.9
-    assert solution4.volume == Unit.convert_to_storage(solution2_volume + solution1_volume*0.1, 'mL')
-    assert solution3.contents[water] == Unit.convert(water, '90 mL', config.moles_storage_unit)
-    assert solution3.contents[salt] == Unit.convert(salt, '45 mmol', config.moles_storage_unit)
+    assert solution3.get_volume(unit='mL') == pytest.approx(solution1_volume * 0.9)
+    assert solution4.volume == pytest.approx(Unit.convert_to_storage(solution2_volume + solution1_volume*0.1, 'mL'))
+    assert solution3.contents[water] == pytest.approx(Unit.convert(water, '90 mL', config.moles_storage_unit))
+    assert solution3.contents[salt] == pytest.approx(Unit.convert(salt, '45 mmol', config.moles_storage_unit))
     assert solution4.contents[water] == pytest.approx(Unit.convert(water, '10 mL', config.moles_storage_unit))
-    assert solution4.contents[salt] == Unit.convert(salt, '5 mmol', config.moles_storage_unit)
+    assert solution4.contents[salt] == pytest.approx(Unit.convert(salt, '5 mmol', config.moles_storage_unit))
 
 
 def test_transfer_to_slice(plate1, solution1, salt):

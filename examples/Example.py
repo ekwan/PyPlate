@@ -6,7 +6,7 @@ from pyplate import Substance, Container, Plate, Recipe
 
 # define reagents
 print("reagents:")
-sodium_sulfate = Substance.solid("sodium sulfate", mol_weight=142.04)
+sodium_sulfate = Substance.solid("sodium sulfate", mol_weight=142.04, density=2.66)
 triethylamine = Substance.liquid("triethylamine", mol_weight=101.19, density=0.726)
 water_tap = Substance.liquid("tap water", 18.0153, 1)
 water_DI = Substance.liquid("DI water", 18.0153, 1)
@@ -118,14 +118,14 @@ triethylamine_10mM = Container.create_solution(solute=triethylamine, concentrati
                                                solvent=DMSO, total_quantity='10.0 mL')
 print(triethylamine_10mM)
 print("Diluting to 0.005 M")
-result = triethylamine_10mM.dilute(solute=triethylamine, concentration='0.005 M', solvent=DMSO)
+result = triethylamine_10mM.dilute_in_place(solute=triethylamine, concentration='0.005 M', solvent=DMSO)
 print(result)
 print("New concentration:", result.contents[triethylamine]/result.volume)
 
 sodium_sulfate_halfM = Container.create_solution(solute=sodium_sulfate, concentration='0.5 M',
                                                  solvent=water_DI, total_quantity='10.0 mL')
 print(sodium_sulfate_halfM)
-result = sodium_sulfate_halfM.dilute(solute=sodium_sulfate, concentration='0.25 M', solvent=water_DI)
+result = sodium_sulfate_halfM.dilute_in_place(solute=sodium_sulfate, concentration='0.25 M', solvent=water_DI)
 print(result)
 print(result.contents[sodium_sulfate]/result.volume)
 

@@ -2,15 +2,13 @@ from pyplate import Substance, Container, Recipe, Plate
 
 
 water = Substance.liquid('H2O', mol_weight=18.0153, density=1)
-salt = Substance.solid('NaCl', 58.4428)
+salt = Substance.solid('NaCl', 58.4428, 2.17)
 triethylamine = Substance.liquid("triethylamine", mol_weight=101.19, density=0.726)
 
-recipe = Recipe()
-water_stock = recipe.create_container('water stock', 'inf L', [(water, '1000 mL')])
-salt_source = recipe.create_container('salt source', 'inf L', [(salt, '1000 g')])
-recipe.create_container('halfM salt water', '1 L', ((water, '100 mL'), (salt, '50 mmol')))
-results = recipe.bake()
-salt_water_halfM = results['halfM salt water']
+
+water_stock = Container('water stock', 'inf L', [(water, '1000 mL')])
+salt_source = Container('salt source', 'inf L', [(salt, '1000 g')])
+salt_water_halfM = Container('halfM salt water', '1 L', ((water, '100 mL'), (salt, '50 mmol')))
 
 
 water_stock_2 = Container('water stock', 'inf L', [(water, '1000 mL')])

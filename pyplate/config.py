@@ -39,7 +39,6 @@ class Config:
         assert ('/' in self.concentration_display_unit or self.concentration_display_unit[-1] == 'm' or
                 self.concentration_display_unit[-1] == 'M')
         self.default_solid_density = float(yaml_config['default_solid_density'])
-        self.default_enzyme_density = float(yaml_config['default_enzyme_density'])
         self.default_weight_volume_units = yaml_config['default_weight_volume_units']
 
         self.default_colormap = yaml_config['default_colormap']
