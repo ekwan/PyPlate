@@ -21,13 +21,16 @@ class Substance:
     classes = {SOLID: 'Solids', LIQUID: 'Liquids'}
 
     def __init__(self, name: str, mol_type: int, 
-                 density:float = None, molecule=None):
+                 mol_weight: float, density: float, 
+                 molecule=None):
         """
         Create a new substance.
 
         Arguments:
             name: Name of substance.
             mol_type: Substance.SOLID or Substance.LIQUID.
+            mol_weight: The molecular weight of the substance in g/mol.
+            density: The density of the substance in g/mL.
             molecule: (optional) A cctk.Molecule.
 
         If  cctk.Molecule is provided, molecular weight will automatically populate.
@@ -36,15 +39,31 @@ class Substance:
         """
         if not isinstance(name, str):
             raise TypeError("Name must be a str.")
+        
         if not isinstance(mol_type, int):
             raise TypeError("Type must be an int.")
+        
+        if not isinstance(mol_weight, (int, float)):
+            raise TypeError("Molecular weight must be a float.")
+        if not isinstance(density, (int, float)):
+            raise TypeError("Density must be a float.")
+
+
         if len(name) == 0:
             raise ValueError("Name must not be empty.")
+        if mol_type not in Substance.classes.keys():
+            #TODO: Maybe improve this error message for users
+            raise ValueError("Molecular type unsupported. " + 
+                             f"Type must be one of: {Substance.classes}") 
+        if not mol_weight > 0:
+            raise ValueError("Molecular weight must be positive.")
+        if not density > 0:
+            raise ValueError("Density must be positive.")
 
         self.name = name
         self._type = mol_type
-        self.mol_weight = None
-        self.density = density if density is not None else config.default_solid_density
+        self.mol_weight = mol_weight
+        self.density = density
         self.molecule = molecule
 
     def __repr__(self):
@@ -73,26 +92,11 @@ class Substance:
             density: Density in g/mL
             molecule: (optional) A cctk.Molecule
 
-        Returns: New substance.
+        Returns: A new solid substance with the specified properties.
 
         """
-        if not isinstance(name, str):
-            raise TypeError("Name must be a str.")
-        if not isinstance(mol_weight, (int, float)):
-            raise TypeError("Molecular weight must be a float.")
-        if not isinstance(density, (int, float)):
-            raise TypeError("Density must be a float.")
+        return Substance(name, Substance.SOLID, mol_weight, density, molecule)
 
-        if not mol_weight > 0:
-            raise ValueError("Molecular weight must be positive.")
-        
-        if not density > 0:
-            raise ValueError("Density must be positive.")
-
-        substance = Substance(name, Substance.SOLID, molecule)
-        substance.mol_weight = mol_weight
-        substance.density = density
-        return substance
 
     @staticmethod
     def liquid(name: str, mol_weight: float, 
@@ -106,25 +110,9 @@ class Substance:
             density: Density in g/mL
             molecule: (optional) A cctk.Molecule
 
-        Returns: New substance.
-
+        Returns: A new liquid substance with the specified properties.
         """
-        if not isinstance(name, str):
-            raise TypeError("Name must be a str.")
-        if not isinstance(mol_weight, (int, float)):
-            raise TypeError("Molecular weight must be a float.")
-        if not isinstance(density, (int, float)):
-            raise TypeError("Density must be a float.")
-
-        if not mol_weight > 0:
-            raise ValueError("Molecular weight must be positive.")
-        if not density > 0:
-            raise ValueError("Density must be positive.")
-
-        substance = Substance(name, Substance.LIQUID, molecule)
-        substance.mol_weight = mol_weight  # g / mol
-        substance.density = density  # g / mL
-        return substance
+        return Substance(name, Substance.LIQUID, mol_weight, density, molecule)
 
     def is_solid(self) -> bool:
         """
