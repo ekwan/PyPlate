@@ -53,14 +53,14 @@ def test_Container_transfer(water, salt, water_stock, salt_water):
     salt_water_volume = Unit.convert_from_storage(salt_water.volume, 'mL')
     container1, container2 = Container.transfer(salt_water, water_stock, f"{salt_water_volume * 0.1} mL")
     # 10 mL of water and 5 mol of salt should have been transferred
-    assert container1.volume == Unit.convert(water, '90 mL', config.volume_storage_unit) \
-           + Unit.convert(salt, '45 mmol', config.volume_storage_unit)
-    assert container1.contents[water] == Unit.convert(water, '90 mL', config.moles_storage_unit)
-    assert container1.contents[salt] == Unit.convert(salt, '45 mmol', config.moles_storage_unit)
-    assert container2.volume == Unit.convert(water, '20 mL', config.volume_storage_unit) \
-           + Unit.convert(salt, '5 mmol', config.volume_storage_unit)
+    assert container1.volume == pytest.approx(Unit.convert(water, '90 mL', config.volume_storage_unit) \
+           + Unit.convert(salt, '45 mmol', config.volume_storage_unit))
+    assert container1.contents[water] == pytest.approx(Unit.convert(water, '90 mL', config.moles_storage_unit))
+    assert container1.contents[salt] == pytest.approx(Unit.convert(salt, '45 mmol', config.moles_storage_unit))
+    assert container2.volume == pytest.approx(Unit.convert(water, '20 mL', config.volume_storage_unit) \
+           + Unit.convert(salt, '5 mmol', config.volume_storage_unit))
     assert salt in container2.contents and container2.contents[salt] == \
-           Unit.convert(salt, '5 mmol', config.moles_storage_unit)
+           pytest.approx(Unit.convert(salt, '5 mmol', config.moles_storage_unit))
     assert container2.contents[water] == pytest.approx(Unit.convert(water, '20 mL', config.moles_storage_unit))
 
     # Original containers should be unchanged.

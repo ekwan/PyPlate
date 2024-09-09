@@ -20,7 +20,8 @@ class Substance:
 
     classes = {SOLID: 'Solids', LIQUID: 'Liquids'}
 
-    def __init__(self, name: str, mol_type: int, molecule=None):
+    def __init__(self, name: str, mol_type: int, 
+                 density:float = None, molecule=None):
         """
         Create a new substance.
 
@@ -42,8 +43,8 @@ class Substance:
 
         self.name = name
         self._type = mol_type
-        self.mol_weight = self.concentration = None
-        self.density = float('inf')
+        self.mol_weight = None
+        self.density = density if density is not None else config.default_solid_density
         self.molecule = molecule
 
     def __repr__(self):
@@ -52,20 +53,24 @@ class Substance:
     def __eq__(self, other):
         if not isinstance(other, Substance):
             return False
-        return self.name == other.name and self._type == other._type and self.mol_weight == other.mol_weight \
-            and self.density == other.density and self.concentration == other.concentration
+        return self.name == other.name and \
+                self._type == other._type and \
+                self.mol_weight == other.mol_weight and \
+                self.density == other.density 
 
     def __hash__(self):
-        return hash((self.name, self._type, self.mol_weight, self.density, self.concentration))
+        return hash((self.name, self._type, self.mol_weight, self.density))
 
     @staticmethod
-    def solid(name: str, mol_weight: float, molecule=None) -> Substance:
+    def solid(name: str, mol_weight: float, 
+              density: float, molecule=None) -> Substance:
         """
         Creates a solid substance.
 
         Arguments:
             name: Name of substance.
             mol_weight: Molecular weight in g/mol
+            density: Density in g/mL
             molecule: (optional) A cctk.Molecule
 
         Returns: New substance.
@@ -75,17 +80,23 @@ class Substance:
             raise TypeError("Name must be a str.")
         if not isinstance(mol_weight, (int, float)):
             raise TypeError("Molecular weight must be a float.")
+        if not isinstance(density, (int, float)):
+            raise TypeError("Density must be a float.")
 
         if not mol_weight > 0:
             raise ValueError("Molecular weight must be positive.")
+        
+        if not density > 0:
+            raise ValueError("Density must be positive.")
 
         substance = Substance(name, Substance.SOLID, molecule)
         substance.mol_weight = mol_weight
-        substance.density = config.default_solid_density
+        substance.density = density
         return substance
 
     @staticmethod
-    def liquid(name: str, mol_weight: float, density: float, molecule=None) -> Substance:
+    def liquid(name: str, mol_weight: float, 
+               density: float, molecule=None) -> Substance:
         """
         Creates a liquid substance.
 
@@ -113,7 +124,6 @@ class Substance:
         substance = Substance(name, Substance.LIQUID, molecule)
         substance.mol_weight = mol_weight  # g / mol
         substance.density = density  # g / mL
-        substance.concentration = density / mol_weight  # mol / mL
         return substance
 
     def is_solid(self) -> bool:
