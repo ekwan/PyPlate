@@ -32,10 +32,12 @@ test_names = ['container', 'plate', 'substance', 'recipe'
 # Variations for test values include single/multidigit integers, and
 # single/multidigit decimals
 test_values = ['1', '20', '300', '4000', '56', '789',
-                '0.1', '0.001', '0.5', '1.5', '200.5',
+                '0.1', '0.001', '0.5', '1.5', '200.5', '0.0000001',
                 '.1', '.0089',
                 '7.', '2562.'
               ]
+
+test_positive_numbers = [float(test_value) for test_value in test_values]
 
 test_prefixes = [
                     '', 'm', 'da', 'u', 'k', 'n'

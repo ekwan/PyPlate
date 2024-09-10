@@ -55,7 +55,7 @@ class Substance:
             raise ValueError("Name must not be empty.")
         if mol_type not in Substance.classes.keys():
             #TODO: Maybe improve this error message for users
-            raise ValueError("Molecular type unsupported. " + 
+            raise ValueError("Substance type unsupported. " + 
                              f"Type must be one of: {Substance.classes}") 
         if not mol_weight > 0:
             raise ValueError("Molecular weight must be positive.")
