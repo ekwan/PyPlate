@@ -25,9 +25,9 @@ mass_display_unit: g
 # Default concentration unit for get_concentration()
 concentration_display_unit: M
 
-# density for solids/enzymes in g/mL or U/mL. Can be set to float('inf') to give solids and enzymes zero volume.
+# density for solids in g/mL. 
+# Can be set to float('inf') to give solids and zero volume.
 default_solid_density: 1
-default_enzyme_density: 1
 
 # units for %w/v
 default_weight_volume_units: g/mL

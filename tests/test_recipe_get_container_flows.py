@@ -36,8 +36,11 @@ def test_container_flows(sodium_sulfate, water):
     recipe.bake()
 
     assert recipe.get_container_flows(container=stock_solution,
-                                      timeframe='all', unit='g') == {"in": 0, "out": 10}
-    assert recipe.get_container_flows(container=dest_container, timeframe='stage 2', unit='mL') == {"out": 9.29,
+                                      timeframe='all', unit='mL') == {"in": 0, "out": 10}
+    # TODO: Remove highly test-specific magic number; compute this from the 
+    # properties of substances involved, and/or change "create_solution" to make
+    # this number easier to determine.
+    assert recipe.get_container_flows(container=dest_container, timeframe='stage 2', unit='mL') == {"out": 9.733,
                                                                                                     "in": 0}
 
 

@@ -390,6 +390,7 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
     """
     Unit Test for the function `Container._self_add()`.
 
+<<<<<<< HEAD
     This unit test checks the following scenarios:
     - Arguments raise a `TypeError` if they are not the correct types.
     - 'quantity' argument raises a `ValueError` if it is not positive or zero.
@@ -410,6 +411,22 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
       that any other pre-existing substances also have the correct amounts,
       and that the overall volume of the container matches the total amount
       of substances that have been added.
+=======
+    initial_hashes = hash(water_stock), hash(salt_water)
+    # water_stock is 10 mL, salt_water is 100 mL and 50 mmol
+    salt_water_volume = Unit.convert_from_storage(salt_water.volume, 'mL')
+    container1, container2 = Container.transfer(salt_water, water_stock, f"{salt_water_volume * 0.1} mL")
+    # 10 mL of water and 5 mol of salt should have been transferred
+    assert container1.volume == pytest.approx(Unit.convert(water, '90 mL', config.volume_storage_unit) \
+           + Unit.convert(salt, '45 mmol', config.volume_storage_unit))
+    assert container1.contents[water] == pytest.approx(Unit.convert(water, '90 mL', config.moles_storage_unit))
+    assert container1.contents[salt] == pytest.approx(Unit.convert(salt, '45 mmol', config.moles_storage_unit))
+    assert container2.volume == pytest.approx(Unit.convert(water, '20 mL', config.volume_storage_unit) \
+           + Unit.convert(salt, '5 mmol', config.volume_storage_unit))
+    assert salt in container2.contents and container2.contents[salt] == \
+           pytest.approx(Unit.convert(salt, '5 mmol', config.moles_storage_unit))
+    assert container2.contents[water] == pytest.approx(Unit.convert(water, '20 mL', config.moles_storage_unit))
+>>>>>>> development
 
     - Edge case: zero quantity addition of a substance does not add the substance
       to the container's contents if it is not already present, and does not

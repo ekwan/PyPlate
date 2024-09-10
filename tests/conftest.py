@@ -4,7 +4,7 @@ from pyplate import Substance, Container, Plate
 
 @pytest.fixture
 def salt() -> Substance:
-    return Substance.solid('NaCl', 58.4428)
+    return Substance.solid('NaCl', 58.4428, 2.17)
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def dmso() -> Substance:
 
 @pytest.fixture
 def sodium_sulfate() -> Substance:
-    return Substance.solid('Sodium sulfate', 142.04)
+    return Substance.solid('Sodium sulfate', 142.04, 2.66)
 
 
 @pytest.fixture

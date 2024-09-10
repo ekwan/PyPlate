@@ -13,17 +13,27 @@ def test_make_solid():
     """
     # Argument types checked
     with pytest.raises(TypeError, match="Name must be a str"):
-        Substance.solid(1, 1)
+        Substance.solid(1, 1, 1)
     with pytest.raises(ValueError, match="Name must not be empty"):
-        Substance.solid('', 1)
+        Substance.solid('', 1, 1)
     with pytest.raises(TypeError, match="Molecular weight must be a float"):
-        Substance.solid('water', '1')
+        Substance.solid('water', [], 1)
+    with pytest.raises(TypeError, match="Molecular weight must be a float"):
+        Substance.solid('water', '1', 1)
+    with pytest.raises(TypeError, match="Density must be a float"):
+        Substance.solid('water', 18.0153, "")
+    with pytest.raises(TypeError, match="Density must be a float"):
+        Substance.solid('water', 18.0153, "1")
 
     # Arguments are sane
     with pytest.raises(ValueError, match="Molecular weight must be positive"):
-        Substance.solid('water', -1)
+        Substance.solid('water', -1, 1)
     with pytest.raises(ValueError, match="Molecular weight must be positive"):
-        Substance.solid('water', 0)
+        Substance.solid('water', 0, 1)
+    with pytest.raises(ValueError, match="Density must be positive"):
+        Substance.solid('water', 1, -1)
+    with pytest.raises(ValueError, match="Density must be positive"):
+        Substance.solid('water', 1, 0)
 
 
 def test_solid(salt):
@@ -34,6 +44,7 @@ def test_solid(salt):
     """
     assert salt.name == 'NaCl'
     assert salt.mol_weight == 58.4428
+    assert salt.density == 2.17
 
 
 def test_make_liquid():
