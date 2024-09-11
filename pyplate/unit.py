@@ -201,7 +201,7 @@ class Unit:
 
             # If matching fails again, fail to parse the quantity and raise a ValueError
             if not match:
-                raise ValueError(f"Could not parse '{quantity}' into a valid value-unit pair.")
+                raise ValueError(f"Could not parse '{quantity}'.")
             
         # Extract the value-unit pair from the capture groups
         value, unit = match.group(1), match.group(2)
@@ -276,8 +276,7 @@ class Unit:
             value *= 0.01
             
         # Define the parsing error string
-        parse_error_msg = f"Could not parse '{concentration}' into a valid " \
-                           "value-numerator-denominator triplet."
+        parse_error_msg = f"Could not parse '{concentration}'."
 
         # Parse the concentration string into a numerator and denominator. 
         split_by_slash_results = concentration.split('/')
@@ -290,16 +289,15 @@ class Unit:
         try:
             numerator_value, numerator_unit = Unit.parse_quantity(numerator)
         except ValueError as e:
-            raise ValueError(parse_error_msg + " Invalid numerator.") from e
+            raise ValueError(parse_error_msg + " Invalid numerator.")
         
         # Try to parse the denominator into a valid quantity OR a valid unit
         #
         # NOTE: It is quite difficult to distinguish between a user incorrectly
         # specifying a denominator unit and incorrectly specifying a denominator
         # quantity, especially since requirement for spaces in quantities is no
-        # longer required. Thus, the raised error does not include a 'from' as
-        # is in the numerator case, since it is unclear which of the two failure
-        # errors should be reported.
+        # longer required. Thus, the raised error does not distinguish between 
+        # these two cases.
         denominator = denominator.strip()
         try:
             denom_unit, denom_value = Unit.parse_prefixed_unit(denominator)
@@ -309,8 +307,8 @@ class Unit:
             except ValueError:
                 raise ValueError(parse_error_msg + " Invalid denominator.")
 
-        # Multiply the existing value by the parsed numerator and denominator scale
-        # factors
+        # Multiply the existing value by the parsed numerator and denominator 
+        # scale factors
         value *= numerator_value / denom_value
 
         return round(value, config.internal_precision), \

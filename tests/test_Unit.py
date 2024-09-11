@@ -172,8 +172,7 @@ def test_Unit_parse_quantity():
         for pattern in test_whitespace_patterns:
             merged_test_quantity = pattern.replace('e', test_quantity)
             with pytest.raises(ValueError, 
-                               match=f"Could not parse '{merged_test_quantity}'"
-                                      " into a valid value-unit pair\\."):
+                               match=f"Could not parse '{merged_test_quantity}'"):
                 Unit.parse_quantity(merged_test_quantity)
 
     # ==========================================================================
@@ -184,8 +183,7 @@ def test_Unit_parse_quantity():
         for pattern in test_whitespace_patterns:
             merged_test_quantity = pattern.replace('e', test_quantity)
             with pytest.raises(ValueError, 
-                               match=f"Could not parse '{merged_test_quantity}'"
-                                      " into a valid value-unit pair\\."):
+                               match=f"Could not parse '{merged_test_quantity}'"):
                 Unit.parse_quantity(merged_test_quantity)
 
     # ==========================================================================
@@ -266,7 +264,10 @@ def test_Unit_parse_concentration():
         - Sub-case: Argument contains more than two groups separated by forward
                     slashes.
           - E.g. 12 mol/L/mol
-        
+      - Case: Value from parsed argument is not a valid float
+        - E.g. 'red M' or '#..# mol/mL'
+      - Case: Value from parsed argument is not a valid float
+        - E.g. 'red M' or '#..# mol/mL'        
     """
 
 
