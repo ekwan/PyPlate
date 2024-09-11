@@ -39,11 +39,16 @@ test_values = ['1', '20', '300', '4000', '56', '789',
 
 test_positive_numbers = [float(test_value) for test_value in test_values]
 
-test_prefixes = [
-                    '', 'm', 'da', 'u', 'k', 'n'
-                ]
+test_prefixes = ['', 'm', 'da', 'u', 'k', 'n']
+
+test_prefix_multipliers = [1, 1e-3, 10, 1e-6, 1000, 1e-9]
+"""
+These values correspond to the positionally matching entries of test_prefix.
+"""
 
 test_base_units = ['L', 'mol', 'g']
+
+test_invalid_base_units = ['K', 'C', 'F', 'T', 'H', 'asdf', 'mmmol']
 
 # Create all permutations of the above prefixes and base units
 test_units = []
@@ -51,11 +56,16 @@ for prefix in test_prefixes:
     for base_unit in test_base_units:
         test_units.append(prefix + base_unit)
 
+# Create all permutations of the above prefixes and invalid base units
+test_invalid_units = []
+for prefix in test_prefixes:
+    for base_unit in test_invalid_base_units:
+        test_invalid_units.append(prefix + base_unit)
+
 # Create all volume units using the above prefixes
 test_volume_units = []
 for prefix in test_prefixes:
     test_volume_units.append(prefix + 'L')
-
 
 # Create all permutations of the above test values & volume units
 test_volumes = []

@@ -12,6 +12,7 @@ from .unit_test_constants import epsilon, \
                             test_base_units, \
                             test_prefixes, \
                             test_units, \
+                            test_invalid_units, \
                             test_volume_units, \
                             test_positive_volumes, \
                             test_negative_volumes, \
@@ -39,7 +40,10 @@ def test_Container__init__(water, salt):
         4. 'name', 'max_volume', and 'initial_contents' provided
     """
 
-    # Argument types checked
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+
     with pytest.raises(TypeError, match="Name must be a str"):
         Container(1)
     with pytest.raises(TypeError, match="Name must be a str"):
@@ -64,56 +68,91 @@ def test_Container__init__(water, salt):
         Container('container', '1 L', [(water, 1), (salt, 1)])
     with pytest.raises(TypeError, match="Element in initial_contents must be"):
         Container('container', '1 L', [(water, None), (salt, True)])
-    
-    # Argument failure cases checked
 
-    # Failure case: empty name
+
+    # ==========================================================================
+    # Failure Case: Empty name
+    # ==========================================================================
+
     with pytest.raises(ValueError, match="Name must not be empty"):
         Container('')
 
-    # Failure case: names with only whitespace
+
+    # ==========================================================================
+    # Failure Case: Names with only whitespace
+    # ==========================================================================
+
     for test_name in test_whitespace_patterns:
         merged_test_name = test_name.replace('e', '')
         if merged_test_name != '':
             with pytest.raises(ValueError, match="Name must contain non-whitespace characters."):
                 Container(merged_test_name)
     
-    # Failure case: quantity is not formatted as 'value unit'
+
+    # ==========================================================================
+    # Failure Case: Quantity is not formatted as 'value unit'
+    # ==========================================================================
     # 
     # NOTE: This is really a failure case for Unit.parse_quantity(), not 
     # for constructing Containers. However, it is still worth checking here
     # in case the call to Unit.parse_quantity() is not correctly implemented
-    # in the constructor for Container.
-    #   
+    # in the constructor for Container. The error type and message are not 
+    # checked here, as that would further couple this test to the implementation
+    # details of Unit.parse_quantity(). 
+
     for test_quantity in test_non_parseable_quantities:
         for pattern in test_whitespace_patterns:
             merged_test_quantity = pattern.replace('e', test_quantity)
-            with pytest.raises(ValueError, match=f"Could not parse '{merged_test_quantity}'"
-                                                + " into a valid value-unit pair\\."):
+            with pytest.raises(Exception):
                 Container('container', merged_test_quantity)
 
-    # Failure case: quantity 'value' cannot be parsed as a float
+    # ==========================================================================
+    # Failure Case: Quantity 'value' cannot be parsed as a float
+    # ==========================================================================
     #
-    #  NOTE: This is really a failure case for Unit.parse_quantity(), not 
+    # NOTE: This is really a failure case for Unit.parse_quantity(), not 
     # for constructing Containers. However, it is still worth checking here
     # in case the call to Unit.parse_quantity() is not correctly implemented
-    # in the constructor for Container.
+    # in the constructor for Container. The error type and message are not 
+    # checked here, as that would further couple this test to the implementation
+    # details of Unit.parse_quantity(). 
+
     for test_value in test_invalid_values:
         for unit in test_volume_units:
             test_volume = test_value + ' ' + unit
             for pattern in test_whitespace_patterns:
                 merged_test_value = pattern.replace('e', test_volume)
-                with pytest.raises(ValueError, match=f"Value \'{test_value}\' is not a valid float"):
+                with pytest.raises(Exception):
                     Container('container', merged_test_value)
+
+    # ==========================================================================
+    # Failure Case: Quantity 'unit' is not a valid unit
+    # ==========================================================================
+    #
+    # NOTE: This is really a failure case for Unit.parse_quantity(), not 
+    # for constructing Containers. However, it is still worth checking here
+    # in case the call to Unit.parse_quantity() is not correctly implemented
+    # in the constructor for Container. The error type and message are not 
+    # checked here, as that would further couple this test to the implementation
+    # details of Unit.parse_quantity(). 
+
+    for unit in test_invalid_units:
+        for pattern in test_whitespace_patterns:
+            merged_test_value = pattern.replace('e', '10 ' + unit)
+            with pytest.raises(Exception):
+                Container('container', merged_test_value)
                 
 
-    # Failure case: quantity 'unit' does not represent volume
+    # ==========================================================================
+    # Failure Case: Quantity 'unit' does not represent volume
+    # ==========================================================================
     #
     # Variations for test quantities include:
     # - Moles (base unit)
     # - Grams (base unit)
     # - Mircomoles (prefixed unit)
     # - Kilograms (prefixed unit)
+
     test_units = ['mol', 'g', 'umol', 'kg']
     for test_unit in test_units:
         for pattern in test_whitespace_patterns:

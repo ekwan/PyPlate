@@ -83,10 +83,10 @@ class Unit:
         Examples: "m" -> 1e-3, "u" -> 1e-6
 
         Arguments:
-            prefix:
+            prefix: A supported prefix (e.g. an element of Unit.PREFIXES).
 
         Returns:
-             Multiplier (float)
+            multiplier (float): The multiplier of the corresponding prefix.
 
         """
         # Check type of prefix argument
@@ -109,10 +109,12 @@ class Unit:
         Examples: 1e-3 -> 'm', 2.5e3 -> 1e3 -> 'k'
 
         Arguments:
-            prefix:
+            multiplier (float): A float whose order of magnitude corresponds to
+                                a supported prefix.
 
         Returns:
-             Multiplier (float)
+            prefix (str): A supported prefix corresponding to the provided 
+                          multiplier.
 
         """
         # Check type of multiplier argument
@@ -120,24 +122,69 @@ class Unit:
             raise TypeError("Multiplier must be a number.")
         
         # Determine the nearest floored power of ten
-        multiplier = 10 ** math.floor(math.log10(multiplier))
+        #   E.g. 2500 -> 1000,  or  0.000724 -> 1e-4
+        try: 
+            multiplier = 10 ** math.floor(math.log10(abs(multiplier)))
+        except (ValueError, OverflowError) as e:
+            raise ValueError(f"Invalid multiplier: {multiplier}")
 
         if multiplier in Unit._PREFIX_LOOKUP:
             return Unit._PREFIX_LOOKUP[multiplier]
         raise ValueError(f"Invalid multiplier: {multiplier}")
 
     @staticmethod
+    def parse_prefixed_unit(unit: str) -> Tuple[str, float]:
+        """
+        Converts a string containing a prefixed unit into its base unit and 
+        the prefix's multiplier. A `ValueError` will be raised for unsupported 
+        units.
+
+        Args:
+            unit (str): The prefixed unit to be parsed (base units without a
+                        prefix will also be parsed correctly).
+        Returns:
+            base_unit (str): The base unit that corresponds to the prefixed unit.
+                               E.g. For the unit 'mmol', the base unit is 'mol'.
+
+            multiplier (float): The multiplier for the prefix of the passed 
+                                argument.
+        """
+        # Check to see if the extracted unit is a valid unit.
+        for base_unit in Unit.BASE_UNITS_PLUS_CONCENTRATION:
+            if unit.endswith(base_unit):
+                # Set the prefix to the substring preceding the base unit 
+                prefix = unit[:-len(base_unit)]
+
+                # Parse the prefix (will raise a ValueError if it fails)
+                # and multiply the value by the associated multiplier
+                # (e.g. m -> 1e-3)
+                try:
+                    multiplier = Unit.convert_prefix_to_multiplier(prefix)
+                except ValueError as e:
+                    raise ValueError(f"Invalid unit '{unit}'") from e
+                
+                return base_unit, multiplier
+            
+        # If no base units matched the end of the unit string, the unit must
+        # be invalid. Raise a ValueError stating as much.
+        raise ValueError(f"Invalid unit '{unit}'.")
+            
+
+    @staticmethod
     def parse_quantity(quantity: str) -> Tuple[float, str]:
         """
-
         Splits a quantity into a value and unit, converting any SI prefix.
+        
         Example: '10 mL' -> (0.01, 'L')
 
         Arguments:
-            quantity: Quantity to convert.
+            quantity (str): The quantity to convert.
 
-        Returns: A tuple of float and str. The float will be the parsed value
-         and the str will be the unit ('L', 'mol', 'g', etc.).
+        Returns: 
+            value (float): The magnitude of the quantity in terms of the 
+                            base unit.
+            base_unit (str): The base unit of the quantity 
+                               E.g. for the quantity '1 mL' the base unit is 'L' 
 
         """
         
@@ -170,81 +217,118 @@ class Unit:
             raise ValueError("'NaN' values are forbidden for quantities.")
 
         # Check to see if the extracted unit is a valid unit.
-        for base_unit in Unit.BASE_UNITS_PLUS_CONCENTRATION:
+        try:
+            base_unit, multiplier = Unit.parse_prefixed_unit(unit)
+        except ValueError as e:
+            raise e
+        
+        # Compute the value converted into the parsed base unit and return the 
+        # value-unit pair.
+        return value * multiplier, base_unit
 
-            # Check if the unit ends with a base unit
-            if unit.endswith(base_unit):
-                # Set the prefix to the what precedes the base unit 
-                prefix = unit[:-len(base_unit)]
-                # Parse the prefix (will raise a ValueError if it fails)
-                # and multiply the value by the associated multiplier
-                # (e.g. m -> 1e-3)
-                value = value * Unit.convert_prefix_to_multiplier(prefix)
-                # Return the value and base unit
-                return value, base_unit
-            
-        # If no base units matched the end of the unit string, the unit must
-        # be invalid. Raise a ValueError stating as much.
-        raise ValueError(f"Invalid unit '{unit}'.")
+       
 
     @staticmethod
     def parse_concentration(concentration : str) -> Tuple[float, str, str]:
         """
-        Parses concentration string to (value, numerator, denominator).
+        Parses concentration string to a tuple triplet of the form (value, 
+        numerator, denominator).
+
         Args:
-            concentration: concentration, '1 M', '1 umol/uL', '0.1 umol/10 uL'
+            concentration (str): The concentration to be parsed.
+                                    E.g. '1 M', '1 umol/uL', '0.1 umol/10 uL'
 
-        Returns: Tuple of value, numerator, denominator. (0.01, 'mol', 'L')
-
+        Returns: 
+            value (float): The magnitude of the concentration in terms of the
+                            parsed base units in the numerator and denominator.
+            numerator (str): The base unit of the numerator.
+            denominator (str): The base unit of the denominator.
         """
+        
+        # If supported concentration units are provided (e.g. 'M' or 'm'), parse
+        # them into the equivalent 'numerator unit/denomintor unit' format so 
+        # that the rest of the function handles them properly. If the unit 
+        # provided is not supported, raise an error. 
         if '/' not in concentration:
             if concentration[-1] == 'm':
                 concentration = concentration[:-1] + 'mol/kg'
             elif concentration[-1] == 'M':
                 concentration = concentration[:-1] + 'mol/L'
             else:
-                raise ValueError("Only m and M are allowed as concentration units.")
-        replacements = {'%v/v': 'L/L', '%w/w': 'g/g', '%w/v': config.default_weight_volume_units}
+                raise ValueError("Unsupported concentration unit. Only m and M "
+                                 "are allowed as concentration units.")
+        
+        # Define the value which will eventually be returned (this will be 
+        # conditionally modified by various parsing steps below).
+        value = 1
+
+        # Define the supported weight percentage and volume percentage 
+        # concentration formats and their 'numerator unit/denominator unit' 
+        # equivalents.
+        replacements = {'%v/v': 'L/L', '%w/w': 'g/g', 
+                        '%w/v': config.default_weight_volume_units}
+        
+        # If a weight percentage or volume percentage concentration was provided,
+        # perform the substitution specified by the above dictionary, and reduce
+        # the value by a factor of 1/100.
         if concentration[-4:] in replacements:
             concentration = concentration[:-4] + replacements[concentration[-4:]]
-            numerator, denominator = map(str.split, concentration.split('/'))
-            numerator[0] = float(numerator[0]) / 100  # percent
-        else:
-            numerator, denominator = map(str.split, concentration.split('/'))
-        if len(numerator) < 2 or len(denominator) < 1:
-            raise ValueError("Concentration must be of the form '1 umol/mL'.")
+            value *= 0.01
+            
+        # Define the parsing error string
+        parse_error_msg = f"Could not parse '{concentration}' into a valid " \
+                           "value-numerator-denominator triplet."
+
+        # Parse the concentration string into a numerator and denominator. 
+        split_by_slash_results = concentration.split('/')
+        if len(split_by_slash_results) != 2:
+            raise ValueError(parse_error_msg + 
+                             " No more than one '/' should be used.")
+        numerator, denominator = split_by_slash_results
+
+        # Try to parse the numerator into a valid quantity
         try:
-            numerator[0] = float(numerator[0])
-            if len(denominator) > 1:
-                numerator[0] /= float(denominator.pop(0))
-        except ValueError as exc:
-            raise ValueError("Value is not a float.") from exc
-        units = ('mol', 'L', 'g')
-        for unit in units:
-            if numerator[1].endswith(unit):
-                numerator[0] *= Unit.convert_prefix_to_multiplier(numerator[1][:-len(unit)])
-                numerator[1] = unit
-            if denominator[0].endswith(unit):
-                numerator[0] /= Unit.convert_prefix_to_multiplier(denominator[0][:-len(unit)])
-                denominator[0] = unit
-        if numerator[1] not in ('mol', 'L', 'g') or denominator[0] not in ('mol', 'L', 'g'):
-            raise ValueError("Concentration must be of the form '1 umol/mL'.")
-        return round(numerator[0], config.internal_precision), numerator[1], denominator[0]
+            numerator_value, numerator_unit = Unit.parse_quantity(numerator)
+        except ValueError as e:
+            raise ValueError(parse_error_msg + " Invalid numerator.") from e
+        
+        # Try to parse the denominator into a valid quantity OR a valid unit
+        #
+        # NOTE: It is quite difficult to distinguish between a user incorrectly
+        # specifying a denominator unit and incorrectly specifying a denominator
+        # quantity, especially since requirement for spaces in quantities is no
+        # longer required. Thus, the raised error does not include a 'from' as
+        # is in the numerator case, since it is unclear which of the two failure
+        # errors should be reported.
+        denominator = denominator.strip()
+        try:
+            denom_unit, denom_value = Unit.parse_prefixed_unit(denominator)
+        except ValueError:
+            try:
+                denom_value, denom_unit = Unit.parse_quantity(denominator)
+            except ValueError:
+                raise ValueError(parse_error_msg + " Invalid denominator.")
+
+        # Multiply the existing value by the parsed numerator and denominator scale
+        # factors
+        value *= numerator_value / denom_value
+
+        return round(value, config.internal_precision), \
+                    numerator_unit, denom_unit
 
     @staticmethod
     def convert_from(substance: Substance, quantity: float, from_unit: str, to_unit: str) -> float:
         """
-                    Convert quantity of substance between units.
+        Convert quantity of substance between units.
 
-                    Arguments:
-                        substance: Substance in question.
-                        quantity: Quantity of substance.
-                        from_unit: Unit to convert quantity from ('mL').
-                        to_unit: Unit to convert quantity to ('mol').
+        Arguments:
+            substance: Substance in question.
+            quantity: Quantity of substance.
+            from_unit: Unit to convert quantity from ('mL').
+            to_unit: Unit to convert quantity to ('mol').
 
-                    Returns: Converted value.
-
-                """
+        Returns: Converted value.
+        """
 
         if not isinstance(substance, Substance):
             raise TypeError(f"Invalid type for substance, {type(substance)}")

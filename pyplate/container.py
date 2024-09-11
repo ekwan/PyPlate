@@ -118,15 +118,14 @@ class Container:
 
     def _self_add(self, source: Substance, quantity: str) -> None:
         """
-
         Adds `Substance` to current `Container`, mutating it.
         Only to be used in the constructor and immediately after copy.
 
         Arguments:
             source: Substance to add.
             quantity: How much to add. ('10 mol')
-
         """
+
         # Check argument types
         if not isinstance(source, Substance):
             raise TypeError("Source must be a Substance.")
@@ -179,6 +178,7 @@ class Container:
 
         Returns: New source and destination container.
         """
+
         # Check argument types to ensure they are correct.
         if not isinstance(source_container, Container):
             raise TypeError("Invalid source type.")
@@ -499,9 +499,7 @@ class Container:
     @cache
     def get_substances(self):
         """
-
         Returns: A set of substances present in the container.
-
         """
         return set(self.contents.keys())
 
@@ -517,7 +515,7 @@ class Container:
                                            If not provided, returns the total mass.
     
         Returns:
-            float: The mass in the specified unit.
+            mass (float): The mass in the specified unit.
         """
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
@@ -542,7 +540,7 @@ class Container:
                                            If not provided, returns the total moles.
     
         Returns:
-            float: The moles in the specified unit.
+            moles (float): The moles in the specified unit.
         """
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
@@ -572,7 +570,7 @@ class Container:
                                            If not provided, returns the total volume.
     
         Returns:
-            float: The volume in the specified unit.
+            volume (float): The volume in the specified unit.
         """
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
@@ -590,7 +588,7 @@ class Container:
                                      config.moles_storage_unit, unit)
     
     @cache
-    def get_quantity(self, unit: str, substance : Substance = None):
+    def get_quantity(self, unit: str, substance: Substance = None):
         """
         Returns the quantity of the container's contents or a specific substance
         in the specified unit.
@@ -602,7 +600,7 @@ class Container:
                                            contents.
     
         Returns:
-            float: The quantity in the specified unit.
+            quantity (float): The quantity in the specified unit.
         """
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
@@ -624,10 +622,13 @@ class Container:
         Get the concentration of solute in the current solution.
 
         Args:
-            solute: Substance interested in.
-            units: Units to return concentration in, defaults to Molar.
+            solute (Substance): Substance interested in.
+            units (str, optional): Units to return concentration in, 
+                                   defaults to Molar.
 
-        Returns: Concentration
+        Returns: 
+            concentration (float): The concentration of the substance in this
+                                   container.
 
         """
         if not isinstance(solute, Substance):
