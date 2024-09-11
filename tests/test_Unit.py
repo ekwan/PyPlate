@@ -103,7 +103,6 @@ def test_Unit_convert_multiplier_to_prefix():
 
     for sign, base, power in product([1, -1], base_numbers, invalid_powers): 
         invalid_multiplier = sign * base * power
-        print(invalid_multiplier)
         with pytest.raises(ValueError, match="Invalid multiplier"):
             Unit.convert_multiplier_to_prefix(invalid_multiplier)
       

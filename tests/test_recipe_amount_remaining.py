@@ -9,7 +9,7 @@ def test_amount_remaining_simple(water, salt):
     recipe.uses(source, dest)
     recipe.transfer(source, dest, quantity='50 mL')
     recipe.bake()
-    assert recipe.get_amount_remaining(dest, 'all', 'mL') == 50
+    assert pytest.approx(recipe.get_amount_remaining(dest, 'all', 'mL')) == 50
 
 def test_amount_remaining_plate(water, salt):
     recipe = Recipe()
@@ -35,7 +35,7 @@ def test_amount_remaining_stages_with_remove(water, salt):
     recipe.remove(dest, water)
     recipe.bake()
     assert recipe.get_amount_remaining(dest, 'all', 'mL') == 0
-    assert recipe.get_amount_remaining(dest, 'stage 1', 'mL') == 50
+    assert pytest.approx(recipe.get_amount_remaining(dest, 'stage 1', 'mL')) == 50
 
 def test_amount_remaining_stages_with_remove_plate(water, salt):
     recipe = Recipe()

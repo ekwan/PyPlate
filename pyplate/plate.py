@@ -421,7 +421,7 @@ class PlateSlicer(Slicer):
         if ('/' in unit or unit[-1] == 'm' or unit[-1] == 'M') and substance == 'all':
             raise ValueError("Cannot display concentrations with respect to 'all' substances.")
 
-        def helper(elem):
+        def helper(elem : Container):
             if '/' in unit or unit[-1] == 'm' or unit[-1] == 'M':
                 """ Returns concentration of substance in elem. """
                 return elem.get_concentration(substance, unit)
@@ -430,15 +430,15 @@ class PlateSlicer(Slicer):
             if substance == 'all':
                 amount = 0
                 for subst, quantity in elem.contents.items():
-                    amount += Unit.convert_from(subst, quantity, config.moles_storage_unit, unit)
+                    amount += subst.convert_from(quantity, config.moles_storage_unit, unit)
                 return amount
             elif isinstance(substance, Iterable):
                 amount = 0
                 for subst in substance:
-                    amount += Unit.convert_from(subst, elem.contents.get(subst, 0), config.moles_storage_unit, unit)
+                    amount += subst.convert_from(elem.contents.get(subst, 0), config.moles_storage_unit, unit)
                 return amount
             else:
-                return Unit.convert_from(substance, elem.contents.get(substance, 0), config.moles_storage_unit, unit)
+                return substance.convert_from(elem.contents.get(substance, 0), config.moles_storage_unit, unit)
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         df = self.get_dataframe().apply(np.vectorize(helper, cache=True, otypes='d'))
@@ -487,10 +487,10 @@ class PlateSlicer(Slicer):
             """ Returns volume of elem. """
             if substance is None:
                 for subs, quantity in elem.contents.items():
-                    amount += Unit.convert_from(subs, quantity, config.moles_storage_unit, unit)
+                    amount += subs.convert_from(quantity, config.moles_storage_unit, unit)
             else:
                 for subs in substance:
-                    amount += Unit.convert_from(subs, elem.contents.get(subs, 0), config.moles_storage_unit, unit)
+                    amount += subs.convert_from(elem.contents.get(subs, 0), config.moles_storage_unit, unit)
             return amount
 
         return np.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)
@@ -528,7 +528,7 @@ class PlateSlicer(Slicer):
         def helper(elem):
             amount = 0
             for subs in substance:
-                amount += Unit.convert_from(subs, elem.contents.get(subs, 0), config.moles_storage_unit, unit)
+                amount += subs.convert_from(elem.contents.get(subs, 0), config.moles_storage_unit, unit)
             return amount
 
         return np.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)

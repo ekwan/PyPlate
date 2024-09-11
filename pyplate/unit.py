@@ -4,7 +4,6 @@ import math
 import re
 
 from pyplate.config import config
-from pyplate.substance import Substance
 
 
 class Unit:
@@ -314,104 +313,6 @@ class Unit:
         return round(value, config.internal_precision), \
                     numerator_unit, denom_unit
 
-    @staticmethod
-    def convert_from(substance: Substance, quantity: float, from_unit: str, to_unit: str) -> float:
-        """
-        Convert quantity of substance between units.
-
-        Arguments:
-            substance: Substance in question.
-            quantity: Quantity of substance.
-            from_unit: Unit to convert quantity from ('mL').
-            to_unit: Unit to convert quantity to ('mol').
-
-        Returns: Converted value.
-        """
-
-        if not isinstance(substance, Substance):
-            raise TypeError(f"Invalid type for substance, {type(substance)}")
-        if not isinstance(quantity, (int, float)):
-            raise TypeError("Quantity must be a float.")
-        if not isinstance(from_unit, str) or not isinstance(to_unit, str):
-            raise TypeError("Unit must be a str.")
-
-        for suffix in ['L', 'g', 'mol']:
-            if from_unit.endswith(suffix):
-                prefix = from_unit[:-len(suffix)]
-                quantity *= Unit.convert_prefix_to_multiplier(prefix)
-                from_unit = suffix
-                break
-        else:  # suffix not found
-            raise ValueError(f"Invalid unit {from_unit}")
-
-        for suffix in ['L', 'g', 'mol']:
-            if to_unit.endswith(suffix):
-                prefix = to_unit[:-len(suffix)]
-                to_unit = suffix
-                break
-        else:  # suffix not found
-            raise ValueError(f"Invalid unit {to_unit}")
-
-        result = None
-
-        if to_unit == 'L':
-            if from_unit == 'L':
-                result = quantity
-            elif from_unit == 'mol':
-                # mol * g/mol / (g/mL)
-                result_in_mL = quantity * substance.mol_weight / substance.density
-                result = result_in_mL / 1000.
-            elif from_unit == 'g':
-                # g / (g/mL)
-                result_in_mL = quantity / substance.density
-                result = result_in_mL / 1000
-        elif to_unit == 'mol':
-            if from_unit == 'L':
-                value_in_mL = quantity * 1000.  # L * mL/L
-                # mL * g/mL / (g/mol)
-                result = value_in_mL * substance.density / substance.mol_weight
-            elif from_unit == 'mol':
-                result = quantity
-            elif from_unit == 'g':
-                # g / (g/mol)
-                result = quantity / substance.mol_weight
-        elif to_unit == 'g':
-            if from_unit == 'L':
-                # L * (1000 mL/L) * g/mL
-                result = quantity * 1000. * substance.density
-            elif from_unit == 'mol':
-                # mol * g/mol
-                result = quantity * substance.mol_weight
-            elif from_unit == 'g':
-                result = quantity
-
-        assert result is not None, f"{substance} {quantity} {from_unit} {to_unit}"
-
-        return result / Unit.convert_prefix_to_multiplier(prefix)
-
-    @staticmethod
-    def convert(substance: Substance, quantity: str, unit: str) -> float:
-        """
-            Convert quantity of substance to unit.
-
-            Arguments:
-                substance: Substance in question.
-                quantity: Quantity of substance ('10 mL').
-                unit: Unit to convert quantity to ('mol').
-
-            Returns: Converted value.
-
-        """
-
-        if not isinstance(substance, Substance):
-            raise TypeError(f"Invalid type for substance, {type(substance)}")
-        if not isinstance(quantity, str):
-            raise TypeError("Quantity must be a str.")
-        if not isinstance(unit, str):
-            raise TypeError("Unit must be a str.")
-
-        value, quantity_unit = Unit.parse_quantity(quantity)
-        return Unit.convert_from(substance, value, quantity_unit, unit)
 
     @staticmethod
     def convert_to_storage(value: float, unit: str) -> float:
@@ -470,7 +371,7 @@ class Unit:
         return round(result, config.internal_precision)
 
     @staticmethod
-    def convert_from_storage_to_standard_format(substance: Substance, quantity: float) -> Tuple[float, str]:
+    def convert_from_storage_to_standard_format(substance, quantity: float) -> Tuple[float, str]:
         """
         Converts a quantity of a substance to a standard format.
         Example: (water, 1e6) -> (18.015, 'mL'), (NaCl, 1e6) -> (58.443, 'g')
@@ -482,6 +383,7 @@ class Unit:
         Returns: Tuple of quantity and unit.
 
         """
+        from pyplate.substance import Substance
         if isinstance(substance, Substance):
             if substance.is_solid():
                 unit = 'g'

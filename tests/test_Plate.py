@@ -58,7 +58,7 @@ def test_volume_and_volumes(salt, water, dmso, empty_plate):
     config.precisions['uL'] = 3
     # set precision to 3 decimal places for 'uL' for testing
 
-    salt_volume = round(Unit.convert(salt, '5 umol', 'uL'), 3)
+    salt_volume = round(salt.convert('5 umol', 'uL'), 3)
     assert empty_plate.get_volume() == 0
     assert numpy.array_equal(empty_plate.get_volumes(), zeros)
     assert numpy.array_equal(empty_plate.get_volumes(water), zeros)

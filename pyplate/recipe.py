@@ -150,9 +150,9 @@ class RecipeStep:
                     before = pandas.DataFrame([before.get_volume(unit)], columns=[before.name])
                     after = pandas.DataFrame([after.get_volume(unit)], columns=[after.name])
                 else:
-                    before = pandas.DataFrame([Unit.convert_from(substance, before.contents.get(substance, 0), 'mol', unit)],
+                    before = pandas.DataFrame([substance.convert_from(before.contents.get(substance, 0), 'mol', unit)],
                                               columns=[before.name])
-                    after = pandas.DataFrame([Unit.convert_from(substance, after.contents.get(substance, 0), 'mol', unit)],
+                    after = pandas.DataFrame([substance.convert_from(after.contents.get(substance, 0), 'mol', unit)],
                                              columns=[after.name])
         else:
             before = before.dataframe(substance=substance, unit=unit).data
@@ -428,7 +428,7 @@ class Recipe:
                 step.to.append(self.results[dest_name])
                 if isinstance(dest, Container):
                     amount_added = self.results[dest_name].contents[solvent] - step.to[0].contents.get(solvent, 0)
-                    amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'L')
+                    amount_added = solvent.convert_from(amount_added, config.moles_storage_unit, 'L')
                     amount_added, unit = Unit.get_human_readable_unit(amount_added, 'L')
                     precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
                     step.instructions = (f"Fill '{dest.name}' with '{solvent.name}' up to {quantity}"
@@ -479,7 +479,7 @@ class Recipe:
                         for col in range(plate.n_columns):
                             amount_added = self.results[dest_name].wells[row, col].contents[solvent] - \
                                            plate.wells[row, col].contents.get(solvent, 0)
-                            amount_added = Unit.convert_from(solvent, amount_added, config.moles_storage_unit, 'uL')
+                            amount_added = solvent.convert_from(amount_added, config.moles_storage_unit, 'uL')
                             amounts[(row, col)] = round(amount_added, config.internal_precision)
                     max_amount = max(amounts.values())
                     _, unit = Unit.get_human_readable_unit(max_amount / 1e6, 'L')
@@ -582,7 +582,7 @@ class Recipe:
                 f"Destination containers contain {-delta} {from_unit} less of substance {substance}" +
                 " after stage {timeframe}. Did you specify the correct destinations?")
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-        return round(Unit.convert(substance, f'{delta} {from_unit}', unit), precision)
+        return round(substance.convert(f'{delta} {from_unit}', unit), precision)
 
     def get_container_flows(self, container: Container | Plate, timeframe: str = 'all', unit: str | None = None) -> \
             dict[str, (int | str)]:
@@ -597,7 +597,7 @@ class Recipe:
 
         def helper(entry):
             substance, quantity = entry
-            return Unit.convert_from(substance, quantity, config.moles_storage_unit, unit)
+            return substance.convert_from(quantity, config.moles_storage_unit, unit)
 
         def plate_helper(container):
             entry = container.contents.items()
@@ -648,7 +648,7 @@ class Recipe:
 
         def conversion_helper(entry):
             substance, quantity = entry
-            return Unit.convert_from(substance, quantity, config.moles_storage_unit, unit)
+            return substance.convert_from(quantity, config.moles_storage_unit, unit)
 
         def plate_helper(well):
             entry = well.contents.items()
@@ -726,15 +726,15 @@ class Recipe:
         if not isinstance(cmap, str):
             raise TypeError("Colormap must be a str.")
 
-        def helper(elem):
+        def helper(elem : Container):
             """ Returns amount of substance in elem. """
             if substance == 'all':
                 amount = 0
                 for subst, quantity in elem.contents.items():
-                    amount += Unit.convert_from(subst, quantity, config.moles_storage_unit, unit)
+                    amount += subst.convert_from(quantity, config.moles_storage_unit, unit)
                 return amount
             else:
-                return Unit.convert_from(substance, elem.contents.get(substance, 0), config.moles_storage_unit, unit)
+                return substance.convert_from(elem.contents.get(substance, 0), config.moles_storage_unit, unit)
 
         if isinstance(timeframe, RecipeStep):
             start_index = self.steps.index(timeframe)
