@@ -82,7 +82,8 @@ class Substance:
                 self.molecule == other.molecule
 
     def __hash__(self):
-        return hash((self.name, self._type, self.mol_weight, self.density)) # pragma: no cover
+        return hash((self.name, self._type, self.mol_weight, 
+                     self.density, self.molecule))
 
     @staticmethod
     def solid(name: str, mol_weight: float, 

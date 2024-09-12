@@ -163,6 +163,16 @@ def test_Substance___init__():
         assert substance.density == 1
         assert substance.molecule == molecule
 
+def test_Substance___repr__(salt, water):
+    """
+    Unit Test for the function `Substance.__repr__()`
+
+    This unit test ensures that the function returns the expected string
+    for both a solid and liquid example substance.
+    """
+    assert salt.__repr__() == "NaCl (SOLID)"
+    assert water.__repr__() == "H2O (LIQUID)"
+
 def test_Substance___eq__(salt, water, sodium_sulfate, dmso):
     """
     Unit Test for `Substance.__eq__()`
@@ -264,20 +274,50 @@ def test_Substance___eq__(salt, water, sodium_sulfate, dmso):
         identical_substance.molecule = substance.molecule
         assert substance == identical_substance 
 
-def test_Substance___repr__(salt, water):
+def test_Substance___hash__(salt, water, sodium_sulfate, dmso):
     """
-    Unit Test for the function `Substance.__repr__()`
+    Unit Test for the function `Substance.__hash__()`
+    
+    This unit test ensures that identical substances result in the same hashing, 
+    and non-identical substances hash to different results. Specifically it 
+    tests the following scenarios:
+    - Comparison of two calls to __hash__() by the same Substance.
+    - Comparison of the hash results of two identical Substances.
+    """
 
-    This unit test ensures that the function returns the expected string
-    for both a solid and liquid example substance.
-    """
-    assert salt.__repr__() == "NaCl (SOLID)"
-    assert water.__repr__() == "H2O (LIQUID)"
+    substances = [salt, water, sodium_sulfate, dmso]
+
+    # ==========================================================================
+    # Equal Case: Two hashes of the same substance
+    # ==========================================================================
+
+    for substance in substances:
+        assert substance.__hash__() == substance.__hash__()
+
+    # ==========================================================================
+    # Equal Case: Hashes of identical substances
+    # ==========================================================================
+
+    for substance in substances:
+        # For a given substance, checks both a) an identical substance created 
+        # manually with the same arguments and b) a deepcopy of the substance
+
+        identical_substance = Substance(name=substance.name, 
+                                        mol_type=substance._type,
+                                        mol_weight=substance.mol_weight,
+                                        density=substance.density,
+                                        molecule=substance.molecule
+                                        )
+        identical_substance_2 = deepcopy(substance)
+
+        assert substance.__hash__() == identical_substance.__hash__()
+        assert substance.__hash__() == identical_substance_2.__hash__()
+
 
 @pytest.mark.filterwarnings("ignore:Density not provided")
 def test_Substance_solid():
     """
-    Unit Test for the function `Substance.solid()`.
+    Unit Test for the function `Substance.solid()`
 
     This unit test does not have any failure scenarios, as these are triggered
     by the call to the constructor. 
