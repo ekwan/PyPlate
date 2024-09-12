@@ -274,6 +274,7 @@ def test_Substance___repr__(salt, water):
     assert salt.__repr__() == "NaCl (SOLID)"
     assert water.__repr__() == "H2O (LIQUID)"
 
+@pytest.mark.filterwarnings("ignore:Density not provided")
 def test_Substance_solid():
     """
     Unit Test for the function `Substance.solid()`.
