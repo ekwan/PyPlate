@@ -78,10 +78,11 @@ class Substance:
         return self.name == other.name and \
                 self._type == other._type and \
                 self.mol_weight == other.mol_weight and \
-                self.density == other.density 
+                self.density == other.density and \
+                self.molecule == other.molecule
 
     def __hash__(self):
-        return hash((self.name, self._type, self.mol_weight, self.density))
+        return hash((self.name, self._type, self.mol_weight, self.density)) # pragma: no cover
 
     @staticmethod
     def solid(name: str, mol_weight: float, 
@@ -143,11 +144,12 @@ class Substance:
         Convert quantity of substance between units.
 
         Arguments:
-            quantity: Quantity of substance.
-            from_unit: Unit to convert quantity from (e.g. 'mL').
-            to_unit: Unit to convert quantity to (e.g. 'mol').
+            quantity (float): The uantity of substance.
+            from_unit (str): Unit to convert quantity from (e.g. 'mL').
+            to_unit (str): Unit to convert quantity to (e.g. 'mol').
 
-        Returns: Converted value.
+        Returns: 
+            result (float): The converted value.
         """
 
         if not isinstance(quantity, (int, float)):
@@ -201,14 +203,16 @@ class Substance:
 
     def convert(self, quantity: str, unit: str) -> float:
         """
-            Convert quantity of substance to unit.
+        Converts a quantity of this substance to different units.
 
-            Arguments:
-                quantity: Quantity of substance ('10 mL').
-                unit: Unit to convert quantity to ('mol').
+        Arguments:
+            quantity (str): The quantity of the substance to convert.
+                                E.g. '10 mL'
+            unit (str): Unit to which the quantity should be converted.
+                                E.g. 'mol'
 
-            Returns: Converted value.
-
+        Returns: 
+            result (float): The converted value.
         """
 
         if not isinstance(quantity, str):

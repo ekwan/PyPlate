@@ -25,7 +25,7 @@ from .unit_test_constants import epsilon, \
 from .common_mock_functions import mock_parse_quantity
 
 
-def test_Container__init__(water, salt):
+def test_Container___init__(water, salt):
     """
     Unit test for the `Container` constructor.
 
@@ -301,10 +301,11 @@ def test_Container__init__(water, salt):
 
 def test_Container___eq__(empty_container, empty_plate, water, dmso):
     """
-    Unit Test for the function Container.__eq__()
+    Unit Test for the function `Container.__eq__()`
 
     This test checks the following scenarios:
-    - Comparison between Container and non-container second argument
+    - Comparison between a Container and a non-container second argument
+    - Comparison between a Container and itself
     - Comparison between two identical empty containers
     - Comparison between two identical non-empty containers
     - Comparison between two containers which are identical except for each of
@@ -339,7 +340,7 @@ def test_Container___eq__(empty_container, empty_plate, water, dmso):
 
 
     # ==========================================================================
-    # True Case: First and second arguments are dentical empty containers
+    # True Case: First and second arguments are identical empty containers
     # ==========================================================================
     assert empty_container == test_container_empty
 

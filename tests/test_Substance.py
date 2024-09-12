@@ -1,13 +1,15 @@
 import pytest
-from pyplate import Substance
+from pyplate import Substance, config
 
+from copy import deepcopy
 from itertools import product
 
 from .unit_test_constants import test_names, test_whitespace_patterns, \
-                                    test_positive_numbers
+                                    test_positive_numbers, test_quantities, \
+                                    test_units, test_values
 
 
-def test_Substance__init__():
+def test_Substance___init__():
     """
     Unit Test for the function `Substance.__init__()`.
 
@@ -161,6 +163,117 @@ def test_Substance__init__():
         assert substance.density == 1
         assert substance.molecule == molecule
 
+def test_Substance___eq__(salt, water, sodium_sulfate, dmso):
+    """
+    Unit Test for `Substance.__eq__()`
+
+    This unit test checks the following scenarios:
+    - Comparison between a Substance and a non-substance second argument
+    - Comparison between a Substance and itself
+    - Comparison between two identical substances
+    - Comparison between two substances which are identical except for each of
+      the following attributes:
+      - Name
+      - Type
+      - Molecular weight
+      - Density
+      - Optional molecule parameter
+    """   
+
+    substances = [salt, water, sodium_sulfate, dmso]
+
+    # ==========================================================================
+    # False Case: Non-substance second argument
+    # ==========================================================================
+
+    for non_substance in [None, False, 1, '1', [], {}, (1,1)]:
+        assert not salt == non_substance
+
+    # ==========================================================================
+    # True Case: Substance equals itself
+    # ==========================================================================
+    
+    for substance in substances:
+        assert substance == substance
+
+    # ==========================================================================
+    # True Case: Substance equals an identical substance
+    # ==========================================================================
+
+    for substance in substances:
+        # For a given substance, checks both a) an identical substance created 
+        # manually with the same arguments and b) a deepcopy of the substance
+
+        identical_substance = Substance(name=substance.name, 
+                                        mol_type=substance._type,
+                                        mol_weight=substance.mol_weight,
+                                        density=substance.density,
+                                        molecule=substance.molecule
+                                        )
+        identical_substance_2 = deepcopy(substance)
+
+        assert substance == identical_substance 
+        assert substance == identical_substance_2
+
+    # ==========================================================================
+    # False Case: Substance does not equal another substance if any properties
+    #             differ between the two
+    # ==========================================================================
+
+    for substance in substances:
+        identical_substance = deepcopy(substance)
+        
+        # Each of these checks ensure the substances are equal before the
+        # property is changed, not equal after it is changed, and equal again
+        # when the property is reverted. This was added to ensure that the later
+        # checks were not being "tainted" by earlier checks without having to
+        # create new copies of substance for each test.
+
+        # Different name
+        assert substance == identical_substance 
+        identical_substance.name = "wrong name"
+        assert not substance == identical_substance 
+        identical_substance.name = substance.name
+        assert substance == identical_substance 
+
+        # Different type
+        assert substance == identical_substance 
+        identical_substance._type = substance._type % 2 + 1 # Flips 1 <--> 2
+        assert not substance == identical_substance 
+        identical_substance._type = substance._type
+        assert substance == identical_substance 
+
+        # Different molecular weight
+        assert substance == identical_substance 
+        identical_substance.mol_weight += 0.1
+        assert not substance == identical_substance 
+        identical_substance.mol_weight = substance.mol_weight
+        assert substance == identical_substance 
+
+        # Different density
+        assert substance == identical_substance 
+        identical_substance.density += 0.1
+        assert not substance == identical_substance 
+        identical_substance.density = substance.density
+        assert substance == identical_substance 
+
+        # Different molecule
+        assert substance == identical_substance 
+        identical_substance.molecule = "wrong molecule"
+        assert not substance == identical_substance 
+        identical_substance.molecule = substance.molecule
+        assert substance == identical_substance 
+
+def test_Substance___repr__(salt, water):
+    """
+    Unit Test for the function `Substance.__repr__()`
+
+    This unit test ensures that the function returns the expected string
+    for both a solid and liquid example substance.
+    """
+    assert salt.__repr__() == "NaCl (SOLID)"
+    assert water.__repr__() == "H2O (LIQUID)"
+
 def test_Substance_solid():
     """
     Unit Test for the function `Substance.solid()`.
@@ -233,7 +346,19 @@ def test_Substance_solid():
         assert solid.density == 2.17
         assert solid.molecule == molecule
 
+    # ==========================================================================
+    # Success Case: Density not provided
+    # ==========================================================================
 
+    # NOTE: This is a non-recommended case, but one that is still being allowed
+    # at the moment. 
+
+    solid = Substance.solid('salt', 58.44)
+    assert solid.name == 'salt'
+    assert solid._type == Substance.SOLID
+    assert solid.mol_weight == 58.44
+    assert solid.density == config.default_solid_density
+    
 
 def test_Substance_liquid():
     """
@@ -307,7 +432,6 @@ def test_Substance_liquid():
         assert liquid.density == 1
         assert liquid.molecule == molecule
 
-
 def test_Substance_is_solid(salt, water, sodium_sulfate, dmso):
     """
     Unit Test for the method `Substance.is_solid()`.
@@ -320,7 +444,6 @@ def test_Substance_is_solid(salt, water, sodium_sulfate, dmso):
     assert water.is_solid() is False
     assert sodium_sulfate.is_solid() is True
     assert dmso.is_solid() is False
-
 
 def test_Substance_is_liquid(salt, water, sodium_sulfate, dmso):
     """
@@ -335,4 +458,224 @@ def test_Substance_is_liquid(salt, water, sodium_sulfate, dmso):
     assert sodium_sulfate.is_liquid() is False
     assert dmso.is_liquid() is True
 
+def test_Substance_convert_from(salt, water, sodium_sulfate, dmso):
+    """
+    Unit Test for `Substance.convert_from()`
+    
+    This unit test checks the following failure scenarios:
+    - Invalid argument types result in a `TypeError`
+    - Invalid argument values result in a `ValueError`
+    
+    This unit test checks the following success scenarios:
+    - Large premutations of prefixed units for all base types
+      - NOTE: These examples are only checked to ensure no errors are thrown, 
+        as automatically computing the expected result for each permutation 
+        would require an implementation akin to the function being tested.
+    - Specific successful conversions for the permutations of each base unit.
+      - NOTE: These examples are checked to ensure the values themselves are
+        correct. They contain both prefixed and unprefixed base units, and cover
+        all nine combinations of the three base units: 'g', 'mol', and 'L'.
 
+    """
+    
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+
+    for invalid_qty_argument in [None, '', '1', (1,1), [], [25, 35], {}, {1:1}]:
+        with pytest.raises(TypeError, match='Quantity must be a float'):
+            salt.convert_from(invalid_qty_argument, 'mL', 'mL')
+
+    for invalid_unit_argument in [None, False, 1, (1,1), ['10 mL'], {}]:
+        with pytest.raises(TypeError, match='\'From unit\' must be a str'):
+            salt.convert_from(1, invalid_unit_argument, 'mL')
+        with pytest.raises(TypeError, match='\'To unit\' must be a str'):
+            salt.convert_from(1, 'mL', invalid_unit_argument)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument values
+    # ==========================================================================
+
+    # NOTE: Error messages are not checked here to avoid coupling this unit test
+    # to the implementations of other functions. 
+
+    # Test invalid 'from unit' str
+    with pytest.raises(ValueError):
+        salt.convert_from(1, 'mA', 'mL')
+
+    # Test invalid 'to unit' str
+    with pytest.raises(ValueError):
+        salt.convert_from(10, 'mL', '1')
+
+
+    # ==========================================================================
+    # Success Cases: Large permutations of prefixed units 
+    # ==========================================================================
+    
+    # Does not check result, only ensures that these calls do not throw errors
+    for value, from_unit, to_unit in product(test_values, test_units, test_units):
+        salt.convert_from(float(value), from_unit, to_unit)
+        water.convert_from(float(value), from_unit, to_unit)
+        dmso.convert_from(float(value), from_unit, to_unit)
+
+
+    # ==========================================================================
+    # Success Cases: Specific successful conversions 
+    # ==========================================================================
+
+    # Check that prefixes are applied correctly
+    assert water.convert_from(1, 'mL', 'L') == 0.001
+    assert water.convert_from(1, 'L', 'mL') == 1000
+    assert water.convert_from(1, 'ug', 'mg') == 0.001
+    assert water.convert_from(1, 'g', 'ug') == 1000000
+
+    tol = 1e-24
+
+    for substance in [salt, water, sodium_sulfate, dmso]:
+        # Check conversions from grams
+        assert substance.convert_from(1, 'g', 'g') == 1
+
+        assert substance.convert_from(1, 'g', 'mol') == 1 / substance.mol_weight
+        assert substance.convert_from(1, 'g', 'mmol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
+        assert substance.convert_from(1, 'kg', 'mol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
+
+        assert substance.convert_from(1, 'g', 'L') == pytest.approx(0.001 / substance.density, rel=tol)
+        assert substance.convert_from(1, 'g', 'mL') == pytest.approx(1 / substance.density, rel=tol)
+        assert substance.convert_from(1, 'kg', 'L') == pytest.approx(1 / substance.density, rel=tol)
+        
+        # Check conversions from moles
+        assert substance.convert_from(1, 'mol', 'mol') == 1
+
+        assert substance.convert_from(1, 'mol', 'g') == substance.mol_weight
+        assert substance.convert_from(1, 'mol', 'mg') == 1000 * substance.mol_weight
+        assert substance.convert_from(1, 'mmol', 'g') == 0.001 * substance.mol_weight
+        
+        assert substance.convert_from(1, 'mol', 'mL') == pytest.approx(substance.mol_weight / substance.density, rel=tol)
+        assert substance.convert_from(1, 'mol', 'L') == pytest.approx(0.001 * substance.mol_weight / substance.density, rel=tol)
+
+        # Check conversions from L
+        assert substance.convert_from(1, 'L', 'L') == 1
+        
+        assert substance.convert_from(1, 'L', 'g') == 1000 * substance.density
+        assert substance.convert_from(1, 'L', 'kg') == substance.density
+        assert substance.convert_from(1, 'mL', 'g') == substance.density
+
+        assert substance.convert_from(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert_from(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert_from(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+
+
+def test_Substance_convert(salt, water, sodium_sulfate, dmso):
+    """
+    Unit Test for `Substance.convert()`
+    
+    This unit test checks the following failure scenarios:
+    - Invalid argument types result in a `TypeError`
+    - Invalid argument values result in a `ValueError`
+      - NOTE: All instances of invalid values are handled in the calls to other
+        functions, so only one failure example for each parameter is included
+        here, and the error message is not checked.
+    
+    This unit test checks the following success scenarios:
+    - Large premutations of prefixed units for all base types
+      - NOTE: These examples are only checked to ensure no errors are thrown, 
+        as automatically computing the expected result for each permutation 
+        would require an implementation akin to the function being tested.
+
+    - Specific successful conversions for the permutations of each base unit.
+      - NOTE: These examples are checked to ensure the values themselves are
+        correct. They contain both prefixed and unprefixed base units, and cover
+        all nine combinations of the three base units: 'g', 'mol', and 'L'.
+
+    """
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+
+    for invalid_argument in [None, False, 1, (1,1), ['10 mL'], {}]:
+        with pytest.raises(TypeError, match='Quantity must be a str'):
+            salt.convert(invalid_argument, '')
+        with pytest.raises(TypeError, match='Unit must be a str'):
+            salt.convert('10 mL', invalid_argument)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument values
+    # ==========================================================================
+
+    # NOTE: Error messages are not checked here to avoid coupling this unit test
+    # to the implementations of other functions. 
+
+    # Test invalid quantity str
+    with pytest.raises(ValueError):
+        salt.convert('mL', 'mL')
+    with pytest.raises(ValueError):
+        salt.convert('inf', 'mL')
+    with pytest.raises(ValueError):
+        salt.convert('-### L', 'mL')
+    with pytest.raises(ValueError):
+        salt.convert('10 K', 'mL')
+
+    # Test invalid unit str
+    with pytest.raises(ValueError):
+        salt.convert('10 mL', '1')
+    with pytest.raises(ValueError):
+        salt.convert('10 mL', 'F')
+
+
+    # ==========================================================================
+    # Success Cases: Large permutations of prefixed units 
+    # ==========================================================================
+    
+    # Does not check result, only ensures that these calls do not throw errors
+    for test_quantity, test_unit in product(test_quantities, test_units):
+        salt.convert(test_quantity, test_unit)
+        water.convert(test_quantity, test_unit)
+        dmso.convert(test_quantity, test_unit)
+
+
+    # ==========================================================================
+    # Success Cases: Specific successful conversions 
+    # ==========================================================================
+
+    # Check that prefixes are applied correctly
+    assert water.convert('1 mL', 'L') == 0.001
+    assert water.convert('1 L', 'mL') == 1000
+    assert water.convert('1 ug', 'mg') == 0.001
+    assert water.convert('1 g', 'ug') == 1000000
+
+    tol = 1e-24
+
+    for substance in [salt, water, sodium_sulfate, dmso]:
+        # Check conversions from grams
+        assert substance.convert('1 g', 'g') == 1
+
+        assert substance.convert('1 g', 'mol') == 1 / substance.mol_weight
+        assert substance.convert('1 g', 'mmol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
+        assert substance.convert('1 kg', 'mol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
+
+        assert substance.convert('1 g', 'L') == pytest.approx(0.001 / substance.density, rel=tol)
+        assert substance.convert('1 g', 'mL') == pytest.approx(1 / substance.density, rel=tol)
+        assert substance.convert('1 kg', 'L') == pytest.approx(1 / substance.density, rel=tol)
+        
+        # Check conversions from moles
+        assert substance.convert('1 mol', 'mol') == 1
+
+        assert substance.convert('1 mol', 'g') == substance.mol_weight
+        assert substance.convert('1 mol', 'mg') == 1000 * substance.mol_weight
+        assert substance.convert('1 mmol', 'g') == 0.001 * substance.mol_weight
+        
+        assert substance.convert('1 mol', 'mL') == pytest.approx(substance.mol_weight / substance.density, rel=tol)
+        assert substance.convert('1 mol', 'L') == pytest.approx(0.001 * substance.mol_weight / substance.density, rel=tol)
+
+        # Check conversions from L
+        assert substance.convert('1 L', 'L') == 1
+        
+        assert substance.convert('1 L', 'g') == 1000 * substance.density
+        assert substance.convert('1 L', 'kg') == substance.density
+        assert substance.convert('1 mL', 'g') == substance.density
+
+        assert substance.convert('1 L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert('1 L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert('1 L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
