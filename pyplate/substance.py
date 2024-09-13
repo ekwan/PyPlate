@@ -139,21 +139,20 @@ class Substance:
         """
         return self._type == Substance.LIQUID
 
-    def convert_from(self, quantity: float, from_unit: str, 
-                                            to_unit: str) -> float:
+    def convert(self, value: float, from_unit: str, to_unit: str) -> float:
         """
-        Convert quantity of substance between units.
+        Converts an amount of this substance from one unit to another.
 
         Arguments:
-            quantity (float): The uantity of substance.
-            from_unit (str): Unit to convert quantity from (e.g. 'mL').
-            to_unit (str): Unit to convert quantity to (e.g. 'mol').
+            value (float): The amount of substance to convert.
+            from_unit (str): The unit to convert from (e.g. 'mL').
+            to_unit (str): The unit to convert to (e.g. 'mol').
 
         Returns: 
             result (float): The converted value.
         """
 
-        if not isinstance(quantity, (int, float)):
+        if not isinstance(value, (int, float)):
             raise TypeError("Quantity must be a float.")
         if not isinstance(from_unit, str):
             raise TypeError("'From unit' must be a str.")
@@ -167,42 +166,41 @@ class Substance:
 
         match from_base_unit, to_base_unit:
             case 'g', 'g':
-                result = quantity
+                result = value
             case 'mol', 'mol':
-                result = quantity
+                result = value
             case 'L', 'L':
-                result = quantity
+                result = value
 
             case 'g', 'mol':
                 # g / (g/mol)
-                result = quantity / self.mol_weight
+                result = value / self.mol_weight
             case 'g', 'L':
                 # g / (g/mL)
-                result_in_mL = quantity / self.density
+                result_in_mL = value / self.density
                 result = result_in_mL / 1000
 
             case 'mol', 'g':
                 # mol * g/mol
-                result = quantity * self.mol_weight
+                result = value * self.mol_weight
             case 'mol', 'L':
                 # mol * g/mol / (g/mL)
-                result_in_mL = quantity * self.mol_weight / self.density
+                result_in_mL = value * self.mol_weight / self.density
                 result = result_in_mL / 1000.
 
             case 'L', 'g':
                 # L * (1000 mL/L) * g/mL
-                result = quantity * 1000. * self.density
+                result = value * 1000. * self.density
             case 'L', 'mol':
-                value_in_mL = quantity * 1000.  # L * mL/L
+                value_in_mL = value * 1000.  # L * mL/L
                 # mL * g/mL / (g/mol)
                 result = value_in_mL * self.density / self.mol_weight
 
-        assert result is not None, f"{self} {quantity} {from_unit} {to_unit}"
+        assert result is not None, f"{self} {value} {from_unit} {to_unit}"
 
         return result * from_mult / to_mult
     
-
-    def convert(self, quantity: str, unit: str) -> float:
+    def convert_quantity(self, quantity: str, unit: str) -> float:
         """
         Converts a quantity of this substance to different units.
 
@@ -223,4 +221,4 @@ class Substance:
 
         value, quantity_unit = Unit.parse_quantity(quantity)
         
-        return self.convert_from(value, quantity_unit, unit)
+        return self.convert(value, quantity_unit, unit)

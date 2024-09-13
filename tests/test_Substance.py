@@ -497,9 +497,9 @@ def test_Substance_is_liquid(salt, water, sodium_sulfate, dmso):
     assert sodium_sulfate.is_liquid() is False
     assert dmso.is_liquid() is True
 
-def test_Substance_convert_from(salt, water, sodium_sulfate, dmso):
+def test_Substance_convert(salt, water, sodium_sulfate, dmso):
     """
-    Unit Test for `Substance.convert_from()`
+    Unit Test for `Substance.convert()`
     
     This unit test checks the following failure scenarios:
     - Invalid argument types result in a `TypeError`
@@ -521,15 +521,15 @@ def test_Substance_convert_from(salt, water, sodium_sulfate, dmso):
     # Failure Case: Invalid argument types
     # ==========================================================================
 
-    for invalid_qty_argument in [None, '', '1', (1,1), [], [25, 35], {}, {1:1}]:
+    for invalid_val_argument in [None, '', '1', (1,1), [], [25, 35], {}, {1:1}]:
         with pytest.raises(TypeError, match='Quantity must be a float'):
-            salt.convert_from(invalid_qty_argument, 'mL', 'mL')
+            salt.convert(invalid_val_argument, 'mL', 'mL')
 
     for invalid_unit_argument in [None, False, 1, (1,1), ['10 mL'], {}]:
         with pytest.raises(TypeError, match='\'From unit\' must be a str'):
-            salt.convert_from(1, invalid_unit_argument, 'mL')
+            salt.convert(1, invalid_unit_argument, 'mL')
         with pytest.raises(TypeError, match='\'To unit\' must be a str'):
-            salt.convert_from(1, 'mL', invalid_unit_argument)
+            salt.convert(1, 'mL', invalid_unit_argument)
 
 
     # ==========================================================================
@@ -541,11 +541,11 @@ def test_Substance_convert_from(salt, water, sodium_sulfate, dmso):
 
     # Test invalid 'from unit' str
     with pytest.raises(ValueError):
-        salt.convert_from(1, 'mA', 'mL')
+        salt.convert(1, 'mA', 'mL')
 
     # Test invalid 'to unit' str
     with pytest.raises(ValueError):
-        salt.convert_from(10, 'mL', '1')
+        salt.convert(10, 'mL', '1')
 
 
     # ==========================================================================
@@ -554,9 +554,9 @@ def test_Substance_convert_from(salt, water, sodium_sulfate, dmso):
     
     # Does not check result, only ensures that these calls do not throw errors
     for value, from_unit, to_unit in product(test_values, test_units, test_units):
-        salt.convert_from(float(value), from_unit, to_unit)
-        water.convert_from(float(value), from_unit, to_unit)
-        dmso.convert_from(float(value), from_unit, to_unit)
+        salt.convert(float(value), from_unit, to_unit)
+        water.convert(float(value), from_unit, to_unit)
+        dmso.convert(float(value), from_unit, to_unit)
 
 
     # ==========================================================================
@@ -564,49 +564,49 @@ def test_Substance_convert_from(salt, water, sodium_sulfate, dmso):
     # ==========================================================================
 
     # Check that prefixes are applied correctly
-    assert water.convert_from(1, 'mL', 'L') == 0.001
-    assert water.convert_from(1, 'L', 'mL') == 1000
-    assert water.convert_from(1, 'ug', 'mg') == 0.001
-    assert water.convert_from(1, 'g', 'ug') == 1000000
+    assert water.convert(1, 'mL', 'L') == 0.001
+    assert water.convert(1, 'L', 'mL') == 1000
+    assert water.convert(1, 'ug', 'mg') == 0.001
+    assert water.convert(1, 'g', 'ug') == 1000000
 
     tol = 1e-24
 
     for substance in [salt, water, sodium_sulfate, dmso]:
         # Check conversions from grams
-        assert substance.convert_from(1, 'g', 'g') == 1
+        assert substance.convert(1, 'g', 'g') == 1
 
-        assert substance.convert_from(1, 'g', 'mol') == 1 / substance.mol_weight
-        assert substance.convert_from(1, 'g', 'mmol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
-        assert substance.convert_from(1, 'kg', 'mol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
+        assert substance.convert(1, 'g', 'mol') == 1 / substance.mol_weight
+        assert substance.convert(1, 'g', 'mmol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
+        assert substance.convert(1, 'kg', 'mol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
 
-        assert substance.convert_from(1, 'g', 'L') == pytest.approx(0.001 / substance.density, rel=tol)
-        assert substance.convert_from(1, 'g', 'mL') == pytest.approx(1 / substance.density, rel=tol)
-        assert substance.convert_from(1, 'kg', 'L') == pytest.approx(1 / substance.density, rel=tol)
+        assert substance.convert(1, 'g', 'L') == pytest.approx(0.001 / substance.density, rel=tol)
+        assert substance.convert(1, 'g', 'mL') == pytest.approx(1 / substance.density, rel=tol)
+        assert substance.convert(1, 'kg', 'L') == pytest.approx(1 / substance.density, rel=tol)
         
         # Check conversions from moles
-        assert substance.convert_from(1, 'mol', 'mol') == 1
+        assert substance.convert(1, 'mol', 'mol') == 1
 
-        assert substance.convert_from(1, 'mol', 'g') == substance.mol_weight
-        assert substance.convert_from(1, 'mol', 'mg') == 1000 * substance.mol_weight
-        assert substance.convert_from(1, 'mmol', 'g') == 0.001 * substance.mol_weight
+        assert substance.convert(1, 'mol', 'g') == substance.mol_weight
+        assert substance.convert(1, 'mol', 'mg') == 1000 * substance.mol_weight
+        assert substance.convert(1, 'mmol', 'g') == 0.001 * substance.mol_weight
         
-        assert substance.convert_from(1, 'mol', 'mL') == pytest.approx(substance.mol_weight / substance.density, rel=tol)
-        assert substance.convert_from(1, 'mol', 'L') == pytest.approx(0.001 * substance.mol_weight / substance.density, rel=tol)
+        assert substance.convert(1, 'mol', 'mL') == pytest.approx(substance.mol_weight / substance.density, rel=tol)
+        assert substance.convert(1, 'mol', 'L') == pytest.approx(0.001 * substance.mol_weight / substance.density, rel=tol)
 
         # Check conversions from L
-        assert substance.convert_from(1, 'L', 'L') == 1
+        assert substance.convert(1, 'L', 'L') == 1
         
-        assert substance.convert_from(1, 'L', 'g') == 1000 * substance.density
-        assert substance.convert_from(1, 'L', 'kg') == substance.density
-        assert substance.convert_from(1, 'mL', 'g') == substance.density
+        assert substance.convert(1, 'L', 'g') == 1000 * substance.density
+        assert substance.convert(1, 'L', 'kg') == substance.density
+        assert substance.convert(1, 'mL', 'g') == substance.density
 
-        assert substance.convert_from(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
-        assert substance.convert_from(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
-        assert substance.convert_from(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
 
-def test_Substance_convert(salt, water, sodium_sulfate, dmso):
+def test_Substance_convert_quantity(salt, water, sodium_sulfate, dmso):
     """
-    Unit Test for `Substance.convert()`
+    Unit Test for `Substance.convert_quantity()`
     
     This unit test checks the following failure scenarios:
     - Invalid argument types result in a `TypeError`
@@ -633,9 +633,9 @@ def test_Substance_convert(salt, water, sodium_sulfate, dmso):
 
     for invalid_argument in [None, False, 1, (1,1), ['10 mL'], {}]:
         with pytest.raises(TypeError, match='Quantity must be a str'):
-            salt.convert(invalid_argument, '')
+            salt.convert_quantity(invalid_argument, '')
         with pytest.raises(TypeError, match='Unit must be a str'):
-            salt.convert('10 mL', invalid_argument)
+            salt.convert_quantity('10 mL', invalid_argument)
 
 
     # ==========================================================================
@@ -647,19 +647,19 @@ def test_Substance_convert(salt, water, sodium_sulfate, dmso):
 
     # Test invalid quantity str
     with pytest.raises(ValueError):
-        salt.convert('mL', 'mL')
+        salt.convert_quantity('mL', 'mL')
     with pytest.raises(ValueError):
-        salt.convert('inf', 'mL')
+        salt.convert_quantity('inf', 'mL')
     with pytest.raises(ValueError):
-        salt.convert('-### L', 'mL')
+        salt.convert_quantity('-### L', 'mL')
     with pytest.raises(ValueError):
-        salt.convert('10 K', 'mL')
+        salt.convert_quantity('10 K', 'mL')
 
     # Test invalid unit str
     with pytest.raises(ValueError):
-        salt.convert('10 mL', '1')
+        salt.convert_quantity('10 mL', '1')
     with pytest.raises(ValueError):
-        salt.convert('10 mL', 'F')
+        salt.convert_quantity('10 mL', 'F')
 
 
     # ==========================================================================
@@ -668,9 +668,9 @@ def test_Substance_convert(salt, water, sodium_sulfate, dmso):
     
     # Does not check result, only ensures that these calls do not throw errors
     for test_quantity, test_unit in product(test_quantities, test_units):
-        salt.convert(test_quantity, test_unit)
-        water.convert(test_quantity, test_unit)
-        dmso.convert(test_quantity, test_unit)
+        salt.convert_quantity(test_quantity, test_unit)
+        water.convert_quantity(test_quantity, test_unit)
+        dmso.convert_quantity(test_quantity, test_unit)
 
 
     # ==========================================================================
@@ -678,42 +678,42 @@ def test_Substance_convert(salt, water, sodium_sulfate, dmso):
     # ==========================================================================
 
     # Check that prefixes are applied correctly
-    assert water.convert('1 mL', 'L') == 0.001
-    assert water.convert('1 L', 'mL') == 1000
-    assert water.convert('1 ug', 'mg') == 0.001
-    assert water.convert('1 g', 'ug') == 1000000
+    assert water.convert_quantity('1 mL', 'L') == 0.001
+    assert water.convert_quantity('1 L', 'mL') == 1000
+    assert water.convert_quantity('1 ug', 'mg') == 0.001
+    assert water.convert_quantity('1 g', 'ug') == 1000000
 
     tol = 1e-24
 
     for substance in [salt, water, sodium_sulfate, dmso]:
         # Check conversions from grams
-        assert substance.convert('1 g', 'g') == 1
+        assert substance.convert_quantity('1 g', 'g') == 1
 
-        assert substance.convert('1 g', 'mol') == 1 / substance.mol_weight
-        assert substance.convert('1 g', 'mmol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
-        assert substance.convert('1 kg', 'mol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
+        assert substance.convert_quantity('1 g', 'mol') == 1 / substance.mol_weight
+        assert substance.convert_quantity('1 g', 'mmol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
+        assert substance.convert_quantity('1 kg', 'mol') == pytest.approx(1000 / substance.mol_weight, rel=tol)
 
-        assert substance.convert('1 g', 'L') == pytest.approx(0.001 / substance.density, rel=tol)
-        assert substance.convert('1 g', 'mL') == pytest.approx(1 / substance.density, rel=tol)
-        assert substance.convert('1 kg', 'L') == pytest.approx(1 / substance.density, rel=tol)
+        assert substance.convert_quantity('1 g', 'L') == pytest.approx(0.001 / substance.density, rel=tol)
+        assert substance.convert_quantity('1 g', 'mL') == pytest.approx(1 / substance.density, rel=tol)
+        assert substance.convert_quantity('1 kg', 'L') == pytest.approx(1 / substance.density, rel=tol)
         
         # Check conversions from moles
-        assert substance.convert('1 mol', 'mol') == 1
+        assert substance.convert_quantity('1 mol', 'mol') == 1
 
-        assert substance.convert('1 mol', 'g') == substance.mol_weight
-        assert substance.convert('1 mol', 'mg') == 1000 * substance.mol_weight
-        assert substance.convert('1 mmol', 'g') == 0.001 * substance.mol_weight
+        assert substance.convert_quantity('1 mol', 'g') == substance.mol_weight
+        assert substance.convert_quantity('1 mol', 'mg') == 1000 * substance.mol_weight
+        assert substance.convert_quantity('1 mmol', 'g') == 0.001 * substance.mol_weight
         
-        assert substance.convert('1 mol', 'mL') == pytest.approx(substance.mol_weight / substance.density, rel=tol)
-        assert substance.convert('1 mol', 'L') == pytest.approx(0.001 * substance.mol_weight / substance.density, rel=tol)
+        assert substance.convert_quantity('1 mol', 'mL') == pytest.approx(substance.mol_weight / substance.density, rel=tol)
+        assert substance.convert_quantity('1 mol', 'L') == pytest.approx(0.001 * substance.mol_weight / substance.density, rel=tol)
 
         # Check conversions from L
-        assert substance.convert('1 L', 'L') == 1
+        assert substance.convert_quantity('1 L', 'L') == 1
         
-        assert substance.convert('1 L', 'g') == 1000 * substance.density
-        assert substance.convert('1 L', 'kg') == substance.density
-        assert substance.convert('1 mL', 'g') == substance.density
+        assert substance.convert_quantity('1 L', 'g') == 1000 * substance.density
+        assert substance.convert_quantity('1 L', 'kg') == substance.density
+        assert substance.convert_quantity('1 mL', 'g') == substance.density
 
-        assert substance.convert('1 L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
-        assert substance.convert('1 L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
-        assert substance.convert('1 L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert_quantity('1 L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert_quantity('1 L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
+        assert substance.convert_quantity('1 L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)

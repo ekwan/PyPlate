@@ -430,15 +430,15 @@ class PlateSlicer(Slicer):
             if substance == 'all':
                 amount = 0
                 for subst, quantity in elem.contents.items():
-                    amount += subst.convert_from(quantity, config.moles_storage_unit, unit)
+                    amount += subst.convert(quantity, config.moles_storage_unit, unit)
                 return amount
             elif isinstance(substance, Iterable):
                 amount = 0
                 for subst in substance:
-                    amount += subst.convert_from(elem.contents.get(subst, 0), config.moles_storage_unit, unit)
+                    amount += subst.convert(elem.contents.get(subst, 0), config.moles_storage_unit, unit)
                 return amount
             else:
-                return substance.convert_from(elem.contents.get(substance, 0), config.moles_storage_unit, unit)
+                return substance.convert(elem.contents.get(substance, 0), config.moles_storage_unit, unit)
 
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
         df = self.get_dataframe().apply(np.vectorize(helper, cache=True, otypes='d'))
@@ -486,11 +486,11 @@ class PlateSlicer(Slicer):
             amount = 0
             """ Returns volume of elem. """
             if substance is None:
-                for subs, quantity in elem.contents.items():
-                    amount += subs.convert_from(quantity, config.moles_storage_unit, unit)
+                for subs, value in elem.contents.items():
+                    amount += subs.convert(value, config.moles_storage_unit, unit)
             else:
                 for subs in substance:
-                    amount += subs.convert_from(elem.contents.get(subs, 0), config.moles_storage_unit, unit)
+                    amount += subs.convert(elem.contents.get(subs, 0), config.moles_storage_unit, unit)
             return amount
 
         return np.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)
@@ -528,7 +528,7 @@ class PlateSlicer(Slicer):
         def helper(elem):
             amount = 0
             for subs in substance:
-                amount += subs.convert_from(elem.contents.get(subs, 0), config.moles_storage_unit, unit)
+                amount += subs.convert(elem.contents.get(subs, 0), config.moles_storage_unit, unit)
             return amount
 
         return np.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)

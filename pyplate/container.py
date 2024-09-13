@@ -134,10 +134,10 @@ class Container:
 
         # Parse the quantity and get the volume/amount to be added. Round to the 
         # internal precision to avoid float-precision bugs
-        volume_to_add = source.convert(quantity, config.volume_storage_unit)
+        volume_to_add = source.convert_quantity(quantity, config.volume_storage_unit)
         volume_to_add = round(volume_to_add, config.internal_precision)
 
-        amount_to_add = source.convert(quantity, config.moles_storage_unit)
+        amount_to_add = source.convert_quantity(quantity, config.moles_storage_unit)
         amount_to_add = round(amount_to_add, config.internal_precision)
 
         # Ensure the quantity to add is finite.
@@ -251,7 +251,7 @@ class Container:
             # Compute the total mass of the container's current contents in grams.
             total_mass = 0
             for substance, amount in source_container.contents.items():
-                total_mass += substance.convert_from(amount, 
+                total_mass += substance.convert(amount, 
                                                 config.moles_storage_unit, "g")
 
             # Ensure the 'mass to transfer' does not exceed the total mass of
@@ -378,7 +378,7 @@ class Container:
         else:
             # Compute the total mass by summing the masses of the individual components of the
             # original source container.
-            mass = sum(substance.convert(f"{amount} {config.moles_storage_unit}", "mg") \
+            mass = sum(substance.convert_quantity(f"{amount} {config.moles_storage_unit}", "mg") \
                                     for substance, amount in source_container.contents.items())
             
             # Compute the transfer mass as the product of the total mass of the 
@@ -393,7 +393,7 @@ class Container:
         # destination container. Round to the internal precision.
         to.volume = 0
         for substance, amount in to.contents.items():
-            to.volume += substance.convert(f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
+            to.volume += substance.convert_quantity(f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
         to.volume = round(to.volume, config.internal_precision)
 
         # If the total volume exceeds the maxmimum volume of the container,
@@ -405,7 +405,7 @@ class Container:
         # container. Round to the internal precision.
         source_container.volume = 0
         for substance, amount in source_container.contents.items():
-            source_container.volume += substance.convert(f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
+            source_container.volume += substance.convert_quantity(f"{amount} {config.moles_storage_unit}", config.volume_storage_unit)
         source_container.volume = round(source_container.volume, config.internal_precision)
 
         # Return the post-transfer source and destination containers.
@@ -463,7 +463,7 @@ class Container:
         for substance, value in self.contents.items():
             columns = []
             for unit in ['L', 'g', 'mol']:
-                converted_value = substance.convert_from(value, config.moles_storage_unit, unit)
+                converted_value = substance.convert(value, config.moles_storage_unit, unit)
                 totals[unit] += converted_value
                 converted_value, unit = Unit.get_human_readable_unit(converted_value, unit)
                 precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
@@ -584,7 +584,7 @@ class Container:
         if not substance:
             return Unit.convert_from_storage(self.volume, unit)
         
-        return substance.convert_from(self.contents.get(substance,0),
+        return substance.convert(self.contents.get(substance,0),
                                      config.moles_storage_unit, unit)
     
     @cache
@@ -609,11 +609,11 @@ class Container:
         
         if not substance:
             return sum(
-                sub.convert_from(value, config.moles_storage_unit, unit)
+                sub.convert(value, config.moles_storage_unit, unit)
                     for sub, value in self.contents.items()
                 )
         else:
-            return substance.convert_from(self.contents.get(substance,0),
+            return substance.convert(self.contents.get(substance,0),
                                      config.moles_storage_unit, unit)
 
     @cache
@@ -638,7 +638,7 @@ class Container:
 
         mult, *units = Unit.parse_concentration('1 ' + units)
 
-        numerator = solute.convert_from(self.contents.get(solute, 0), 
+        numerator = solute.convert(self.contents.get(solute, 0), 
                                       config.moles_storage_unit, units[0])
 
         if numerator == 0:
@@ -649,7 +649,7 @@ class Container:
         else:
             denominator = 0
             for substance, amount in self.contents.items():
-                denominator += substance.convert_from(amount, 
+                denominator += substance.convert(amount, 
                                                  config.moles_storage_unit,
                                                    units[1])
 
@@ -829,7 +829,7 @@ class Container:
         # this function.
         def convert_one(substance: Substance, u: str) -> float:
             """ Converts 1 mol to unit `u` for a given substance. """
-            return substance.convert_from(1, 'mol', u)
+            return substance.convert(1, 'mol', u)
 
         # If the solvent is not a pure substance, define a helper function for 
         # mole-to-unit conversions for containers. This is the equivalent of the
@@ -1635,7 +1635,7 @@ class Container:
                                   if what not in (substance._type, substance)}
         new_container.volume = 0
         for substance, value in new_container.contents.items():
-            new_container.volume += substance.convert_from(value, config.moles_storage_unit, config.volume_storage_unit)
+            new_container.volume += substance.convert(value, config.moles_storage_unit, config.volume_storage_unit)
 
         new_container.instructions = self.instructions
         classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid'}
@@ -1705,7 +1705,7 @@ class Container:
                 #   E.g. If concentration = 0.25 mol/L and the solute & solvent 
                 #        are both water, then the solvent concentration is
                 #        1 / 18.0153 mol/mL.
-                solvent_conc = solvent.convert_from(1, denom_unit, num_unit)
+                solvent_conc = solvent.convert(1, denom_unit, num_unit)
         else:
             solvent_conc = solvent.get_concentration(solute, target_units)
 
@@ -1789,7 +1789,7 @@ class Container:
         # Second, the amount of solvent in "denom units" is multiplied by the 
         # "volume of solvent per denom unit".
         if is_pure_solvent:
-            vol_per_qty = solvent.convert_from(1, denom_unit, 'L')
+            vol_per_qty = solvent.convert(1, denom_unit, 'L')
             solvent_volume = solvent_amt * vol_per_qty
         else:
             vol_per_qty = solvent.get_volume('L') / solvent.get_quantity(denom_unit)
@@ -1854,7 +1854,7 @@ class Container:
             raise ValueError("Invalid quantity unit.")
 
         # Compute the total amount of substances currently in the container.
-        current_quantity = sum(subst.convert(f"{value} {config.moles_storage_unit}", 
+        current_quantity = sum(subst.convert_quantity(f"{value} {config.moles_storage_unit}", 
                                             quantity_unit) 
                                 for subst, value in self.contents.items())
 
