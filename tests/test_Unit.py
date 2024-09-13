@@ -8,7 +8,7 @@ from itertools import product
 from .unit_test_constants import test_names, test_whitespace_patterns, \
                                 test_prefixes, test_prefix_multipliers, \
                                 test_non_parseable_quantities, \
-                                test_units, test_values, \
+                                test_units, test_units_bases_and_mults, \
                                 test_invalid_units, test_invalid_values,  \
                                 test_base_units, test_values \
 
@@ -163,6 +163,14 @@ def test_Unit_parse_quantity():
     the parsed unit match the expected values.
     """
     
+    # ==========================================================================
+    # Failure Case: Invalid argument type
+    # ==========================================================================
+
+    for invalid_qty in [None, False, 1, ('1',), ['1'], {}]:
+        with pytest.raises(TypeError, match="Quantity must be a str"):
+            Unit.parse_quantity(invalid_qty)
+
     # ==========================================================================
     # Failure Case: Argument cannot be parsed as a value-unit pair
     # ==========================================================================
@@ -537,11 +545,13 @@ def test_Unit_parse_concentration():
 
     # Iterate through all value/unit permutations
     for sign, val, num_unit, denom_unit in permutations:
+          
+        # Construct the test example from the various pieces
         test_ex = f"{sign}{val} {num_unit}/{denom_unit}"
 
-        # TODO: Remove prefix coupling if feasible
-        expected_num_unit, num_mult = Unit.parse_prefixed_unit(num_unit)
-        expected_denom_unit, denom_mult = Unit.parse_prefixed_unit(denom_unit)
+        # Get the base unit and multiplier for the numerator and denominator
+        expected_num_unit, num_mult = test_units_bases_and_mults[num_unit]
+        expected_denom_unit, denom_mult = test_units_bases_and_mults[denom_unit]
 
         # Compute the expected result for the value based on the supplied
         # prefixes 
@@ -551,7 +561,7 @@ def test_Unit_parse_concentration():
         # example
         value, num_unit, denom_unit = Unit.parse_concentration(test_ex)
 
-        # TODO: Come back and fix precision issue here.
+        # TODO: [BUG] Come back and fix precision issue here.
         assert expected_value == pytest.approx(value, rel=1e-10, abs=1e-10)
         assert expected_num_unit == num_unit 
         assert expected_denom_unit == denom_unit
@@ -612,11 +622,12 @@ def test_Unit_parse_concentration():
         if num_val == 'inf ' and denom_val == 'inf ':
             continue
 
+        # Construct the test example from the various pieces
         test_ex = f"{sign}{num_val} {num_unit}/{denom_val} {denom_unit}"
 
-        # TODO: Remove prefix coupling if feasible
-        expected_num_unit, num_mult = Unit.parse_prefixed_unit(num_unit)
-        expected_denom_unit, denom_mult = Unit.parse_prefixed_unit(denom_unit)
+        # Get the base unit and multiplier for the numerator and denominator
+        expected_num_unit, num_mult = test_units_bases_and_mults[num_unit]
+        expected_denom_unit, denom_mult = test_units_bases_and_mults[denom_unit]
 
         # Compute the expected result for the value based on the supplied
         # values and prefixes 
@@ -640,6 +651,7 @@ def test_Unit_parse_concentration():
         ('10 M', 10.0, 'mol', 'L'),
         ('10 mM', 0.01, 'mol', 'L'),
         ('50 m', 0.05, 'mol', 'g'),
+        ('50 km', 50, 'mol', 'g'),
         ('0 M', 0, 'mol', 'L'),
         ('0 m', 0, 'mol', 'g'),
         
@@ -670,3 +682,4 @@ def test_Unit_parse_concentration():
         assert ex[1] == value
         assert ex[2] == num_unit
         assert ex[3] == denom_unit
+

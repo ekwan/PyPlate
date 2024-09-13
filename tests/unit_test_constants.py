@@ -52,9 +52,11 @@ test_invalid_base_units = ['K', 'C', 'F', 'T', 'H', 'asdf', 'mmmol']
 
 # Create all permutations of the above prefixes and base units
 test_units = []
-for prefix in test_prefixes:
+test_units_bases_and_mults = {}
+for prefix, mult in zip(test_prefixes, test_prefix_multipliers):
     for base_unit in test_base_units:
         test_units.append(prefix + base_unit)
+        test_units_bases_and_mults[test_units[-1]] = (base_unit, mult)
 
 # Create all permutations of the above prefixes and invalid base units
 test_invalid_units = []

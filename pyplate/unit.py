@@ -188,7 +188,7 @@ class Unit:
         
         # Ensure that the quantity is a string
         if not isinstance(quantity, str):
-            raise TypeError("Quantity must be a string.")
+            raise TypeError("Quantity must be a str.")
 
         # Match the primary regular expression against the quantity string
         match = Unit._PRIMARY_QUANTITY_PATTERN_COMPILED.match(quantity)
@@ -333,7 +333,6 @@ class Unit:
 
         return round(value, config.internal_precision), \
                     numerator_unit, denom_unit
-
 
     @staticmethod
     def convert_to_storage(value: float, unit: str) -> float:
