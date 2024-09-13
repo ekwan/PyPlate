@@ -308,10 +308,10 @@ class Unit:
         denominator = denominator.strip()
         try:
             denom_unit, denom_value = Unit.parse_prefixed_unit(denominator)
-        except ValueError as e1:
+        except ValueError:
             try:
                 denom_value, denom_unit = Unit.parse_quantity(denominator)
-            except ValueError as e2:
+            except ValueError:
                 raise ValueError(parse_error_msg + " Invalid denominator.")
 
         # Molarity is currently supported in Unit.parse_quantity(), but it 
