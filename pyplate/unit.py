@@ -149,6 +149,9 @@ class Unit:
             multiplier (float): The multiplier for the prefix of the passed 
                                 argument.
         """
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+
         # Check to see if the extracted unit is a valid unit.
         for base_unit in Unit.BASE_UNITS_PLUS_CONCENTRATION:
             if unit.endswith(base_unit):

@@ -137,8 +137,62 @@ def test_Unit_convert_multiplier_to_prefix():
                 f"Expected: {prefix}  Returned: {result}"    
 
 def test_Unit_parse_prefixed_unit():
-    # TODO
-    pass
+    """
+    Unit Test for `Unit.parse_prefixed_unit()`
+
+    This unit test checks for the following failure scenarios:
+    - Invalid argument type (non-string) results in a `TypeError`
+    - Invalid argument value results in a `ValueError`
+      - Case: Argument does not end with a base unit or 'M'
+      - Case: Argument does not have a valid prefix
+
+    This unit test checks for the following success scenarios:
+    - Valid unprefixed base unit
+    - Valid prefixed unit
+
+    These success scenarios are checked to ensure correctness of both the 
+    returned multiplier and the base unit.
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid argument type
+    # ==========================================================================
+
+    for non_str in [None, False, 1, ('1',), ['1'], {}]:
+        with pytest.raises(TypeError, match="Unit must be a str\\."):
+            Unit.parse_prefixed_unit(non_str)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - invalid base unit
+    # ==========================================================================
+    
+    for unit in test_invalid_units:
+        with pytest.raises(ValueError, match="Invalid unit"):
+            Unit.parse_prefixed_unit(unit)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - invalid prefix
+    # ==========================================================================
+    
+    for unit in ['jmol', 'ig', 'yL', 'Tmol', 'mmmmol', 'gg', 'L mL']:
+        with pytest.raises(ValueError, match="Invalid prefix"):
+            Unit.parse_prefixed_unit(unit)
+
+    
+    # ==========================================================================
+    # Success Cases
+    # ==========================================================================
+
+    for unit in test_units:
+        expected_base_unit, expected_mult = test_units_bases_and_mults[unit]
+        result_base_unit, result_mult = Unit.parse_prefixed_unit(unit)
+
+        assert expected_base_unit == result_base_unit
+        assert expected_mult == result_mult
+
+
 
 def test_Unit_parse_quantity():
     """

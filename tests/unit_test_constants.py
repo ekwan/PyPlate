@@ -40,15 +40,22 @@ test_values = ['1', '20', '300', '4000', '56', '789',
 test_positive_numbers = [float(test_value) for test_value in test_values]
 
 test_prefixes = ['', 'm', 'da', 'u', 'k', 'n']
+"""
+This list contains the selected prefixes that are used for testing.
+"""
 
 test_prefix_multipliers = [1, 1e-3, 10, 1e-6, 1000, 1e-9]
 """
-These values correspond to the positionally matching entries of test_prefix.
+This contains values corresponding to the positionally matching entries of 
+test_prefixes.
 """
 
 test_base_units = ['L', 'mol', 'g']
+"""
+This list contains the base units that are used for testing.
+"""
 
-test_invalid_base_units = ['K', 'C', 'F', 'T', 'H', 'asdf', 'mmmol']
+test_invalid_base_units = ['K', 'C', 'F', 'T', 'H', 'asdf', 'mool']
 
 # Create all permutations of the above prefixes and base units
 test_units = []
