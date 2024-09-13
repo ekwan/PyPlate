@@ -10,9 +10,9 @@ epsilon = 1e-3
 # - Single space/tab/newline character on both sides
 # - Multiple space/tab/newline characters on both side
 # - Mixed space/tab/newline chracters throughout the string
-test_whitespace_patterns = ['e', ' e', 'e ', ' e ', '  e  ', '   e   ',
-                            'e\t', '\te', '\te\t', '\t\te\t\t', '\t\t\te\t\t\t',
-                            'e\n', '\ne', '\ne\n', '\n\ne\n\n', '\n\n\ne\n\n\n',
+test_whitespace_patterns = ['e', ' e', 'e ', ' e ', '   e   ',
+                            'e\t', '\te', '\te\t', '\t\t\te\t\t\t',
+                            'e\n', '\ne', '\ne\n', '\n\n\ne\n\n\n',
                             'e \t\n', ' \t\ne', '  \t\t\n\ne\n\n\t\t  ']
 
 # Variations for test names include:

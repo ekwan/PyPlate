@@ -313,7 +313,6 @@ def test_Substance___hash__(salt, water, sodium_sulfate, dmso):
         assert substance.__hash__() == identical_substance.__hash__()
         assert substance.__hash__() == identical_substance_2.__hash__()
 
-
 @pytest.mark.filterwarnings("ignore:Density not provided")
 def test_Substance_solid():
     """
@@ -400,7 +399,6 @@ def test_Substance_solid():
     assert solid.mol_weight == 58.44
     assert solid.density == config.default_solid_density
     
-
 def test_Substance_liquid():
     """
     Unit Test for the function `Substance.liquid()`.
@@ -605,7 +603,6 @@ def test_Substance_convert_from(salt, water, sodium_sulfate, dmso):
         assert substance.convert_from(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
         assert substance.convert_from(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
         assert substance.convert_from(1, 'L', 'mol') == pytest.approx(1000 * substance.density / substance.mol_weight, rel=tol)
-
 
 def test_Substance_convert(salt, water, sodium_sulfate, dmso):
     """

@@ -168,7 +168,6 @@ class Unit:
         # be invalid. Raise a ValueError stating as much.
         raise ValueError(f"Invalid unit '{unit}'.")
             
-
     @staticmethod
     def parse_quantity(quantity: str) -> Tuple[float, str]:
         """
@@ -225,8 +224,6 @@ class Unit:
         # value-unit pair.
         return value * multiplier, base_unit
 
-       
-
     @staticmethod
     def parse_concentration(concentration : str) -> Tuple[float, str, str]:
         """
@@ -243,7 +240,15 @@ class Unit:
             numerator (str): The base unit of the numerator.
             denominator (str): The base unit of the denominator.
         """
-        
+        if not isinstance(concentration, str):
+            raise TypeError("Concentration must be str.")        
+
+        # Define the parsing error string
+        parse_error_msg = f"Could not parse '{concentration}'."
+
+        # Strip whitespace for pre-processing steps
+        concentration = concentration.strip()
+
         # If supported concentration units are provided (e.g. 'M' or 'm'), parse
         # them into the equivalent 'numerator unit/denomintor unit' format so 
         # that the rest of the function handles them properly. If the unit 
@@ -254,8 +259,9 @@ class Unit:
             elif concentration[-1] == 'M':
                 concentration = concentration[:-1] + 'mol/L'
             else:
-                raise ValueError("Unsupported concentration unit. Only m and M "
-                                 "are allowed as concentration units.")
+                raise ValueError(parse_error_msg + " Unsupported concentration "
+                                 "unit. Only m and M are allowed as "
+                                 "concentration units.")
         
         # Define the value which will eventually be returned (this will be 
         # conditionally modified by various parsing steps below).
@@ -273,9 +279,6 @@ class Unit:
         if concentration[-4:] in replacements:
             concentration = concentration[:-4] + replacements[concentration[-4:]]
             value *= 0.01
-            
-        # Define the parsing error string
-        parse_error_msg = f"Could not parse '{concentration}'."
 
         # Parse the concentration string into a numerator and denominator. 
         split_by_slash_results = concentration.split('/')
@@ -290,6 +293,11 @@ class Unit:
         except ValueError as e:
             raise ValueError(parse_error_msg + " Invalid numerator.")
         
+        # Molarity is currently supported in Unit.parse_quantity(), but it 
+        # cannot be allowed in the numerator of the concentration.
+        if numerator_unit == 'M':
+            raise ValueError(parse_error_msg + " Invalid numerator.")
+        
         # Try to parse the denominator into a valid quantity OR a valid unit
         #
         # NOTE: It is quite difficult to distinguish between a user incorrectly
@@ -300,15 +308,28 @@ class Unit:
         denominator = denominator.strip()
         try:
             denom_unit, denom_value = Unit.parse_prefixed_unit(denominator)
-        except ValueError:
+        except ValueError as e1:
             try:
                 denom_value, denom_unit = Unit.parse_quantity(denominator)
-            except ValueError:
+            except ValueError as e2:
                 raise ValueError(parse_error_msg + " Invalid denominator.")
+
+        # Molarity is currently supported in Unit.parse_quantity(), but it 
+        # cannot be allowed in the denominator of the concentration.
+        if denom_unit == 'M':
+            raise ValueError(parse_error_msg + " Invalid denominator.")
 
         # Multiply the existing value by the parsed numerator and denominator 
         # scale factors
-        value *= numerator_value / denom_value
+        try:
+            value *= numerator_value / denom_value
+        except ZeroDivisionError:
+            raise ValueError(parse_error_msg + " Denominator quantity cannot "
+                             "be zero.")
+
+        if math.isnan(value):
+            raise ValueError(parse_error_msg + " Resulting concentration was "
+                             "NaN.")
 
         return round(value, config.internal_precision), \
                     numerator_unit, denom_unit

@@ -1,5 +1,7 @@
 import pytest
-from pyplate import Unit
+from pyplate import Unit, config
+
+import math
 
 from itertools import product
 
@@ -8,7 +10,7 @@ from .unit_test_constants import test_names, test_whitespace_patterns, \
                                 test_non_parseable_quantities, \
                                 test_units, test_values, \
                                 test_invalid_units, test_invalid_values,  \
-                                test_base_units \
+                                test_base_units, test_values \
 
 def test_Unit_convert_prefix_to_multiplier():
     """
@@ -55,7 +57,6 @@ def test_Unit_convert_prefix_to_multiplier():
             f"Expected Multiplier: {multiplier}  " \
             f"Actual Multiplier: {result}"
         
-
 def test_Unit_convert_multiplier_to_prefix():
     """
     Unit Test for `Unit.convert_multiplier_to_prefix()`
@@ -134,7 +135,6 @@ def test_Unit_convert_multiplier_to_prefix():
         assert Unit.PREFIXES[result] == Unit.PREFIXES[prefix], \
                 "Expected and returned prefixes are not equivalent. " \
                 f"Expected: {prefix}  Returned: {result}"    
-
 
 def test_Unit_parse_quantity():
     """
@@ -247,7 +247,6 @@ def test_Unit_parse_quantity():
                 f"Unit was not parsed correctly. " \
                 f"Expected: {base_unit}  Result: {result_unit}"
     
-
 def test_Unit_parse_concentration():
     """
     Unit Test for `Unit.parse_concentration()`
@@ -256,17 +255,418 @@ def test_Unit_parse_concentration():
     - Invalid argument type (non-string) results in a `TypeError`.
     - Invalid argument value results in a `ValueError` with the appropriate
       message.
-      - Case: Argument cannot be parsed into a value-numerator-denominator
-        triplet.
-        - Sub-case: Argument contains unsupported concentration units.
-          - E.g. ppb
-        - Sub-case: Argument contains more than two groups separated by forward
-                    slashes.
-          - E.g. 12 mol/L/mol
-      - Case: Value from parsed argument is not a valid float
-        - E.g. 'red M' or '#..# mol/mL'
-      - Case: Value from parsed argument is not a valid float
-        - E.g. 'red M' or '#..# mol/mL'        
+      - Case: Argument contains no slashes and the provided unit is not a
+              supported concentration unit ('m' or 'M').
+      - Case: Argument contains more than two groups separated by forward
+              slashes.
+      - Case: Numerator from parsed argument is invalid.
+        - Sub-Case: Numerator cannot be parsed into a value & unit.
+        - Sub-Case: Numerator value is not a valid float.
+          - E.g. 'red M' or '#..# mol/mL'
+        - Sub-Case: Numerator value is NaN.
+        - Sub-Case: Numerator unit is not a valid unit. 
+          - E.g. '10 red/L', '12 ggg/mL', '5 M/L'       
+      - Case: Denominator from parsed argument is invalid.
+        - Sub-Case: Denominator cannot be parsed into either a unit or a 
+                      value & unit.
+        - Sub-Case: Denominator value is not a valid float.
+          - E.g. '10 g/2.4.4 mols' or '12 mmol/-- L' 
+        - Sub-Case: Denominator value is NaN.
+        - Sub-Case: Denominator unit is not a valid unit.
+          - E.g. '10 mol/K', '2 g / 12 Lalas', '7 mL/M', '2 mol/m'
+        - Sub-Case: Denominator value is zero.
+      - Case: The resulting concentration value is NaN.
+        - E.g. 'inf mol/inf L'
+
+    
+    This unit test checks for the following success scenarios:
+    - Concentrations formatted as 'value concentration unit'
+    - Concentrations formatted as 'value weight/volume %'
+    - Concentrations formatted as 'value unit/unit'
+    - Concentrations formatted as 'value unit/value unit'
+    - Specific, manually created examples (these will cover all of the above
+      categories, in case the permutation-based tests of the categories are
+      flawed)
+
+    Each of the above success scenarios is tested to ensure that the value, 
+    numerator unit, and denominator unit of the parsed result are all 
+    as expected.
     """
+    
+    # ==========================================================================
+    # Failure Case: Invalid argument type (non-string)
+    # ==========================================================================
+
+    for invalid_unit in [None, False, 1, (1,1), [], {}, 9.81]:
+        with pytest.raises(TypeError, match="Concentration must be str\\."):
+            Unit.parse_concentration(invalid_unit)
 
 
+    # ==========================================================================
+    # Failure Case: Invalid argument value - invalid concentration unit
+    # ==========================================================================
+
+    for invalid_unit in ['A', 'S', 'mF', 'laskdf', '']:
+        with pytest.raises(ValueError, match="Unsupported concentration unit\\."):
+            Unit.parse_concentration('2 ' + invalid_unit)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - too many slashes
+    # ==========================================================================
+
+    test_examples = ['2 mol/L/mol', 
+                     '1 kg / 1 mmol / 12 mol',
+                     '100 g //////////////// 100 g',
+                     'This / is / not / a / valid / concentration!']
+    for ex in test_examples:
+        with pytest.raises(ValueError, match=f"Could not parse '{ex}'\\. "
+                           "No more than one '/' should be used\\."):
+            Unit.parse_concentration(ex)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - invalid numerator
+    # ==========================================================================
+
+    # Sub-Case: Numerator cannot be parsed
+    test_examples = ['#.....#/L', '0.5.a.5.5/mol', '---/1 g', '/12 mL']
+
+    # Sub-Case: Numerator value is not a valid float
+    test_examples += ['red mL/mol', '0.0.0 L/mL', 'inff mmol/mmol', '--1 mg/L',
+                      'blue M', 'ThisIsBad mol/L']
+    
+    # Sub-Case: Numerator value is NaN.
+    test_examples += ['NaN mol/1 L', 'NaN M']
+
+    # Sub-Case: Numerator unit is not a valid unit
+    test_examples += ['10 map/L', '0.5 mS/mol', '2.0001 F/mmol', '9.81 ggg/mol',
+                      '888 M/L', '12 m/mol', '178 M/1 g']
+
+    for ex in test_examples:
+        with pytest.raises(ValueError, match=f"Could not parse '{ex}'\\. "
+                            "Invalid numerator\\."):
+            Unit.parse_concentration(ex)
+
+    
+    # ==========================================================================
+    # Failure Case: Invalid argument value - invalid denominator
+    # ==========================================================================
+
+    # Sub-Case: Denominator cannot be parsed into a unit or a value & unit pair
+    #           (cases of invalid denominator units without numbers are included
+    #            here).
+    test_examples = ['10 mol/', '2 g/None', '12 mL/AA', '5 g/----', '65 g/GGG',
+                     '31 mol/M', '15 g/m', '4968 mmol/M']
+
+    # Sub-Case: Denominator value is not a valid float.
+    test_examples += ['8 mL/. mol', '1 L/0.0.0 mL', '4 mmol/inff mmol', 
+                      '2mg/--1 L', '7 kL/## mol', '2 g / _____ g','1 L/yeesh g']
+    
+    # Sub-Case: Denominator value is NaN.
+    test_examples += ['1 mol/NaN L']
+
+    # Sub-Case: Denominator unit is not a valid unit (only cases with numbers in
+    #           the denominator are included here).
+    test_examples += ['1 g/2 ya', '1 mol/3 1231.2', '1 L/4 ______', '1 ug/10 A',
+                      '12 mmol/2 M', '1 mmol/1 m']
+
+    for ex in test_examples:
+        with pytest.raises(ValueError, match=f"Could not parse '{ex}'\\. "
+                            "Invalid denominator\\."):
+            Unit.parse_concentration(ex)
+
+    # Sub-Case: Denominator value is zero
+    for num_unit, denom_unit in product(test_base_units, repeat=2):
+        ex = '1 ' + num_unit + '/0 ' + denom_unit
+        with pytest.raises(ValueError, match=f"Could not parse '{ex}'\\. "
+                            "Denominator quantity cannot be zero\\."):
+            Unit.parse_concentration(ex)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument values - concentration is NaN
+    # ==========================================================================
+
+    for ex in ['inf mol/inf L', '-inf g/ inf mmol', '-inf L/-inf L']:
+        with pytest.raises(ValueError, match=f"Could not parse '{ex}'\\. "
+                            "Resulting concentration was NaN\\."):
+            Unit.parse_concentration(ex)
+
+    # ==========================================================================
+    # Success Case: 'value concentration_unit'
+    # ==========================================================================
+
+    space_list = [' ' * i for i in range(5)]
+    permutations = product(['','-'], test_values + ['0', 'inf '], space_list, 
+                           ['M', 'm'])
+    
+    for sign, val, spaces, unit in permutations:
+        # Construct examples with varying amounts of whitespace between the
+        # value and the unit
+        test_ex = f"{sign}{val}{spaces}{unit}"
+        
+        expected_value = float(sign + val) * (0.001 if unit == 'm' else 1)
+
+        # Test varying amounts of external whitespace
+        for pattern in test_whitespace_patterns:
+            test_ex = pattern.replace('e', test_ex)
+
+            value, num_unit, denom_unit = Unit.parse_concentration(test_ex)
+            
+            # If the input units are molality ('m'), then the output denom unit
+            # must be scaled down by 1000 to match the returned units. Otherwise, 
+            # the input value and returned value should match. 
+            # 
+            # To clarify the above, molality or 'm' means 'moles per kilogram'. 
+            # Thus, a '2 m' concentration means the following:
+            #
+            #    2 m -> 2 mols per kg -> 0.002 mols per g
+            #
+            # Because Unit.parse_concentration() returns everything in base
+            # units, the value needs to be scaled down from mol/kg to mol/g.
+            assert expected_value == value
+            assert 'mol' == num_unit
+            assert ('L' if unit == 'M' else 'g') == denom_unit 
+
+
+    # ==========================================================================
+    # Success Case: 'value weight/volume%'
+    # ==========================================================================
+
+    # Create list of the input 'unit' as well as the expected numerator and 
+    # denominator units for the output.
+    unit_tuples = [('%w/w', 'g', 'g'), 
+                   ('%v/v', 'L', 'L'), 
+                   ('%w/v', 'g', 'L')]
+    
+    spaces_list = [" " * i for i in range(3)]
+
+    # Create an iterable for all the permutations that will be tested. These
+    # permutations include:
+    #  - Sign: +/-
+    #  - Value: Various float values
+    #  - Number of Spaces: The space between the value and the weight/volume
+    #                      percentage.
+    #  - Unit Tuples: The three supported weight/volume percentages
+    permutations = product(['','-'], test_values, spaces_list, unit_tuples)
+    
+    # Iterate through all permutations
+    for sign, val, spaces, unit_tuple in permutations:
+        # Unpack the unit tuple
+        input_unit, expected_num_unit, expected_denom_unit = unit_tuple
+
+        # Construct examples with varying amounts of whitespace between the
+        # value and the unit
+        test_ex = f"{sign}{val}{spaces}{input_unit}"
+
+        expected_value = float(sign + val) * 0.01
+        # TODO: Remove this quick-correction for %w/v
+        if input_unit == '%w/v':
+            expected_value *= 1000
+        expected_value = pytest.approx(expected_value, rel=1e-24)
+
+        # Test varying amounts of external whitespace
+        for pattern in test_whitespace_patterns:
+            test_ex = pattern.replace('e', test_ex)
+            value, num_unit, denom_unit = Unit.parse_concentration(test_ex)
+
+            assert expected_value == value
+            assert expected_num_unit == num_unit
+            assert expected_denom_unit == denom_unit
+
+    
+    # ==========================================================================
+    # Success Case: 'value unit/unit'
+    # ==========================================================================
+
+    spaces_list = [" " * i for i in range(3)]
+
+    # For performance reasons, the permutations will be broken up into two
+    # categories:
+    #   1) Whitespace parsing testing
+    #   2) Value parsing testing
+
+    # For the first set, a limited number of values will be tested, just enough
+    # to cover the various ways the numbers would be written, and the units will
+    # always be the same.
+
+    # For the second category, only one whitespace pattern will be used, and a
+    # larger set of values & units will be tested.
+
+    # Create an iterable for all the permutations that will be tested. These
+    # permutations include:
+    #  - Sign: +/-
+    #  - Value: Values with different lexical formats
+    #  - Spaces 1: # of spaces between the value and the numerator unit
+    #  - Spaces 2: # of spaces between the numerator unit and the '/', and 
+    #              between the '/' and the denominator unit.
+    #  - Pattern: The external whitespace surrounding the rest of the test 
+    #             example.
+    permutations = product(['','-'], ['1', '.24', '10.', '9.9', 'inf '], 
+                           spaces_list, spaces_list, test_whitespace_patterns)
+
+    # Iterate through all formatting permutations
+    for sign, val, spaces_1, spaces_2, pattern in permutations:
+        # Construct examples with varying amounts of whitespace between the
+        # various parts of the concentration string
+        #  E.g. '-' + '1' + '  ' + 'mol' + '' + '/' + '' + 'L' -> '-1  mol/L'
+        test_ex = f"{sign}{val}{spaces_1}{'mol'}{spaces_2}"\
+                  f"/{spaces_2}{'L'}"
+        pattern.replace('e', test_ex)
+
+        # Parse the expected result as a float (prefixes are set to 1 here)
+        expected_value = float(sign + val)
+
+        # Get the actual result of a call to parse_concentration() on the test
+        # example
+        value, num_unit, denom_unit = Unit.parse_concentration(test_ex)
+
+        assert expected_value == value
+        assert 'mol' == num_unit 
+        assert 'L' == denom_unit
+
+    # Create an iterable for all the permutations that will be tested. These
+    # permutations include:
+    #  - Sign: +/-
+    #  - Value: Various test values that cover possible types of floats
+    #  - Num Unit: Various possible units for the numerator
+    #  - Denom Unit: Various possivle units for the denominator
+    permutations = product(['','-'], test_values + ['0', 'inf '], 
+                           test_units, test_units)
+
+    # Iterate through all value/unit permutations
+    for sign, val, num_unit, denom_unit in permutations:
+        test_ex = f"{sign}{val} {num_unit}/{denom_unit}"
+
+        # TODO: Remove prefix coupling if feasible
+        expected_num_unit, num_mult = Unit.parse_prefixed_unit(num_unit)
+        expected_denom_unit, denom_mult = Unit.parse_prefixed_unit(denom_unit)
+
+        # Compute the expected result for the value based on the supplied
+        # prefixes 
+        expected_value = float(sign + val) * num_mult / denom_mult
+
+        # Get the actual result of a call to parse_concentration() on the test
+        # example
+        value, num_unit, denom_unit = Unit.parse_concentration(test_ex)
+
+        # TODO: Come back and fix precision issue here.
+        assert expected_value == pytest.approx(value, rel=1e-10, abs=1e-10)
+        assert expected_num_unit == num_unit 
+        assert expected_denom_unit == denom_unit
+
+
+    # ==========================================================================
+    # Success Case: 'value unit/value unit'
+    # ==========================================================================
+
+    spaces_list = [" " * i for i in range(3)]
+
+    # Create an iterable for all the permutations that will be tested. These
+    # permutations include:
+    #  - Sign: +/-
+    #  - Value: Values with different lexical formats
+    #  - Spaces 1: # of spaces between the values and their units
+    #  - Spaces 2: # of spaces between the numerator unit and the '/', and 
+    #              between the '/' and the denominator unit.
+    permutations = product(['','-'], ['1', '.25', '10.', '0.05', 'inf '], 
+                           spaces_list, spaces_list, test_whitespace_patterns)
+
+    # Iterate through all formatting permutations
+    for sign, val, spaces_1, spaces_2, pattern in permutations:
+        # Construct examples with varying amounts of whitespace between the
+        # various parts of the concentration string
+        #  E.g. '-' + '1' + ' ' + 'mol' + '' + '/' + '' + '0.24' + ' ' + 'L' 
+        #       '-1 mol/0.24 L'
+        test_ex = f"{sign}1{spaces_1}mol{spaces_2}"\
+                  f"/{spaces_2}{val}{spaces_1}L"
+        pattern.replace('e', test_ex)
+
+        # Parse the expected result as a float (prefixes are set to 1 here)
+        expected_value = 1 / float(sign + val)
+
+        # Get the actual result of a call to parse_concentration() on the test
+        # example
+        value, num_unit, denom_unit = Unit.parse_concentration(test_ex)
+
+        assert expected_value == value
+        assert 'mol' == num_unit 
+        assert 'L' == denom_unit
+
+    # Create an iterable for all the permutations that will be tested. These
+    # permutations include:
+    #  - Sign: +/-
+    #  - Num Value: Various test values for the numerator
+    #  - Num Unit: Various possible units for the numerator
+    #  - 
+    #  - Denom Unit: Various possivle units for the denominator
+    # 
+    # NOTE: Sub-sampling was added due to increase unit test speed.
+    permutations = product(['','-'], test_values[::4] + ['0', 'inf '], test_units[::4], 
+                           test_values[::2] + ['inf '], test_units)
+
+    # Iterate through all value/unit permutations
+    for sign, num_val, num_unit, denom_val, denom_unit in permutations:
+        # Skip this case; it is a failure case
+        if num_val == 'inf ' and denom_val == 'inf ':
+            continue
+
+        test_ex = f"{sign}{num_val} {num_unit}/{denom_val} {denom_unit}"
+
+        # TODO: Remove prefix coupling if feasible
+        expected_num_unit, num_mult = Unit.parse_prefixed_unit(num_unit)
+        expected_denom_unit, denom_mult = Unit.parse_prefixed_unit(denom_unit)
+
+        # Compute the expected result for the value based on the supplied
+        # values and prefixes 
+        expected_value = float(sign + num_val) * num_mult 
+        expected_value /= float(denom_val) * denom_mult
+
+        # Get the actual result of a call to parse_concentration() on the test
+        # example
+        value, num_unit, denom_unit = Unit.parse_concentration(test_ex)
+
+        # TODO: Come back and fix precision issue here.
+        assert expected_value == pytest.approx(value, rel=1e-10, abs=1e-10)
+        assert expected_num_unit == num_unit 
+        assert expected_denom_unit == denom_unit
+
+    # ==========================================================================
+    # Success Case: Hand-picked examples
+    # ==========================================================================
+
+    examples = [
+        ('10 M', 10.0, 'mol', 'L'),
+        ('10 mM', 0.01, 'mol', 'L'),
+        ('50 m', 0.05, 'mol', 'g'),
+        ('0 M', 0, 'mol', 'L'),
+        ('0 m', 0, 'mol', 'g'),
+        
+        ('1 %w/v', 10.0, 'g', 'L'),
+        ('25 %v/v', 0.25, 'L', 'L'),
+        ('2 %w/w', 0.02, 'g', 'g'),
+        ('0 %w/v', 0, 'g', 'L'),
+        
+        ('0.1 mol/L', 0.1, 'mol', 'L'),
+        ('7 g/g', 7, 'g', 'g'),
+        ('0.1 kmol/mL', 1e5, 'mol', 'L'),
+        ('0.4 mL/mol', 0.0004, 'L', 'mol'),
+        ('36 mg/ug', 36000, 'g', 'g'),
+        ('0.1 kg/kmol', 0.1, 'g', 'mol'),
+        ('0 g/L', 0, 'g', 'L'),
+        ('inf mol/mol', float('inf'), 'mol', 'mol'),
+
+        ('1 mol/1 L', 1, 'mol', 'L'),
+        ('0.5 mol/2 L', 0.25, 'mol', 'L'),
+        ('3 dag/0.4 mol', 75, 'g', 'mol'),
+        ('0 g/1 L', 0, 'g', 'L'),
+        ('0 g/inf L', 0, 'g', 'L'),
+        ('inf mol/1 mol', float('inf'), 'mol', 'mol')
+    ]
+
+    for ex in examples:
+        value, num_unit, denom_unit = Unit.parse_concentration(ex[0])
+        assert ex[1] == value
+        assert ex[2] == num_unit
+        assert ex[3] == denom_unit
