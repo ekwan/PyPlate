@@ -135,12 +135,13 @@ class Unit:
     def parse_prefixed_unit(unit: str) -> Tuple[str, float]:
         """
         Converts a string containing a prefixed unit into its base unit and 
-        the prefix's multiplier. A `ValueError` will be raised for unsupported 
-        units.
+        the prefix's multiplier. A `ValueError` is raised for unsupported units
+        and prefixes.
 
         Args:
             unit (str): The prefixed unit to be parsed (base units without a
                         prefix will also be parsed correctly).
+
         Returns:
             base_unit (str): The base unit that corresponds to the prefixed unit.
                                E.g. For the unit 'mmol', the base unit is 'mol'.
@@ -159,8 +160,8 @@ class Unit:
                 # (e.g. m -> 1e-3)
                 try:
                     multiplier = Unit.convert_prefix_to_multiplier(prefix)
-                except ValueError as e:
-                    raise ValueError(f"Invalid unit '{unit}'") from e
+                except ValueError:
+                    raise ValueError(f"Invalid prefix '{prefix}'.")
                 
                 return base_unit, multiplier
             
@@ -337,15 +338,15 @@ class Unit:
     @staticmethod
     def convert_to_storage(value: float, unit: str) -> float:
         """
-
-        Converts value to storage format.
+        Converts a molar or volume value to storage format.
         Example: (1, 'L') -> 1e6 uL
 
         Arguments:
-            value: Value to be converted.
-            unit: Unit value is in. ('uL', 'mL', 'mol', etc.)
+            value (float): Value to be converted.
+            unit (str): Unit value is in. ('uL', 'mL', 'mol', etc.)
 
-        Returns: Converted value.
+        Returns: 
+            result (float): Converted value.
         """
 
         if not isinstance(value, (int, float)):
@@ -353,24 +354,33 @@ class Unit:
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
 
-        if unit[-1] == 'L':
-            prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
-            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.volume_storage_unit[:-1])
-        else:  # moles
-            prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
-            result = value * prefix_value / Unit.convert_prefix_to_multiplier(config.moles_storage_unit[:-3])
+        base_unit = mult = None
+        try:
+            base_unit, mult = Unit.parse_prefixed_unit(unit)
+        except ValueError:
+            raise ValueError(f"Invalid unit '{unit}'.")
+
+        if base_unit == 'L':
+            storage_prefix = config.volume_storage_unit[:-1]
+        elif base_unit == 'mol':
+            storage_prefix = config.moles_storage_unit[:-3]
+        else:
+            raise ValueError(f"Invalid unit '{unit}'. Unit must refer to moles or volume.")
+
+        storage_mult = Unit.convert_prefix_to_multiplier(storage_prefix)
+        result = value * mult / storage_mult
+
         return round(result, config.internal_precision)
 
     @staticmethod
     def convert_from_storage(value: float, unit: str) -> float:
         """
-
         Converts value from storage format.
         Example: (1e3 uL, 'mL') -> 1
 
         Arguments:
-            value: Value to be converted.
-            unit: Unit value should be in. ('uL', 'mL', 'mol', etc.)
+            value (float): Value to be converted.
+            unit (str): Unit value should be in. ('uL', 'mL', 'mol', etc.)
 
         Returns: Converted value.
 
@@ -383,11 +393,11 @@ class Unit:
         if unit[-1] == 'L':
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
             result = value * Unit.convert_prefix_to_multiplier(config.volume_storage_unit[0]) / prefix_value
-        elif unit[-3:] == 'mol':  # moles
+        elif unit[-3:] == 'mol': 
             prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
             result = value * Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0]) / prefix_value
         else:
-            raise ValueError("Invalid unit.")
+            raise ValueError(f"Invalid unit '{unit}'. Unit must be for moles or volume.")
         return round(result, config.internal_precision)
 
     @staticmethod
