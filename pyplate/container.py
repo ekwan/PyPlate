@@ -349,10 +349,10 @@ class Container:
             # zero. If so raise a ValueError. This error should never happen,
             # so it is excluded from code coverage.
             if source_container.contents[substance] < 0:
-                raise ValueError(f"Transfer resulted in negative quantity of " + \
-                                 f"{substance} in source container. This " + \
-                                 "error should never be encountered. If you " + \
-                                 "are reading this, please report the issue " + \
+                raise ValueError(f"Transfer resulted in negative quantity of "
+                                 f"{substance} in source container. This "
+                                 "error should never be encountered. If you " 
+                                 "are reading this, please report the issue " 
                                  "at https://github.com/ekwan/PyPlate/issues.") \
                                  # pragma: no cover
             

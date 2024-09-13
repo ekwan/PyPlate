@@ -41,11 +41,9 @@ class Substance:
 
         """
         if not isinstance(name, str):
-            raise TypeError("Name must be a str.")
-        
+            raise TypeError("Name must be a str.")  
         if not isinstance(mol_type, int):
             raise TypeError("Type must be an int.")
-        
         if not isinstance(mol_weight, (int, float)):
             raise TypeError("Molecular weight must be a float.")
         if not isinstance(density, (int, float)):
@@ -109,7 +107,6 @@ class Substance:
             warnings.warn(warning_msg, stacklevel=2)
             density = config.default_solid_density
         return Substance(name, Substance.SOLID, mol_weight, density, molecule)
-
 
     @staticmethod
     def liquid(name: str, mol_weight: float, 

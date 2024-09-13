@@ -41,6 +41,13 @@ def sodium_sulfate() -> Substance:
 def triethylamine() -> Substance:
     return Substance.liquid("triethylamine", mol_weight=101.19, density=0.726)
 
+@pytest.fixture
+def invalid_substance() -> Substance:
+    substance = Substance.solid('invalid', 1, 1)
+    substance.mol_weight = 0
+    substance.density = 0
+    substance._type = 0
+    return substance
 
 @pytest.fixture
 def empty_plate() -> Plate:

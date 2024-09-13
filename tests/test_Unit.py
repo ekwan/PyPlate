@@ -1,5 +1,5 @@
 import pytest
-from pyplate import Unit, config
+from pyplate import Substance, Unit, config
 
 import math
 
@@ -191,8 +191,6 @@ def test_Unit_parse_prefixed_unit():
 
         assert expected_base_unit == result_base_unit
         assert expected_mult == result_mult
-
-
 
 def test_Unit_parse_quantity():
     """
@@ -687,7 +685,7 @@ def test_Unit_parse_concentration():
         # example
         value, num_unit, denom_unit = Unit.parse_concentration(test_ex)
 
-        # TODO: Come back and fix precision issue here.
+        # TODO: [BUG] Come back and fix precision issue here.
         assert expected_value == pytest.approx(value, rel=1e-10, abs=1e-10)
         assert expected_num_unit == num_unit 
         assert expected_denom_unit == denom_unit
@@ -738,15 +736,15 @@ def test_Unit_convert_to_storage():
     
     This unit test checks for the following failure cases:
     - Invalid argument types result in raising a `TypeError`
-    - Invalid value for 'unit' parameter results in raising a `ValueError`
+    - Invalid value for 'unit' argument results in raising a `ValueError`
       - Case: A string that does not parse correctly as a base or prefixed unit.
         - E.g. 'abba' or 'mA'
       - Case: A string that parses as a non-molar and non-volume unit.
         - E.g. 'g' or 'mg'
     
-    NOTE: Currently, any float value is supported for the 'quantity' argument, 
+    NOTE: Currently, any float value is supported for the 'value' argument, 
     including NaN, so there are no failure cases for a correctly-typed 
-    'quantity' argument.
+    'value' argument.
 
     This unit test checks for the following success cases:
     - Unit argument is the base unit 'mol'
@@ -795,6 +793,7 @@ def test_Unit_convert_to_storage():
     prefix_mults = zip(test_prefixes, test_prefix_multipliers)
     permutations = product(base_units, values, prefix_mults)
 
+    # TODO: Add mocking to remove Unit.convert_prefix_to_multiplier() dependency
     storage_mults = {
         'mol': Unit.convert_prefix_to_multiplier(config.moles_storage_unit[:-3]),
         'L': Unit.convert_prefix_to_multiplier(config.volume_storage_unit[:-1])
@@ -810,4 +809,181 @@ def test_Unit_convert_to_storage():
     # NaN == NaN returns false, so that needs a separate check
     assert math.isnan(Unit.convert_to_storage(float('nan'), 'mol'))
     assert math.isnan(Unit.convert_to_storage(float('nan'), 'L'))
+
+def test_Unit_convert_from_storage():
+    """
+    Unit test for `Unit.convert_from_storage()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types result in raising a `TypeError`
+    - Invalid value for 'unit' argument results in raising a `ValueError`
+      - Case: A string that does not parse correctly as a base or prefixed unit.
+        - E.g. 'abba' or 'mA'
+      - Case: A string that parses as a non-molar and non-volume unit.
+        - E.g. 'g' or 'mg'
+
+    NOTE: Currently, any float value is supported for the 'value' argument, 
+    including NaN, so there are no failure cases for a correctly-typed 
+    'value' argument.
+
+    This unit test checks for the following success cases:
+    - Unit argument is the base unit 'mol'
+    - Unit argument is a prefixed molar unit (e.g. 'mmol')
+    - Unit argument is the base unit 'L'
+    - Unit argument is a prefixed volume unit (e.g. 'mL')
+    """
+    
+    # ==========================================================================
+    # Failure Case: Invalid argument type
+    # ==========================================================================
+
+    for non_float in [None, '', '1', [1], (1,), {}]:
+        with pytest.raises(TypeError, match="Value must be a float\\."):
+            Unit.convert_from_storage(non_float, 'L')
+
+    for non_str in [None, False, 1, ['1'], ('1',), {}]:
+        with pytest.raises(TypeError, match="Unit must be a str\\."):
+            Unit.convert_from_storage(1, non_str)
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - unit
+    # ==========================================================================
+
+    # Case: Argument 'unit' is an invalid unit
+    for invalid_unit in test_invalid_units:
+        with pytest.raises(ValueError, match=f"Invalid unit '{invalid_unit}'\\.$"):
+            Unit.convert_from_storage(1, invalid_unit)
+
+    # Case: Argument 'unit' is a non-molar and non-volume unit
+    for prefix in test_prefixes:
+        invalid_unit = prefix + 'g'
+        with pytest.raises(ValueError, match=f"Invalid unit '{invalid_unit}'\\."
+                                      " Unit must refer to moles or volume."):
+            Unit.convert_from_storage(1, invalid_unit)
+
+    # ==========================================================================
+    # Success Cases 
+    # ==========================================================================
+
+    base_units = ['mol', 'L']
+    values = [1, 5.789, -12, -4.5, -0.000001, 0.0, -0.0, 
+              float('inf'), float('-inf')]
+    prefix_mults = zip(test_prefixes, test_prefix_multipliers)
+    permutations = product(base_units, values, prefix_mults)
+
+    # TODO: Add mocking to remove Unit.convert_prefix_to_multiplier() dependency
+    storage_mults = {
+        'mol': Unit.convert_prefix_to_multiplier(config.moles_storage_unit[:-3]),
+        'L': Unit.convert_prefix_to_multiplier(config.volume_storage_unit[:-1])
+    }
+
+    for base_unit, value, (prefix, mult) in permutations:
+        test_unit = prefix + base_unit
+        
+        expected_value = value * storage_mults[base_unit] / mult
+        result = Unit.convert_from_storage(value, test_unit)
+
+        # TODO: [BUG] Come back and fix precision issue here.
+        assert result == pytest.approx(expected_value, rel=1e-10, abs=1e-10)
+
+    # NaN == NaN returns false, so that needs a separate check
+    assert math.isnan(Unit.convert_from_storage(float('nan'), 'mol'))
+    assert math.isnan(Unit.convert_from_storage(float('nan'), 'L'))
+
+def test_Unit_convert_from_storage_to_standard_format(salt, water, 
+                                                      invalid_substance):
+    """
+    Unit Test for `Unit.convert_from_storage_to_standard_format()`
+
+    This unit test checks for the following failure cases:
+    - Invalid argument types result in raising a `TypeError`
+    - Invalid argument values result in raising a `ValueError`
+      - Case: Substance argument is neither solid nor liquid.
+
+    NOTE: Currently, any float value is supported for the 'value' argument, 
+    including NaN, so there are no failure cases for a correctly-typed 
+    'value' argument.
+
+    NOTE: This function uses the substance parameter to convert to non-storage
+    units. Thus, 
+
+    This unit test checks for the following success cases:
+    - Solid and liquid substances
+    - Various prefixed and unprefixed units
+
+    Each success case is tested to ensure the value and unit returned match
+    those that are expected.
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
+    for non_substance in [None, False, 1, '1', [1,], (salt, water), {}]:
+        with pytest.raises(TypeError, match="Invalid type for substance\\."):
+            Unit.convert_from_storage_to_standard_format(non_substance, 1)
+    
+    for non_float in [None, '1', salt, (1,), [water], {}]:
+        with pytest.raises(TypeError, match="Quantity must be a float\\."):
+            Unit.convert_from_storage_to_standard_format(salt, non_float)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - substance type
+    # ==========================================================================
+    
+    with pytest.raises(ValueError, match="Invalid subtype for substance\\."):
+        Unit.convert_from_storage_to_standard_format(invalid_substance, 1)
+
+
+    # ==========================================================================
+    # Success Cases
+    # ==========================================================================
+    
+    examples= [
+        ((salt, 1), (58.4428, 'ug')),
+        ((salt, 10), (584.428, 'ug')),
+        ((salt, 100), (5.84428, 'mg')),
+        ((salt, 1000), (58.4428, 'mg')),
+        ((salt, 1e6), (58.4428, 'g')),
+
+        ((salt, 0.1), (5.84428, 'ug')),
+        ((salt, 0.01), (584.428, 'ng')),
+        ((salt, 0.001), (58.4428, 'ng')),
+        ((salt, 0.0001), (5.84428, 'ng')),
+        ((salt, 0.00001), (0.584428, 'ng')),
+
+        ((water, 1), (18.0153, 'nL')),
+        ((water, 10), (180.153, 'nL')),
+        ((water, 100), (1.80153, 'uL')),
+        ((water, 1000), (18.0153, 'uL')),
+        ((water, 1e6), (18.0153, 'mL')),
+        ((water, 1e9), (18.0153, 'L')),
+
+        ((water, 0.1), (1.80153, 'nL')),
+        ((water, 0.01), (0.180153, 'nL')),
+        ((water, 0.001), (0.0180153, 'nL')),
+    ]
+
+    for ex, (expected_value, expected_unit) in examples:
+        results = Unit.convert_from_storage_to_standard_format(ex[0], ex[1])
+
+        assert results[0] == pytest.approx(expected_value, rel=1e-24)
+
+        # The second case here handles the equivalent prefixes of 'u' and 'µ'
+        # TODO: Improve the generality of this assert statement (i.e. make this
+        #       less hacky)
+        assert results[1] == expected_unit or \
+                (results[1][0] == 'µ'and 'u' + results[1][1:] == expected_unit)
+        
+def test_Unit_get_human_readable_unit():
+    """
+    Unit Test for `Unit.get_human_readable_unit()`
+    
+    This unit test checks the following failure scenarios:
+    - Invalid argument types raise a `TypeError`.
+    - 
+    """
+    # TODO: Need to finish this last unit test
+
 

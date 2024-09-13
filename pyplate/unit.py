@@ -378,14 +378,21 @@ class Unit:
     @staticmethod
     def convert_from_storage(value: float, unit: str) -> float:
         """
-        Converts value from storage format.
+        Converts value from storage format. 
+        
         Example: (1e3 uL, 'mL') -> 1
+
+        This function assumes that the provided value is in the storage units 
+        that correspond to the type of the unit argument. 
+          E.g. If unit is 'kmol', then the value is assumed to be in 'molar
+               storage units'.
 
         Arguments:
             value (float): Value to be converted.
             unit (str): Unit value should be in. ('uL', 'mL', 'mol', etc.)
 
-        Returns: Converted value.
+        Returns: 
+            result (float): The converted value.
 
         """
         if not isinstance(value, (int, float)):
@@ -393,14 +400,21 @@ class Unit:
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
 
-        if unit[-1] == 'L':
-            prefix_value = Unit.convert_prefix_to_multiplier(unit[:-1])
-            result = value * Unit.convert_prefix_to_multiplier(config.volume_storage_unit[0]) / prefix_value
-        elif unit[-3:] == 'mol': 
-            prefix_value = Unit.convert_prefix_to_multiplier(unit[:-3])
-            result = value * Unit.convert_prefix_to_multiplier(config.moles_storage_unit[0]) / prefix_value
+        base_unit = mult = None
+        try:
+            base_unit, mult = Unit.parse_prefixed_unit(unit)
+        except ValueError:
+            raise ValueError(f"Invalid unit '{unit}'.")
+
+        if base_unit == 'L':
+            storage_prefix = config.volume_storage_unit[:-1]
+        elif base_unit == 'mol':
+            storage_prefix = config.moles_storage_unit[:-3]
         else:
-            raise ValueError(f"Invalid unit '{unit}'. Unit must be for moles or volume.")
+            raise ValueError(f"Invalid unit '{unit}'. Unit must refer to moles or volume.")
+        
+        storage_mult = Unit.convert_prefix_to_multiplier(storage_prefix)
+        result = value * storage_mult / mult
         return round(result, config.internal_precision)
 
     @staticmethod
@@ -417,31 +431,36 @@ class Unit:
 
         """
         from pyplate.substance import Substance
-        if isinstance(substance, Substance):
-            if substance.is_solid():
-                unit = 'g'
-                # convert moles to grams
-                # molecular weight is in g/mol
-                quantity *= Unit.convert_prefix_to_multiplier(config.moles_storage_unit[:-3]) * substance.mol_weight
-            elif substance.is_liquid():
-                unit = 'L'
-                # convert moles to liters
-                # molecular weight is in g/mol
-                # density is in g/mL
-                quantity *= (Unit.convert_prefix_to_multiplier(config.moles_storage_unit[:-3])
-                             * substance.mol_weight / substance.density / 1e3)
-            else:
-                # This shouldn't happen.
-                raise TypeError("Invalid subtype for substance.")
-        else:
+        if not isinstance(substance, Substance):
             raise TypeError("Invalid type for substance.")
+        if not isinstance(quantity, (float, int)):
+            raise TypeError("Quantity must be a float.")
+        
+        storage_prefix = config.moles_storage_unit[:-3]
+        storage_mult = Unit.convert_prefix_to_multiplier(storage_prefix)
+
+        if substance.is_solid():
+            unit = 'g'
+            # convert moles to grams
+            # molecular weight is in g/mol
+            quantity *= storage_mult * substance.mol_weight
+        elif substance.is_liquid():
+            unit = 'L'
+            # convert moles to liters
+            # molecular weight is in g/mol
+            # density is in g/mL
+            quantity *= storage_mult * substance.mol_weight / substance.density / 1e3
+        else:
+            # This shouldn't happen.
+            raise ValueError("Invalid subtype for substance.")
 
         multiplier = 1
-        while quantity < 1 and multiplier > 1e-6:
+        while quantity < 1 and multiplier > 1e-9:
             quantity *= 1e3
             multiplier /= 1e3
 
-        unit = {1: '', 1e-3: 'm', 1e-6: 'u'}[multiplier] + unit
+        # Rounding is performed here to avoid off-by-one floating point errors
+        unit = Unit._PREFIX_LOOKUP[round(multiplier, 24)] + unit
 
         quantity = round(quantity, config.internal_precision)
         return quantity, unit
@@ -456,23 +475,25 @@ class Unit:
             unit:  Unit to determine type and default unit if value is zero.
 
         Returns: Tuple of new value and unit
-
         """
+        if not isinstance(value, (float, int)):
+            raise TypeError("Value must be a float.")
+        if not isinstance(unit, str):
+            raise TypeError("Unit must be a str.")
+
         # If the value is zero, return early with the provided unit
         if value == 0:
             return value, unit
         
-        # Convert argument 'unit' into the corresponding base unit, and adjust 
-        # value by the multiplier corresponding to the provided unit's prefix.
-        if unit[-1] == 'L':
-            value *= Unit.convert_prefix_to_multiplier(unit[:-1])
-            unit = 'L'
-        elif unit[-3:] == 'mol':
-            value *= Unit.convert_prefix_to_multiplier(unit[:-3])
-            unit = 'mol'
-        elif unit[-1] == 'g':
-            value *= Unit.convert_prefix_to_multiplier(unit[:-1])
-            unit = 'g'
+        # Try to parse the provided unit, and raise a ValueError if unsuccessful
+        base_unit = mult = None
+        try:
+            base_unit, mult = Unit.parse_prefixed_unit(unit)
+        except ValueError as e:
+            raise e
+        
+        # Scale the provided value by the provided unit's prefix multiplier
+        value *= mult
 
         # Determine the 1e3-scale multiplier needed to put 'value' in the range
         # 1 to 1000. This multiplier cannot exceed 1e6 ('M' prefix) and cannot 
@@ -489,5 +510,17 @@ class Unit:
             value /= 1e3
             multiplier *= 1e3
 
+        # Determine the new prefix from the multiplier
+        new_prefix = None
+        try:
+            new_prefix = Unit.convert_multiplier_to_prefix(multiplier)
+        except ValueError as e:
+            raise ValueError("Provided value/unit resulted in an internal logic"
+                             " error. This error should never be encountered. "
+                             "If you are reading this, please report the issue "
+                             "at https://github.com/ekwan/PyPlate/issues.") \
+                            # pragma: no cover
+
+        # TODO: Potentially come back and fix this with other precision issues.
         return round(value, config.precisions['default']), \
-                Unit.convert_multiplier_to_prefix(multiplier) + unit
+                new_prefix + base_unit
