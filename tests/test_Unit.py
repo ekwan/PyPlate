@@ -34,17 +34,32 @@ def test_Unit_convert_prefix_to_multiplier():
         with pytest.raises(TypeError, match="SI prefix must be a string"):
             Unit.convert_prefix_to_multiplier(invalid_prefix)
 
+
     # ==========================================================================
     # Failure Case: Invalid string - does not match an existing prefix
     # ==========================================================================
 
-    # Uses test_names and the test whitespace patterns to generate variations of
+    # Test empty string
+    with pytest.raises(ValueError, match="Invalid prefix"):
+        Unit.convert_prefix_to_multiplier("")
+
+    # Test pure whitespace
+    with pytest.raises(ValueError, match="Invalid prefix"):
+        Unit.convert_prefix_to_multiplier("   ")
+
+    # Use test_names and the test whitespace patterns to generate variations of
     # invalid prefixes
     for name in test_names:
         for pattern in test_whitespace_patterns:
             invalid_prefix = pattern.replace('e', name)
             with pytest.raises(ValueError, match="Invalid prefix"):
                 Unit.convert_prefix_to_multiplier(invalid_prefix)
+    
+    # Test special characters as prefixes
+    for special_char in ["@", "#", "$", "%", "^", "&", "*", "(", ")"]:
+        with pytest.raises(ValueError, match="Invalid prefix"):
+            Unit.convert_prefix_to_multiplier(special_char)
+
 
     # ==========================================================================
     # Success Case: Valid string - does match an existing prefix
@@ -80,7 +95,6 @@ def test_Unit_convert_multiplier_to_prefix():
     for invalid_multiplier in [None, '', '1', [1], {}, (2.5, 3.4)]:
         with pytest.raises(TypeError, match="Multiplier must be a number"):
             Unit.convert_multiplier_to_prefix(invalid_multiplier)
-
 
 
     # The following base numbers will be combined with valid and invalid prefix 
