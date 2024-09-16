@@ -439,6 +439,8 @@ class Unit:
         storage_prefix = config.moles_storage_unit[:-3]
         storage_mult = Unit.convert_prefix_to_multiplier(storage_prefix)
 
+        prec = config.internal_precision
+
         if substance.is_solid():
             unit = 'g'
             # convert moles to grams
@@ -451,18 +453,20 @@ class Unit:
             # density is in g/mL
             quantity *= storage_mult * substance.mol_weight / substance.density / 1e3
         else:
-            # This shouldn't happen.
+            # This should be encountered for correctly-instantiated substances.
             raise ValueError("Invalid subtype for substance.")
 
         multiplier = 1
-        while quantity < 1 and multiplier > 1e-9:
+        # TODO: Potentially fix this when fixing precision issues with the
+        # library.
+        while round(quantity, prec) < 1 and multiplier > 1e-9:
             quantity *= 1e3
             multiplier /= 1e3
 
         # Rounding is performed here to avoid off-by-one floating point errors
-        unit = Unit._PREFIX_LOOKUP[round(multiplier, 24)] + unit
+        unit = Unit._PREFIX_LOOKUP[round(multiplier, prec)] + unit
 
-        quantity = round(quantity, config.internal_precision)
+        quantity = round(quantity, prec)
         return quantity, unit
 
     @staticmethod

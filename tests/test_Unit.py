@@ -1027,7 +1027,7 @@ def test_Unit_get_human_readable_unit():
     unit_ghru = Unit.get_human_readable_unit
 
     # Selected variations of float/unit inputs
-    for unit in Unit.BASE_UNITS:
+    for unit in test_base_units:
         # Test base unit conversions to all supported prefixes from 1e6 to 1e-9
         assert unit_ghru(1000000, unit) == (1.0, f"M{unit}")
         assert unit_ghru(1000, unit) == (1.0, f"k{unit}")

@@ -70,6 +70,7 @@ test_invalid_units = []
 for prefix in test_prefixes:
     for base_unit in test_invalid_base_units:
         test_invalid_units.append(prefix + base_unit)
+test_invalid_units.append('')
 
 # Create all volume units using the above prefixes
 test_volume_units = []

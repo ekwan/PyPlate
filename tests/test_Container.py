@@ -38,6 +38,9 @@ def test_Container___init__(water, salt):
         2. 'name' and 'max_volume' provided
         3. 'name' and 'initial_contents' provided
         4. 'name', 'max_volume', and 'initial_contents' provided
+
+    NOTE: More rigorous tests of the initial_contents variations are tested in
+    the unit test for `Container._set_initial_contents()`.
     """
 
     # ==========================================================================
@@ -50,24 +53,13 @@ def test_Container___init__(water, salt):
         Container(None)
     with pytest.raises(TypeError, match="Name must be a str"):
         Container([])
+    
     with pytest.raises(TypeError, match='Maximum volume must be a str'):
         Container('container', 1)
     with pytest.raises(TypeError, match='Maximum volume must be a str'):
         Container('container', None)
     with pytest.raises(TypeError, match='Maximum volume must be a str'):
         Container('container', [])
-    with pytest.raises(TypeError, match="Initial contents must be iterable"):
-        Container('container', '1 L', 1)
-    with pytest.raises(TypeError, match="Element in initial_contents must be"):
-        Container('container', '1 L', "inital_contents")
-    with pytest.raises(TypeError, match="Element in initial_contents must be"):
-        Container('container', '1 L', [1])
-    with pytest.raises(TypeError, match="Element in initial_contents must be"):
-        Container('container', '1 L', [water, salt])
-    with pytest.raises(TypeError, match="Element in initial_contents must be"):
-        Container('container', '1 L', [(water, 1), (salt, 1)])
-    with pytest.raises(TypeError, match="Element in initial_contents must be"):
-        Container('container', '1 L', [(water, None), (salt, True)])
 
 
     # ==========================================================================
@@ -91,7 +83,7 @@ def test_Container___init__(water, salt):
     
 
     # ==========================================================================
-    # Failure Case: Quantity is not formatted as 'value unit'
+    # Failure Case: Maximum volume is not formatted as 'value unit'
     # ==========================================================================
     # 
     # NOTE: This is really a failure case for Unit.parse_quantity(), not 
@@ -108,7 +100,7 @@ def test_Container___init__(water, salt):
                 Container('container', merged_test_quantity)
 
     # ==========================================================================
-    # Failure Case: Quantity 'value' cannot be parsed as a float
+    # Failure Case: Maximum volume 'value' cannot be parsed as a float
     # ==========================================================================
     #
     # NOTE: This is really a failure case for Unit.parse_quantity(), not 
@@ -127,7 +119,7 @@ def test_Container___init__(water, salt):
                     Container('container', merged_test_value)
 
     # ==========================================================================
-    # Failure Case: Quantity 'unit' is not a valid unit
+    # Failure Case: Maximum volume 'unit' is not a valid unit
     # ==========================================================================
     #
     # NOTE: This is really a failure case for Unit.parse_quantity(), not 
@@ -145,7 +137,7 @@ def test_Container___init__(water, salt):
                 
 
     # ==========================================================================
-    # Failure Case: Quantity 'unit' does not represent volume
+    # Failure Case: Maximum volume 'unit' does not represent volume
     # ==========================================================================
     #
     # Variations for test quantities include:
@@ -162,6 +154,7 @@ def test_Container___init__(water, salt):
             with pytest.raises(ValueError, match="Maximum volume must have volume " + \
                                                 "units \\(e\\.g\\. L, mL, uL, etc\\.\\)\\."):
                 Container('container', pattern.replace('e','100 ' + test_unit))
+
 
     # ==========================================================================
     # Failure Case: Maximum volume is non-positive
@@ -643,6 +636,193 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
             # zero-quantity addition
             assert Unit.convert_from_storage(container.volume, 'mL') == 5
         
+def test_Container__set_initial_contents(water, dmso, salt):
+    """
+    Unit test for `Container._set_initial_contents()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument type results in raising a `TypeError`
+      - Case: Overall argument type is incorrect (not an iterable).
+        - E.g. initial_contents=12
+        - Note: Strings are also considered a failure case here even though they
+          are an Iterable.
+      - Case: An element of the of the initial contents does not match the
+              format (Substance, str).
+        - Sub-Case: The element is not an iterable with a length of 2.
+          - E.g. inital_contents=[(12)]
+          - Note: An element that is string of length 2 is also considered a 
+            failure case here even though they satisfy the other conditions.
+        - Sub-Case: The first entry of the element is not a substance.
+        - Sub-Case: The second entry of the element is not a string.
+
+    This unit test checks the following success scenarios:
+    - Single/multiple substances with an outer iteration layer
+      - E.g. initial_contents=[(water, '1 mL')]
+    - Single substances WITHOUT an outer iteration layer
+      - E.g. initial_contents=(water, '1 mL')
+    - Repeated substances
+      - E.g. initial_content=[(water, '1 mL'), (water, '1 mL')]
+    - Zero quantity of substance 
+    """
+    
+    # ==========================================================================
+    # Failure Case: Invalid argument type - overall argument type is incorrect
+    # ==========================================================================
+
+    with pytest.raises(TypeError, match="Initial contents must be iterable"):
+        Container('container', '1 L', 1)
+    with pytest.raises(TypeError, match="Initial contents cannot be a str\\."):
+        Container('container', '1 L', "inital_contents")
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument type - incorrect type for one or more
+    #               individual entries of initial_contents argument
+    # ==========================================================================
+
+    base_error_msg = r"Invalid entry in initial_contents '.*'\. "
+
+    # Sub-Case: Entry is not formatted as (Substance, str).
+    with pytest.raises(TypeError, match=base_error_msg +
+                                r"Elements must be \(Substance, str\) tuples\."):
+        Container('container', '1 L', [1])
+    
+    # Sub-Case: First element of the entry is not a Substance
+    with pytest.raises(TypeError, match=base_error_msg + 
+                                  r".* is not a Substance."):
+        Container('container', '1 L', [None, "1 mL"])
+    with pytest.raises(TypeError, match=base_error_msg + 
+                                  r".* is not a Substance."):
+        Container('container', '1 L', [1, "1 mL"])
+
+    # Sub-Case: Second element of the entry is not a str
+    with pytest.raises(TypeError, match=base_error_msg + 
+                                  r".* is not a str."):
+        Container('container', '1 L', [water, salt])
+    with pytest.raises(TypeError, match=base_error_msg + 
+                                  r".* is not a str."):
+        Container('container', '1 L', [(water, 1), (salt, 1)])
+    with pytest.raises(TypeError, match=base_error_msg + 
+                                  r".* is not a str."):
+        Container('container', '1 L', [(water, None), (salt, True)])
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - invalid quantity for a substance
+    # ==========================================================================
+
+    # Sub-Case: Non-parseable quantities
+    for ex in test_non_parseable_quantities:
+        with pytest.raises(ValueError, match=r"Could not add '.*' of .*\."):
+            container = Container('container')
+            container._set_initial_contents((salt, ex))
+
+    # Sub-Case: Invalid quantity value 
+    for ex in ['-1 mol', 'inf g', 'nan L']:
+        with pytest.raises(ValueError, match=r"Could not add '.*' of .*\."):
+            container = Container('container')
+            container._set_initial_contents((salt, ex))
+
+    # Sub-Case: Exceeds volume of container
+    with pytest.raises(ValueError, match=r"Could not add '.*' of .*\."):
+            container = Container('container', '10 L')
+            container._set_initial_contents((salt, '20 L'))
+
+    
+
+    # Test variations for initial contents
+    test_initial_contents = [[(water, '1 mol')],
+                             [(water, '1 g')],
+                             [(water, '1 L')],
+                             [(salt, '10 g')],
+                             [(salt, '10 mol')],
+                             [(salt, '10 L')],
+                             [(water, '1 kL')],
+                             [(salt, '5 mg')],
+                             [(water, '1 L'), (salt, '5 mg')],
+                             [(dmso, '12 mL'), (salt, '10 g')],
+                             [(water, '1 g'), (salt, '1 g'), (dmso, '1 g')],
+                            ]
+    
+    # ==========================================================================
+    # Success Case: Standard substance variations (with outer iterable layer)
+    # ==========================================================================
+    
+    for init_contents in test_initial_contents:
+        container = Container('container')
+        container._set_initial_contents(init_contents)
+
+        for substance, quantity in init_contents:
+            assert substance in container.contents, \
+                f"Container 'contents' is missing substance '{substance}' that " \
+                "was present in 'initial_contents' constructor argument."
+            
+            # NOTE: This line creates an interdependence between unit tests. 
+            # If Substance.convert_quantity() is not working, this test will not
+            # work correctly.
+            umols_substance = substance.convert_quantity(quantity, 
+                                                         config.moles_storage_unit)
+            assert container.contents[substance] == pytest.approx(umols_substance)
+    
+
+    # ==========================================================================
+    # Success Case: Single substance in contents WITHOUT an outer iterable type
+    #                  E.g. initial_contents=(water, '1 mL')
+    # ==========================================================================
+    
+    # Test with no maximum volume & list type
+    container = Container('container')
+    container._set_initial_contents([water, '1 L'])
+    assert water in container.contents 
+    expected_water = water.convert_quantity('1 L', config.moles_storage_unit)
+    assert container.contents[water] == pytest.approx(expected_water, rel=1e-12)
+
+    # Test with maximum volume & tuple type
+    container = Container('container', '10 L')
+    container._set_initial_contents((dmso, '1 L'))
+    assert dmso in container.contents 
+    expected_dmso = dmso.convert_quantity('1 L', config.moles_storage_unit)
+    assert container.contents[dmso] == pytest.approx(expected_dmso, rel=1e-12)
+
+
+    # ==========================================================================
+    # Success Case: Repeated entry in initial_contents
+    # ==========================================================================
+    
+    # Single repeated substance
+    container = Container('container')
+    container._set_initial_contents(([water, '1 L'], [water, '1 L']))
+    assert water in container.contents 
+    expected_water = water.convert_quantity('2 L', config.moles_storage_unit)
+    assert container.contents[water] == pytest.approx(expected_water, rel=1e-12)
+
+    # Multiple repeated substances
+    container = Container('container')
+    repeated_initial_contents = []
+    for i in range(5):
+        repeated_initial_contents.append((water, '500 uL'))
+        repeated_initial_contents.append((salt, '5 ug'))
+    container._set_initial_contents(repeated_initial_contents)
+
+    assert water in container.contents 
+    expected_water = water.convert_quantity('2500 uL', config.moles_storage_unit)
+    assert container.contents[water] == pytest.approx(expected_water, rel=1e-12)
+
+    assert salt in container.contents 
+    expected_salt = salt.convert_quantity('25 ug', config.moles_storage_unit)
+    assert container.contents[salt] == pytest.approx(expected_salt)
+
+
+    # ==========================================================================
+    # Success Case: Zero quantity for substance
+    # ==========================================================================
+    
+    # Substance should not be found in the container
+    for unit in test_base_units:
+        container = Container('container')
+        container._set_initial_contents(([dmso, f'0 {unit}']))
+        assert dmso not in container.contents 
+    
 def test_Container__transfer(water, dmso, salt, sodium_sulfate, 
                              empty_container, empty_plate):
     """
@@ -1268,15 +1448,18 @@ def test_create_solution(water, dmso,
     """
     Unit Test for the function `Container.create_solution()`
 
-    TODO: Come back to this one
+    This unit test checks the following failure scenarios:
+    - Invalid argument types will result in raising a `TypeError`
+    - Invalid argument values will result in raising a `ValueError`.
 
-    This unit test checks the following scenarios:
-    - Arguments raise a `TypeError` if they are not the correct types.
-    
-    
-
+    This unit test checks the following success scenarios:
+    - 
     """
-    # Argument types checked
+    
+    # ==========================================================================
+    # Failure Case: Invalid argument types (non-keyword)
+    # ==========================================================================
+
     with pytest.raises(TypeError, match='Solute\\(s\\) must be a Substance\\.'):
         Container.create_solution('salt', water, concentration='0.5 M', total_quantity='100 mL')
 
@@ -1290,12 +1473,52 @@ def test_create_solution(water, dmso,
     with pytest.raises(TypeError, match='Solvent must be a Substance or a Container\\.'):
         Container.create_solution(salt, 'water', concentration='0.5 M', total_quantity='100 mL')
 
-        """
 
+    # ==========================================================================
+    # Failure Case: Invalid argument types (keyword)
+    # ==========================================================================
+    
+    # Set up mock function for Container._compute_solution_contents()
+    real_compute_solution_contents = Container._compute_solution_contents
+
+    def mock_compute_type_error(solute, solvent, **kwargs):
+        raise TypeError("THIS IS A TEST TYPE ERROR!")
+    
+    Container._compute_solution_contents = mock_compute_type_error
+    
+    # Check that this function correctly raises any type errors for the keywords
+    # generated by the sub-call to Container._compute_solution_contents()
+    with pytest.raises(TypeError, match="THIS IS A TEST TYPE ERROR!"):
+        Container.create_solution(salt, water)
+
+    # Revert Container.compute_solution_contents() to the true function.
+    Container._compute_solution_contents = real_compute_solution_contents
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument values (non-keyword and keyword)
+    # ==========================================================================
+
+    # Set up mock function for Container._compute_solution_contents()
+    real_compute_solution_contents = Container._compute_solution_contents
+
+    def mock_compute_value_error(solute, solvent, **kwargs):
+        raise ValueError("THIS IS A TEST VALUE ERROR!")
+    
+    Container._compute_solution_contents = mock_compute_value_error
+
+    # Check that this function correctly raises any type errors for the keywords
+    # generated by the sub-call to Container._compute_solution_contents()
+    with pytest.raises(ValueError, match="THIS IS A TEST VALUE ERROR!"):
+        Container.create_solution(salt, water)
+
+    # Revert Container.compute_solution_contents() to the true function.
+    Container._compute_solution_contents = real_compute_solution_contents
+    
+    """
     Create a solution using each a quantity of each solvent and solute in each unit.
     Try "0.001 numerator/denominator" and "0.01 numerator/10 denominator"
     Ensure the correct amount of solvent, solute, and total solution is applied.
-
     """
     solvents = [water, dmso]
     solutes = [salt, triethylamine, sodium_sulfate]

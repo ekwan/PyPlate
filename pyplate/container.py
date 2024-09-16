@@ -58,8 +58,12 @@ class Container:
         
         # Attempt to parse max_volume argument into a quantity 
         # (raises ValueError on failure)
-        max_volume, max_volume_unit = Unit.parse_quantity(max_volume)
-        
+        try:
+            max_volume, max_volume_unit = Unit.parse_quantity(max_volume)
+        except ValueError as e:
+            raise ValueError(f"Could not parse max volume '{max_volume}'. {e}")\
+                  from None
+
         # Ensure the quantity represents a valid volume for a container
         if max_volume_unit != 'L':
             raise ValueError("Maximum volume must have volume units (e.g. L, mL, uL, etc.).")
@@ -75,16 +79,17 @@ class Container:
 
         # Set starting state of container based on the initial contents
         if initial_contents:
-            # If the initial contents are not iterable, raise a type error
-            if not isinstance(initial_contents, Iterable):
-                raise TypeError("Initial contents must be iterable.")
-            for entry in initial_contents:
-                if not isinstance(entry, Iterable) or not len(entry) == 2:
-                    raise TypeError("Element in initial_contents must be a (Substance, str) tuple.")
-                substance, quantity = entry
-                if not isinstance(substance, Substance) or not isinstance(quantity, str):
-                    raise TypeError("Element in initial_contents must be a (Substance, str) tuple.")
-                self._self_add(substance, quantity)
+            # Try to set the initial contents of the container. If an error is 
+            # raised, re-raise it and hide the call to the hidden internal 
+            # function.
+            try:
+                self._set_initial_contents(initial_contents)
+            except TypeError as e:
+                raise TypeError(f"{e}") from None
+            except ValueError as e:
+                raise ValueError(f"{e}") from None
+            
+            # Parse and set the instructions for creating the container
             contents = []
             for substance, quantity in self.contents.items():
                 quantity, unit = Unit.convert_from_storage_to_standard_format(substance, quantity)
@@ -92,16 +97,15 @@ class Container:
                 contents.append(f"{round(quantity, precision)} {unit} of {substance.name}")
             self.instructions = f"Add {', '.join(contents)}"
             if self.max_volume != float('inf'):
-                unit = "L"
-                max_volume = Unit.convert_from_storage(self.max_volume, unit) # TODO: Add back in a "standard format"
+                max_volume, unit = Unit.get_human_readable_unit(self.max_volume, config.volume_storage_unit)
                 precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
                 self.instructions += f" to a {round(max_volume, precision)} {unit} container."
             else:
                 self.instructions += " to a container."
         else:
+            # Parse and set the instructions for creating the container
             if self.max_volume != float('inf'):
-                unit = "L"
-                max_volume = Unit.convert_from_storage(self.max_volume, unit) # TODO: Add back in a "standard format"
+                max_volume, unit = Unit.get_human_readable_unit(self.max_volume, config.volume_storage_unit)
                 precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
                 self.instructions = f"Create a {round(max_volume, precision)} {unit} container."
             else:
@@ -134,11 +138,14 @@ class Container:
 
         # Parse the quantity and get the volume/amount to be added. Round to the 
         # internal precision to avoid float-precision bugs
-        volume_to_add = source.convert_quantity(quantity, config.volume_storage_unit)
-        volume_to_add = round(volume_to_add, config.internal_precision)
+        try:
+            volume_to_add = source.convert_quantity(quantity, config.volume_storage_unit)
+            volume_to_add = round(volume_to_add, config.internal_precision)
 
-        amount_to_add = source.convert_quantity(quantity, config.moles_storage_unit)
-        amount_to_add = round(amount_to_add, config.internal_precision)
+            amount_to_add = source.convert_quantity(quantity, config.moles_storage_unit)
+            amount_to_add = round(amount_to_add, config.internal_precision)
+        except ValueError as e:
+            raise ValueError(f"Could not parse quantity '{quantity}'. {e}") from None
 
         # Ensure the quantity to add is finite.
         if not math.isfinite(volume_to_add):
@@ -168,13 +175,76 @@ class Container:
         self.contents[source] = round(self.contents.get(source, 0) + amount_to_add, 
                                       config.internal_precision)
 
+    def _set_initial_contents(self, initial_contents) -> None:
+        """
+        Sets the contents of the container to the specified initial contents.
+        
+        This function is a helper function for `Container.__init__()`. It should
+        NEVER be called outside of that constructor.
+        
+        Args:
+            initial_contents (Iterable): An iterable set of the container's
+                                         starting contents. Each element should
+                                         be a (Substance, str) tuple storing the
+                                         substance and quantity to be added
+                                         respectively.
+        """
+        # If the initial contents are not iterable, raise a type error
+        if not isinstance(initial_contents, Iterable):
+            raise TypeError("Initial contents must be iterable.")
+        
+        # If the initial contents are a string, raise a type error
+        if isinstance(initial_contents, str):
+            raise TypeError("Initial contents cannot be a str.")
+        
+        # If the initial contents only contains one substance and no outer
+        # iterable is provided, automatically add an extra iteration layer.
+        #   E.g. c1 = Container('c1', initial_contents=(water, '1 mL'))
+        #
+        # NOTE: The check for a string type is included here so that the correct
+        # error message is reported for cases like ['water', '1 L']
+        if len(initial_contents) == 2 and \
+            (not isinstance(initial_contents[0], Iterable) \
+              or isinstance(initial_contents[0], str)):
+                initial_contents = [initial_contents]
+
+        # Define a helper function generating error strings.
+        def entry_error_msg(entry, reason):
+            return f"Invalid entry in initial_contents '{entry}'. {reason}"
+
+        # Add all the initial contents to the container.
+        for entry in initial_contents:
+            # Type checking for the overall format of the entry (strings are
+            # iterables, so for correct error reporting, a string type check is
+            # done here)
+            if not isinstance(entry, Iterable) or len(entry) != 2 \
+               or isinstance(entry, str):
+                reason = "Elements must be (Substance, str) tuples."
+                raise TypeError(entry_error_msg(entry, reason))
+            
+            # Type checking for the individual elements of the entry
+            substance, quantity = entry
+            if not isinstance(substance, Substance):
+                reason=f"{substance} is not a Substance."
+                raise TypeError(entry_error_msg(entry, reason))
+            if not isinstance(quantity, str):
+                reason=f"{quantity} is not a str."
+                raise TypeError(entry_error_msg(entry, reason))
+            
+            # Try to add the entry to the container; raise an error on failure.
+            try:
+                self._self_add(substance, quantity)
+            except Exception as e:
+                raise ValueError(f"Could not add '{quantity}' of "
+                                    f"{substance.name}. {e}") from None
+
     def _transfer(self, source_container: Container, quantity: str) -> Tuple[Container, Container]:
         """
         Move quantity ('10 mL', '5 mg') from container to self.
 
         Arguments:
-            source_container: `Container` to transfer from.
-            quantity: How much to transfer.
+            source_container (Container): `Container` to transfer from.
+            quantity (str): How much to transfer.
 
         Returns: New source and destination container.
         """
@@ -1229,8 +1299,14 @@ class Container:
         if not name:
             name = Container._auto_generate_solution_name(solute, solvent)
 
-        # Compute the moles of each of the substances of the solution
-        xs = Container._compute_solution_contents(solute, solvent, **kwargs)
+        # Compute the moles of each of the substances of the solution. Raise an
+        # error of the appropriate type if this fails.
+        try:
+            xs = Container._compute_solution_contents(solute, solvent, **kwargs)
+        except TypeError as te:
+            raise TypeError(str(te)) from None
+        except ValueError as ve:
+            raise ValueError(str(ve)) from None
 
         # Set the initial contents of the solution based on the results of the 
         # mole calculations above
