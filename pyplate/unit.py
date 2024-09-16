@@ -502,12 +502,12 @@ class Unit:
         multiplier = 1.0
 
         # Compute multiplier for values less than one
-        while value < 1 and multiplier > 1e-9:
+        while abs(value) < 1 and multiplier > 1e-9:
             value *= 1e3
             multiplier /= 1e3
 
         # Compute multiplier for values greater than 1000
-        while value >= 1000 and multiplier < 1e6:
+        while abs(value) >= 1000 and multiplier < 1e6:
             value /= 1e3
             multiplier *= 1e3
 

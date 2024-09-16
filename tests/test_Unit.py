@@ -983,6 +983,17 @@ def test_Unit_get_human_readable_unit():
     This unit test checks the following failure scenarios:
     - Invalid argument types raise a `TypeError`.
     - Invalid unit argument raises a `ValueError`.
+
+    This unit test checks the following success scenarios:
+    - Conversions from each base unit to each of the prefixes supported by this 
+      function.
+    - Convertsions from prefixed units.
+    - Conversions with negative values.
+    - Conversions with zero/infinite/NaN values.
+    - Near conversions
+      - E.g. '999.9 L' should not convert, 0.9999 L should convert
+    - Rounding off 
+      - E.g. '0.999999 L' should round to '1.0 L'
     """
     
     # ==========================================================================
@@ -1011,28 +1022,50 @@ def test_Unit_get_human_readable_unit():
     # Success Cases
     # ==========================================================================
     
+    # Alias created to reduce space taken up by calls to the original
+    # function below
+    unit_ghru = Unit.get_human_readable_unit
+
     # Selected variations of float/unit inputs
     for unit in Unit.BASE_UNITS:
-        assert Unit.get_human_readable_unit(1000000, unit) == (1.0, f"M{unit}")
-        assert Unit.get_human_readable_unit(1000, unit) == (1.0, f"k{unit}")
-        assert Unit.get_human_readable_unit(1, unit) == (1.0, unit)
-        assert Unit.get_human_readable_unit(0.001, unit) == (1.0, f"m{unit}")
-
+        # Test base unit conversions to all supported prefixes from 1e6 to 1e-9
+        assert unit_ghru(1000000, unit) == (1.0, f"M{unit}")
+        assert unit_ghru(1000, unit) == (1.0, f"k{unit}")
+        assert unit_ghru(1, unit) == (1.0, unit)
+        assert unit_ghru(0.001, unit) == (1.0, f"m{unit}")
+        assert unit_ghru(1e-9, unit) == (1.0, f"n{unit}")
         # Need to account for 'u' and 'µ' here.
-        result_value, result_unit = Unit.get_human_readable_unit(2e-6, unit)
-        assert result_value == 2.0
+        result_value, result_unit = unit_ghru(1e-6, unit)
+        assert result_value == 1.0
         assert result_unit == f"u{unit}" or result_unit == f"µ{unit}"
-        
-        assert Unit.get_human_readable_unit(5.6e-9, unit) == (5.6, f"n{unit}")
+
+        # Test non-power of ten values
+        assert unit_ghru(17, unit) == (17.0, unit)
+        assert unit_ghru(2e3, unit) == (2.0, f"k{unit}")
+        assert unit_ghru(5.6e-9, unit) == (5.6, f"n{unit}")
+
+        # Test near-conversion values
+        assert unit_ghru(999.9, unit) == (999.9, unit)
+        assert unit_ghru(0.9999, unit) == (999.9, f"m{unit}")
+
+        # Test negative number
+        assert unit_ghru(-0.001, unit) == (-1.0, f"m{unit}")
+
+        # Test prefixed unit conversion
+        assert unit_ghru(1000, f"m{unit}") == (1.0, unit)
+        assert unit_ghru(1000000, f"m{unit}") == (1.0, f"k{unit}")
+
+        # Test rounding-off 
+        assert unit_ghru(1.000001, unit) == (1.0, unit)
+        assert unit_ghru(2.599999, unit) == (2.6, unit)
+        # TODO: Expand this section, and adjust for any changes made to
+        # "precision" logic.
 
         # Edge cases: values of 0 and +/- infinity
         for val in [0, float('inf'), float('-inf')]:
-            result_value, result_unit = Unit.get_human_readable_unit(val, unit)
-            assert result_value == val
-            assert result_unit == unit
+            assert unit_ghru(val, unit) == (val, unit)
 
         # Edge case: NaN
-        val = float('nan')
-        result_value, result_unit = Unit.get_human_readable_unit(val, unit)
+        result_value, result_unit = unit_ghru(float('nan'), unit)
         assert math.isnan(result_value)
         assert result_unit == unit
