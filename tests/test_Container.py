@@ -85,7 +85,8 @@ def test_Container___init__(water, salt):
     for test_name in test_whitespace_patterns:
         merged_test_name = test_name.replace('e', '')
         if merged_test_name != '':
-            with pytest.raises(ValueError, match="Name must contain non-whitespace characters."):
+            error_msg = "Name must contain non-whitespace characters."
+            with pytest.raises(ValueError, match=error_msg):
                 Container(merged_test_name)
     
 
@@ -162,7 +163,10 @@ def test_Container___init__(water, salt):
                                                 "units \\(e\\.g\\. L, mL, uL, etc\\.\\)\\."):
                 Container('container', pattern.replace('e','100 ' + test_unit))
 
-    # Failure case: maximum volume quantity is non-positive
+    # ==========================================================================
+    # Failure Case: Maximum volume is non-positive
+    # ==========================================================================
+    
     for test_volume in test_negative_volumes:
         for pattern in test_whitespace_patterns:
             with pytest.raises(ValueError, match="Maximum volume must be positive"):
@@ -174,16 +178,18 @@ def test_Container___init__(water, salt):
                 Container('container', pattern.replace('e',test_volume))
 
 
-    # Failure case: 'nan' value for maximum volume
+    # ==========================================================================
+    # Failure Case: Maximum volume is NaN
+    # ==========================================================================
+    
     for pattern in test_whitespace_patterns:
         with pytest.raises(ValueError, match="'NaN' values are forbidden for quantities\\."):
             Container('container', pattern.replace('e','nan L'))
 
 
-    # ==========================================
-    # 1. Success case: only name provided
-    # ==========================================    
-    #
+    # ==========================================================================
+    # Success Case: Only name provided
+    # ==========================================================================
 
     for test_name in test_names:
         for pattern in test_whitespace_patterns:
@@ -199,10 +205,9 @@ def test_Container___init__(water, salt):
                 "Container 'contents' attribute does not match 'initial_contents' default constructor argument."
     
 
-    # ===============================================
-    # 2. Success case: name and max_volume provided
-    # ===============================================
-    #
+    # ==========================================================================
+    # Success Case: name and max_volume provided
+    # ==========================================================================
     
     # Pre-compute parsed quantities to save time
     parsed_test_volumes = map(Unit.parse_quantity, test_positive_volumes)
@@ -220,10 +225,10 @@ def test_Container___init__(water, salt):
             assert len(test_container.contents) == 0, \
                 "Container 'contents' attribute does not match 'initial_contents' default constructor argument."
     
-    # ============================================================
-    # 3. Success case: name and initial_contents are provided
-    # ============================================================
-    #
+
+    # ==========================================================================
+    # Success Case: name and initial_contents are provided
+    # ==========================================================================
 
     # TODO: Ideally improve the variations here, and possibly move to 
     # test constants
@@ -263,10 +268,11 @@ def test_Container___init__(water, salt):
                 umols_substance = substance.convert_quantity(quantity, config.moles_storage_unit)
                 assert test_container.contents[substance] == pytest.approx(umols_substance)
 
-    # =========================================================================
-    # 4. Success case: name, max_volume, and initial_contents are provided
-    # =========================================================================
-    #
+
+    # ==========================================================================
+    # Success Case: name, max_volume, and initial_contents are provided
+    # ==========================================================================
+
     for test_name in test_names:
         for test_volume, (test_value, test_unit) in zip(test_positive_volumes, 
                                                         parsed_test_volumes):
@@ -297,7 +303,6 @@ def test_Container___init__(water, salt):
                     # If Substance.convert_quantity() is not working, this test will not work correctly.
                     umols_substance = substance.convert_quantity(quantity, config.moles_storage_unit)
                     assert test_container.contents[substance] == pytest.approx(umols_substance)
-
 
 def test_Container___eq__(empty_container, empty_plate, water, dmso):
     """
@@ -424,8 +429,6 @@ def test_Container___eq__(empty_container, empty_plate, water, dmso):
     # to avoid linking the containers' contents to the same object)
     test_container_water_1.contents = deepcopy(test_container_water_2.contents)
 
-
-
 def test_Container__self_add(water, dmso, salt, sodium_sulfate):
     """
     Unit Test for the function `Container._self_add()`.
@@ -458,13 +461,22 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
     # Create a new container for use in argument type/value checking
     container = Container('container', max_volume='5 mL')
 
-    # Argument types checked
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
     with pytest.raises(TypeError, match='Source must be a Substance\\.'):
         container._self_add('water', '5 mL')
     with pytest.raises(TypeError, match='Quantity must be a str\\.'):
         container._self_add(water, 5)
 
-    # Try to add negative amounts to the container
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - non-sensical amount to be added
+    # ==========================================================================
+    
+    # Sub-Case: Negative additional volume
     for test_volume in test_negative_volumes:
         # Wildcard (.*) used in the regular expression because negative infinite
         # quantities are included in the test_negative_volumes list, which should 
@@ -473,11 +485,16 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
                     match="Cannot add a .* amount of a substance\\."):
             container._self_add(water, test_volume)
 
-    # Try to add non-finite amount to the container
+    # Sub-Case: Non finite transfer volume
     with pytest.raises(ValueError,
                 match="Cannot add a non-finite amount of a substance\\."):
         container._self_add(water, 'inf L')
 
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - quantity exceeds container volume
+    # ==========================================================================
+    
     # Try to add more substance than the container can hold
     with pytest.raises(ValueError, match='Exceeded maximum volume'):
         container._self_add(water, '10 mL')
@@ -490,9 +507,9 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
 
     substance_list = [water, dmso, salt, sodium_sulfate]
 
-    # =========================================================
-    # 1. Success case: substance added to empty container
-    # =========================================================
+    # ==========================================================================
+    # Success Case: Substance added to empty container
+    # ==========================================================================
     #
     for substance in substance_list:
         # Create a new empty container
@@ -509,8 +526,8 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
 
 
     # ==========================================================================
-    # 2. Success case: substance added to non-empty container 
-    #                   (substance to-be-added is not in the container)
+    # Success Case: Substance added to non-empty container 
+    #               (substance to-be-added is not in the container)
     # ==========================================================================
     #
     for old_substance in substance_list:
@@ -542,9 +559,9 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
             
 
     # ==========================================================================
-    # 3. Success Case: Substance added to non-empty container (substance to-be-
-    #                  added is already in the container; no other substances 
-    #                  are present)
+    # Success Case: Substance added to non-empty container (substance to-be-
+    #               added is already in the container; no other substances are
+    #               present)
     # ==========================================================================
     #
     for substance in substance_list:
@@ -566,9 +583,9 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
 
 
     # ==========================================================================
-    # 4. Success Case: Substance added to non-empty container (substance to-be-
-    #                  added is already in the container and other substances 
-    #                  are also present)
+    # Success Case: Substance added to non-empty container (substance to-be-
+    #               added is already in the container and other substances are
+    #               also present)
     # ==========================================================================
     #
     for old_substance in substance_list:
@@ -599,8 +616,8 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
                 Unit.convert_to_storage(22.5, 'mL')
             
     # ==========================================================================
-    # 5. Success Case: Zero quantity of substance added to empty/non-empty 
-    #                  container
+    # Success Case: Zero quantity of substance added to empty/non-empty 
+    #               container
     # ==========================================================================
     #
     for substance in substance_list:
@@ -626,8 +643,6 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
             # zero-quantity addition
             assert Unit.convert_from_storage(container.volume, 'mL') == 5
         
-
-
 def test_Container__transfer(water, dmso, salt, sodium_sulfate, 
                              empty_container, empty_plate):
     """
@@ -1170,8 +1185,6 @@ def test_Container__transfer(water, dmso, salt, sodium_sulfate,
         assert_contents_helper(c1_prime, salt, 0, unit)
         assert c1_prime.volume == 0, assert_msg
 
-
-
 def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, mocker):
     """
     Unit Test for the function `Container.transfer()`
@@ -1185,7 +1198,10 @@ def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, m
     - Calling with the correct types with a Container as the source
     - Calling with the correct types with a Plate as the source
     """
-    # Argument types checked
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
     with pytest.raises(TypeError, match='Destination must be a Container'):
         Container.transfer(1, 1, '10 mL')
     with pytest.raises(TypeError, match='Destination must be a Container'):
@@ -1203,6 +1219,11 @@ def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, m
     with pytest.raises(TypeError, match='Invalid source type'):
         Container.transfer(1, water_stock, '10 mL')
 
+
+    # ==========================================================================
+    # Success Cases
+    # ==========================================================================    
+
     _transfer_message = "SUCCESSFUL CALL TO 'Container._transfer()'!"
     _transfer_slice_message = "SUCCESSFUL CALL TO 'Container._transfer_slice()'!"
 
@@ -1219,7 +1240,7 @@ def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, m
     mocker.patch.object(Container, '_transfer_slice', mock__transfer_slice)
 
     # ==========================================
-    # 1. Success case: call to _transfer()
+    # Success case: call to _transfer()
     # ==========================================    
     #
     result = Container.transfer(salt_water, water_stock, "1 mL")
@@ -1231,7 +1252,7 @@ def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, m
         "Container.transfer() failed to call Container._transfer()"
     
     # ==========================================
-    # 2. Success case: call to _transfer_slice()
+    # Success case: call to _transfer_slice()
     # ==========================================    
     #
     result = Container.transfer(water_plate, water_stock, "50 uL")
@@ -1241,12 +1262,6 @@ def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, m
     result = Container.transfer(water_plate, salt_water, ".25 L")
     assert result == _transfer_slice_message, \
         "Container.transfer() failed to call Container._transfer_slice()"
-
-    
-    
-
-
-
 
 def test_create_solution(water, dmso, 
                         salt, triethylamine, sodium_sulfate):
