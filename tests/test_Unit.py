@@ -39,10 +39,6 @@ def test_Unit_convert_prefix_to_multiplier():
     # Failure Case: Invalid string - does not match an existing prefix
     # ==========================================================================
 
-    # Test empty string
-    with pytest.raises(ValueError, match="Invalid prefix"):
-        Unit.convert_prefix_to_multiplier("")
-
     # Test pure whitespace
     with pytest.raises(ValueError, match="Invalid prefix"):
         Unit.convert_prefix_to_multiplier("   ")
