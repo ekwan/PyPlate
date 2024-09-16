@@ -481,11 +481,12 @@ class Unit:
         if not isinstance(unit, str):
             raise TypeError("Unit must be a str.")
 
-        # If the value is zero, return early with the provided unit
-        if value == 0:
+        # If the value is zero or non-finite, return early with the unit the
+        # user specified.
+        if value == 0 or not math.isfinite(value):
             return value, unit
         
-        # Try to parse the provided unit, and raise a ValueError if unsuccessful
+        # Try to parse the provided unit, and raise a ValueError if unsuccessful.
         base_unit = mult = None
         try:
             base_unit, mult = Unit.parse_prefixed_unit(unit)
@@ -506,7 +507,7 @@ class Unit:
             multiplier /= 1e3
 
         # Compute multiplier for values greater than 1000
-        while value > 1000 and multiplier < 1e6:
+        while value >= 1000 and multiplier < 1e6:
             value /= 1e3
             multiplier *= 1e3
 
@@ -514,12 +515,12 @@ class Unit:
         new_prefix = None
         try:
             new_prefix = Unit.convert_multiplier_to_prefix(multiplier)
-        except ValueError as e:
+        except ValueError as e: # pragma: no cover
             raise ValueError("Provided value/unit resulted in an internal logic"
                              " error. This error should never be encountered. "
                              "If you are reading this, please report the issue "
                              "at https://github.com/ekwan/PyPlate/issues.") \
-                            # pragma: no cover
+                            from e # pragma: no cover
 
         # TODO: Potentially come back and fix this with other precision issues.
         return round(value, config.precisions['default']), \

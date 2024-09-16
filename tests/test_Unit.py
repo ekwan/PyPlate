@@ -982,8 +982,57 @@ def test_Unit_get_human_readable_unit():
     
     This unit test checks the following failure scenarios:
     - Invalid argument types raise a `TypeError`.
-    - 
+    - Invalid unit argument raises a `ValueError`.
     """
-    # TODO: Need to finish this last unit test
+    
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
+    for invalid_float in [None, '', '1', [1], (2.5,), {}]:
+        with pytest.raises(TypeError, match="Value must be a float\\."):
+            Unit.get_human_readable_unit(invalid_float, 'mol')
+
+    for invalid_str in [None, False, 1, ['1'], ('2.5',), {}]:
+        with pytest.raises(TypeError, match="Unit must be a str\\."):
+            Unit.get_human_readable_unit(1, invalid_str)
 
 
+    # ==========================================================================
+    # Failure Case: Invalid unit
+    # ==========================================================================
+    
+    for invalid_unit in test_invalid_units:
+        with pytest.raises(ValueError):
+            Unit.get_human_readable_unit(1, invalid_unit)
+
+
+    # ==========================================================================
+    # Success Cases
+    # ==========================================================================
+    
+    # Selected variations of float/unit inputs
+    for unit in Unit.BASE_UNITS:
+        assert Unit.get_human_readable_unit(1000000, unit) == (1.0, f"M{unit}")
+        assert Unit.get_human_readable_unit(1000, unit) == (1.0, f"k{unit}")
+        assert Unit.get_human_readable_unit(1, unit) == (1.0, unit)
+        assert Unit.get_human_readable_unit(0.001, unit) == (1.0, f"m{unit}")
+
+        # Need to account for 'u' and 'µ' here.
+        result_value, result_unit = Unit.get_human_readable_unit(2e-6, unit)
+        assert result_value == 2.0
+        assert result_unit == f"u{unit}" or result_unit == f"µ{unit}"
+        
+        assert Unit.get_human_readable_unit(5.6e-9, unit) == (5.6, f"n{unit}")
+
+        # Edge cases: values of 0 and +/- infinity
+        for val in [0, float('inf'), float('-inf')]:
+            result_value, result_unit = Unit.get_human_readable_unit(val, unit)
+            assert result_value == val
+            assert result_unit == unit
+
+        # Edge case: NaN
+        val = float('nan')
+        result_value, result_unit = Unit.get_human_readable_unit(val, unit)
+        assert math.isnan(result_value)
+        assert result_unit == unit
