@@ -596,7 +596,12 @@ class Container:
         if unit[-1:] != 'g':
             raise ValueError(f"Invalid mass unit '{unit}'.")
 
-        return self.get_quantity(unit, substance)
+        # Try to get the mass using the generic "get_quantity()" function. Raise
+        # an appropriate error if this fails.
+        try:
+            return self.get_quantity(unit, substance)
+        except ValueError as ve:
+            raise ValueError(f"{ve}") from None
 
     @cache
     def get_moles(self, unit: str = 'mol', substance: Substance = None) -> float:
@@ -648,7 +653,7 @@ class Container:
             raise TypeError("Substance argument must be a Substance or None.")
         
         # Ensure the unit is a valid volume unit.
-        if unit[-1:].upper() != 'L' or unit[-3:].lower() == "mol":
+        if unit[-1:] != 'L' or unit[-3:].lower() == "mol":
             raise ValueError(f"Invalid volume unit '{unit}'.")
 
         if not substance:
@@ -677,6 +682,12 @@ class Container:
         if substance is not None and not isinstance(substance, Substance):
             raise TypeError("Substance argument must be a Substance or None.")
         
+        # Check to ensure the unit is a properly formed unit (result is unused)
+        try:
+            Unit.parse_prefixed_unit(unit)
+        except ValueError as e:
+            raise ValueError(str(e)) from None
+
         if not substance:
             return sum(
                 sub.convert(value, config.moles_storage_unit, unit)
@@ -706,7 +717,10 @@ class Container:
         if not isinstance(units, str):
             raise TypeError("Units must be a str.")
 
-        mult, *units = Unit.parse_concentration('1 ' + units)
+        try:
+            mult, *units = Unit.parse_concentration('1 ' + units)
+        except ValueError as e:
+            raise ValueError(f"{e}") from None
 
         numerator = solute.convert(self.contents.get(solute, 0), 
                                       config.moles_storage_unit, units[0])
@@ -1260,17 +1274,21 @@ class Container:
         used for all solutes.
 
         Arguments:
-            solute: What to dissolve. Can be a single Substance or an iterable
+            solute (Substance | Iterable[Substance]): What to dissolve. Can be a single Substance or an iterable
                     set of Substances.
-            solvent: What to dissolve with. Can be a Substance or a Container.
-            name: Optional name for new container.
-            concentration: Desired concentration(s). ('1 M', '0.1 umol/10 uL', etc.)
-            quantity: Desired quantity of solute(s). ('3 mL', '10 g')
-            total_quantity: Desired total quantity. ('3 mL', '10 g')
+            solvent (Substance | Container): What to dissolve with. Can be a Substance or a Container.
+            name (str, optional): Optional name for the new container.
+            concentration (str, optional): Desired concentration(s). ('1 M', '0.1 umol/10 uL', etc.)
+            quantity (str, optional): Desired quantity of solute(s). ('3 mL', '10 g')
+            total_quantity (str, optional): Desired total quantity. ('3 mL', '10 g')
 
 
         Returns:
-            New container with desired solution.
+            solvent (Container, optional): If the solvent is a Container, the 
+                                            updated container with the remaining
+                                            amount of solvent is returned.
+
+            solution (Container): New container with desired solution.
         """
 
         # Check that the solute argument has the correct type (either a single
@@ -1282,8 +1300,11 @@ class Container:
         if isinstance(solute, Substance):
             solute = [solute]
         elif not isinstance(solute, Iterable) or \
-             any(not isinstance(substance, Substance) for substance in solute):
-            raise TypeError("Solute(s) must be a Substance.")
+            isinstance(solute, str):
+            raise TypeError("Solute must be a Substance or a set of Substances.")
+        
+        if any(not isinstance(substance, Substance) for substance in solute):
+            raise TypeError("Solute must be a Substance or a set of Substances.")
 
         # Check that the solvent argument has the correct type
         if not isinstance(solvent, (Substance, Container)):
@@ -1304,9 +1325,9 @@ class Container:
         try:
             xs = Container._compute_solution_contents(solute, solvent, **kwargs)
         except TypeError as te:
-            raise TypeError(str(te)) from None
+            raise TypeError(str(te)) from te
         except ValueError as ve:
-            raise ValueError(str(ve)) from None
+            raise ValueError(str(ve)) from ve
 
         # Set the initial contents of the solution based on the results of the 
         # mole calculations above

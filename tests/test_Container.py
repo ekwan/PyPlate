@@ -11,16 +11,14 @@ from .unit_test_constants import epsilon, \
                             test_invalid_values, \
                             test_base_units, \
                             test_prefixes, \
+                            test_prefix_multipliers, \
                             test_units, \
                             test_invalid_units, \
                             test_volume_units, \
                             test_positive_volumes, \
                             test_negative_volumes, \
                             test_zero_volumes, \
-                            test_quantities, \
-                            test_positive_quantities, \
-                            test_negative_quantities, \
-                            test_zero_quantities
+                            test_negative_quantities
 
 from .common_mock_functions import mock_parse_quantity
 
@@ -1365,6 +1363,376 @@ def test_Container__transfer(water, dmso, salt, sodium_sulfate,
         assert_contents_helper(c1_prime, salt, 0, unit)
         assert c1_prime.volume == 0, assert_msg
 
+def test_Container_get_substances(empty_container, water, salt, sodium_sulfate,
+                                  water_stock, salt_water):
+    """
+    Unit Test for `Container.get_substances()`
+
+    This unit test checks the following success scenarios:
+    - Empty container
+    - Non-empty container with one substance
+    - Non-empty container with multiple substances
+    """
+
+    # ==========================================================================
+    # Success Case: Empty container
+    # ==========================================================================
+    
+    substances = empty_container.get_substances()
+
+    assert len(substances) == 0
+    assert salt not in substances
+    assert water not in substances
+    assert sodium_sulfate not in substances
+
+
+    # ==========================================================================
+    # Success Case: Non-empty container with one substance
+    # ==========================================================================
+
+    substances = water_stock.get_substances()
+
+    assert len(substances) == 1
+    assert water in substances
+    assert salt not in substances
+    assert sodium_sulfate not in substances
+
+
+    # ==========================================================================
+    # Success Case: Non-empty container with one substance
+    # ==========================================================================
+
+    substances = salt_water.get_substances()
+
+    assert len(substances) == 2
+    assert water in substances
+    assert salt in substances
+    assert sodium_sulfate not in substances
+
+def test_Container_get_mass(empty_container, water, salt, sodium_sulfate, 
+                            water_stock):
+    """
+    Unit Test for `Container.get_mass()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types result in raising a `TypeError`
+    - Invalid value for 'unit' results in raising a `ValueError`
+
+    This unit test checks for the following success scenarios:
+    - Valid unit provided for empty container (with/without substance argument)
+    - Valid unit provided for non-empty container (with/without substance argument)
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
+    with pytest.raises(TypeError, match="Unit must be a str\\."):
+        empty_container.get_mass(123)
+    with pytest.raises(TypeError, match="Unit must be a str\\."):
+        empty_container.get_mass(None)
+
+    with pytest.raises(TypeError, match="Substance argument must be a Substance or None\\."):
+        empty_container.get_mass('g', 123)
+    with pytest.raises(TypeError, match="Substance argument must be a Substance or None\\."):
+        empty_container.get_mass('g', "invalid")
+
+    # ==========================================================================
+    # Failure Case: Invalid value for 'unit'
+    # ==========================================================================
+    
+    # Sub-Case: Non-mass unit (e.g. 'L' or 'mol' or any invalid unit)
+    with pytest.raises(ValueError, match="Invalid mass unit "):
+        empty_container.get_mass('L')
+    with pytest.raises(ValueError, match="Invalid mass unit "):
+        empty_container.get_mass('mol')
+    with pytest.raises(ValueError, match="Invalid mass unit "):
+        empty_container.get_mass('2 mL')
+    for unit in test_invalid_units:
+        with pytest.raises(ValueError, match="Invalid mass unit "):
+            empty_container.get_mass(unit)
+
+    # Sub-Case: Invalid unit values (satisfy 'g' end check)
+    with pytest.raises(ValueError):
+        empty_container.get_mass('jg')
+    with pytest.raises(ValueError):
+        empty_container.get_mass('weg')
+    with pytest.raises(ValueError):
+        empty_container.get_mass('10 kg')
+
+    
+    # ==========================================================================
+    # Success Case: Empty container
+    # ==========================================================================
+    
+    for prefix in test_prefixes:
+        for substance in [None, water, salt, sodium_sulfate]:
+            mass = empty_container.get_mass(prefix + 'g', substance)
+            assert mass == 0
+
+
+    # ==========================================================================
+    # Success Case: Non-empty container
+    # ==========================================================================
+    
+    for prefix, mult in zip(test_prefixes, test_prefix_multipliers):
+        # Fixture is created with 10 mL of water (which is 10 g because of 
+        # water's density of 1 g/mL). Thus, both total mass and water mass 
+        # should be 10 g. The assert statement scales this amount by the
+        # multiplier for the current prefix.
+        for substance in [None, water]:
+            mass = water_stock.get_mass(prefix + 'g', substance)
+            assert mass == pytest.approx(10 / mult, rel=1e-10)
+
+        # These substances are not in the water stock, so their masses should be
+        # zero.
+        for substance in [salt, sodium_sulfate]:
+            mass = water_stock.get_mass(prefix + 'g', substance)
+            assert mass == 0
+
+def test_Container_get_moles(empty_container, water, salt, sodium_sulfate, 
+                             water_stock):
+    """
+    Unit Test for `Container.get_moles()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types result in raising a `TypeError`
+    - Invalid value for 'unit' results in raising a `ValueError`
+
+    This unit test checks for the following success scenarios:
+    - Valid unit provided for empty container (with/without substance argument)
+    - Valid unit provided for non-empty container (with/without substance argument)
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
+    with pytest.raises(TypeError, match="Unit must be a str\\."):
+        empty_container.get_moles(None)
+    with pytest.raises(TypeError, match="Unit must be a str\\."):
+        empty_container.get_moles(456)
+
+    with pytest.raises(TypeError, match="Substance argument must be a Substance or None\\."):
+        empty_container.get_moles('mol', 456)
+    with pytest.raises(TypeError, match="Substance argument must be a Substance or None\\."):
+        empty_container.get_moles('mol', "invalid")
+
+    # ==========================================================================
+    # Failure Case: Invalid value for 'unit'
+    # ==========================================================================
+    
+    # Sub-Case: Non-mole unit (e.g. 'g' or 'L' or any invalid unit)
+    with pytest.raises(ValueError, match="Invalid mole unit "):
+        empty_container.get_moles('g')
+    with pytest.raises(ValueError, match="Invalid mole unit "):
+        empty_container.get_moles('L')
+    with pytest.raises(ValueError, match="Invalid mole unit "):
+        empty_container.get_moles('2 g')
+    for unit in test_invalid_units:
+        with pytest.raises(ValueError, match="Invalid mole unit "):
+            empty_container.get_moles(unit)
+
+    # Sub-Case: Invalid unit values (satisfy 'mol' end check)
+    with pytest.raises(ValueError):
+        empty_container.get_moles('jmol')
+    with pytest.raises(ValueError):
+        empty_container.get_moles('wegmol')
+    with pytest.raises(ValueError):
+        empty_container.get_moles('10 mol')
+
+    
+    # ==========================================================================
+    # Success Case: Empty container
+    # ==========================================================================
+    
+    for prefix in test_prefixes:
+        for substance in [None, water, salt, sodium_sulfate]:
+            moles = empty_container.get_moles(prefix + 'mol', substance)
+            assert moles == 0
+
+
+    # ==========================================================================
+    # Success Case: Non-empty container
+    # ==========================================================================
+    
+    for prefix, mult in zip(test_prefixes, test_prefix_multipliers):
+        # Fixture is created with 10 mL of water (which is 10 g because of 
+        # water's density of 1 g/mL). Thus, both total moles and water moles 
+        # should be 10 g / 18.0153 g/mol (molecular weight of water). The assert 
+        # statement scales this amount by the multiplier for the current prefix.
+        for substance in [None, water]:
+            moles = water_stock.get_moles(prefix + 'mol', substance)
+            assert moles == pytest.approx((10 / 18.0153) / mult)
+
+        # These substances are not in the water stock, so their moles should be
+        # zero.
+        for substance in [salt, sodium_sulfate]:
+            moles = water_stock.get_moles(prefix + 'mol', substance)
+            assert moles == 0
+
+def test_Container_get_volume(empty_container, water, salt, sodium_sulfate, 
+                              water_stock):
+    """
+    Unit Test for `Container.get_volume()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types result in raising a `TypeError`
+    - Invalid value for 'unit' results in raising a `ValueError`
+
+    This unit test checks for the following success scenarios:
+    - Valid unit provided for empty container (with/without substance argument)
+    - Valid unit provided for non-empty container (with/without substance argument)
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
+    with pytest.raises(TypeError, match="Unit must be a str\\."):
+        empty_container.get_volume(None)
+    with pytest.raises(TypeError, match="Unit must be a str\\."):
+        empty_container.get_volume(789)
+
+    with pytest.raises(TypeError, match="Substance argument must be a Substance or None\\."):
+        empty_container.get_volume('L', 789)
+    with pytest.raises(TypeError, match="Substance argument must be a Substance or None\\."):
+        empty_container.get_volume('L', "invalid")
+
+    # ==========================================================================
+    # Failure Case: Invalid value for 'unit'
+    # ==========================================================================
+    
+    # Sub-Case: Non-volume unit (e.g. 'g' or 'mol' or any invalid unit)
+    with pytest.raises(ValueError, match="Invalid volume unit "):
+        empty_container.get_volume('g')
+    with pytest.raises(ValueError, match="Invalid volume unit "):
+        empty_container.get_volume('mol')
+    with pytest.raises(ValueError, match="Invalid volume unit "):
+        empty_container.get_volume('2 g')
+    for unit in test_invalid_units:
+        with pytest.raises(ValueError, match="Invalid volume unit "):
+            empty_container.get_volume(unit)
+
+    # Sub-Case: Invalid unit values (satisfy 'L' end check)
+    with pytest.raises(ValueError):
+        empty_container.get_volume('jL')
+    with pytest.raises(ValueError):
+        empty_container.get_volume('wegmolL')
+    with pytest.raises(ValueError):
+        empty_container.get_volume('10 L')
+
+    
+    # ==========================================================================
+    # Success Case: Empty container
+    # ==========================================================================
+    
+    for prefix in test_prefixes:
+        for substance in [None, water, salt, sodium_sulfate]:
+            volume = empty_container.get_volume(prefix + 'L', substance)
+            assert volume == 0
+
+
+    # ==========================================================================
+    # Success Case: Non-empty container
+    # ==========================================================================
+    
+    for prefix, mult in zip(test_prefixes, test_prefix_multipliers):
+        # Fixture is created with 10 mL of water. Thus, both total volume and 
+        # water volume should be 0.01 L. The assert statement scales this amount 
+        # by the multiplier for the current prefix.
+        for substance in [None, water]:
+            volume = water_stock.get_volume(prefix + 'L', substance)
+            assert volume == pytest.approx(0.01 / mult, rel=1e-10)
+
+        # These substances are not in the water stock, so their volumes should 
+        # be zero.
+        for substance in [salt, sodium_sulfate]:
+            volume = water_stock.get_volume(prefix + 'L', substance)
+            assert volume == 0
+
+def test_Container_get_quantity(empty_container, water, salt, sodium_sulfate, 
+                                water_stock):
+    """
+    Unit Test for `Container.get_quantity()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types result in raising a `TypeError`
+    - Invalid value for 'unit' results in raising a `ValueError`
+
+    This unit test checks for the following success scenarios:
+    - Valid unit provided for empty container (with/without substance argument)
+    - Valid unit provided for non-empty container (with/without substance argument)
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
+    with pytest.raises(TypeError, match="Unit must be a str\\."):
+        empty_container.get_quantity(None)
+    with pytest.raises(TypeError, match="Unit must be a str\\."):
+        empty_container.get_quantity(789)
+
+    with pytest.raises(TypeError, match="Substance argument must be a Substance or None\\."):
+        empty_container.get_quantity('L', 789)
+    with pytest.raises(TypeError, match="Substance argument must be a Substance or None\\."):
+        empty_container.get_quantity('L', "invalid")
+
+    # ==========================================================================
+    # Failure Case: Invalid value for 'unit'
+    # ==========================================================================
+
+    # Check invalid unit permutations
+    for unit in test_invalid_units:
+        with pytest.raises(ValueError):
+            empty_container.get_quantity(unit)
+
+    # Additional handwritten test examples
+    test_examples = [
+        '', '  ', '\t', '\n',
+        'jg', 'jmol', 'jL',
+        'abba', 'asdfg', 
+        '10g', '10mol', '10L', 
+        '10 g', '10 mol', '10 L', 
+    ]
+
+    for ex in test_examples:
+        with pytest.raises(ValueError):
+            empty_container.get_quantity(ex)
+
+    
+    # ==========================================================================
+    # Success Case: Empty container
+    # ==========================================================================
+    
+    for unit in test_units:
+        for substance in [None, water, salt, sodium_sulfate]:
+            volume = empty_container.get_quantity(unit, substance)
+            assert volume == 0
+
+
+    # ==========================================================================
+    # Success Case: Non-empty container
+    # ==========================================================================
+    
+    for unit in test_units:
+        # To avoid all the extra unit conversions for each possibile unit, 
+        # create a custom water stock with a known amount of water in the 
+        # unit being tested.
+        custom_water_stock = Container('water stock', 
+                                       initial_contents=[(water, f"5 {unit}")])
+
+        for substance in [None, water]:
+            volume = custom_water_stock.get_quantity(unit, substance)
+            assert volume == pytest.approx(5, rel=1e-6)
+
+        # These substances are not in the water stock, so their volumes should 
+        # be zero.
+        for substance in [salt, sodium_sulfate]:
+            volume = custom_water_stock.get_quantity(unit, substance)
+            assert volume == 0
+
 def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, mocker):
     """
     Unit Test for the function `Container.transfer()`
@@ -1443,6 +1811,95 @@ def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, m
     assert result == _transfer_slice_message, \
         "Container.transfer() failed to call Container._transfer_slice()"
 
+def test_get_concentration(water, salt):
+    """
+    Unit Test for `Container.get_concentration()`.
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types result in raising a `TypeError`
+    - Invalid argument value for 'unit' results in raising a `ValueError`
+
+    This unit test checks the following success scenarios:
+    - The method returns 0 if the substance is not in the container.
+    - The method returns the correct concentration of the substance in the 
+      container in the specified units.
+      - Units tested: ['M', 'L/L', 'mL/L', 'mol/mol', 'mol/mmol']
+    """
+
+    container = Container('container', '10 mL')
+    
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+
+    with pytest.raises(TypeError, match='Solute must be a Substance'):
+        container.get_concentration('water')
+    
+    with pytest.raises(TypeError, match='Units must be a str'):
+        container.get_concentration(water, None)
+    with pytest.raises(TypeError, match='Units must be a str'):
+        container.get_concentration(water, 1)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid argument value - invalid unit
+    # ==========================================================================
+
+    for unit in test_invalid_units:
+        with pytest.raises(ValueError):
+            container.get_concentration(salt, unit)
+
+
+    # ==========================================================================
+    # Success Case: Substance is not in the container 
+    # ==========================================================================
+    
+    assert salt not in container.contents
+    conc = container.get_concentration(salt, 'M')
+    assert conc == 0
+
+
+    # ==========================================================================
+    # Success Case: Substance is in the container
+    # ==========================================================================
+    
+    # Density is set to match water, and molar mass is set to 1 to simplify 
+    # conversions. 
+    simple_solute = Substance.solid('simple', 1, 0.001)
+
+    # Check if the method returns the correct concentration of the substance in 
+    # the container (units: M)
+    for value in [0.01, 0.1, 0.25, 0.5, 0.75]:
+        # Add 'value' liters of solute and '1 - value' liters of water to the
+        # solution. This results in 1 L of solution, with 'value' moles of 
+        # solute.
+        test_container = Container('tc', 'inf L', 
+                                   [(simple_solute, str(value) + ' L'),
+                                    (water, str(1 - value) + ' L')])
+        assert test_container.get_concentration(simple_solute) == \
+                pytest.approx(value, abs=1e-3)
+        assert test_container.get_concentration(simple_solute, 'L/L') == \
+                pytest.approx(value, abs=1e-3)
+        assert test_container.get_concentration(simple_solute, 'mL/L') == \
+                pytest.approx(value*1000, abs=1e-3)
+        
+
+    # Check if the method returns the correct conconcentration of the substance
+    # in the container (units: mol/mol)
+    for value in [0.01, 0.1, 0.25, 0.5, 0.75]:
+        # Add 'value' liters of solute and '1 - value' liters of water to the
+        # solution. This results in 1 L of solution, with 'value' moles of 
+        # solute.
+        test_container = Container('tc', 'inf L', 
+                                   [(salt, str(value) + ' mol'),
+                                    (water, str(1 - value) + ' mol')])
+        assert test_container.get_concentration(salt, 'mol/mol') == \
+                pytest.approx(value, abs=1e-3)
+        assert test_container.get_concentration(salt, 'mol/mmol') == \
+                pytest.approx(value*0.001, abs=1e-3)
+
+    # TODO: Add additional success cases for more unit variations
+
 def test_create_solution(water, dmso, 
                         salt, triethylamine, sodium_sulfate):
     """
@@ -1453,25 +1910,36 @@ def test_create_solution(water, dmso,
     - Invalid argument values will result in raising a `ValueError`.
 
     This unit test checks the following success scenarios:
-    - 
+    - Single solute and pure Substance solvent (various units)
+    - Multiple solutes and pure Substance solvent (various units)
+    - Single solute and Container solvent (specific units)
     """
     
     # ==========================================================================
     # Failure Case: Invalid argument types (non-keyword)
     # ==========================================================================
 
-    with pytest.raises(TypeError, match='Solute\\(s\\) must be a Substance\\.'):
+    with pytest.raises(TypeError, match='Solute must be a Substance or a set of Substances\\.'):
         Container.create_solution('salt', water, concentration='0.5 M', total_quantity='100 mL')
+    with pytest.raises(TypeError, match='Solute must be a Substance or a set of Substances\\.'):
+        Container.create_solution([1], water, concentration='0.5 M', total_quantity='100 mL')
 
     with pytest.raises(TypeError, match='Name must be a str\\.'):
-        Container.create_solution(salt, water, 1, conventration='0.5 M', total_quantity='100 mL')
+        Container.create_solution(salt, water, 1, conventration='0.5 M', 
+                                  total_quantity='100 mL')
     with pytest.raises(TypeError, match='Name must be a str\\.'):
-        Container.create_solution(salt, water, [], conventration='0.5 M', total_quantity='100 mL')
+        Container.create_solution(salt, water, [], conventration='0.5 M', 
+                                  total_quantity='100 mL')
     with pytest.raises(TypeError, match='Name must be a str\\.'):
-        Container.create_solution(salt, water, False, conventration='0.5 M', total_quantity='100 mL')
+        Container.create_solution(salt, water, False, conventration='0.5 M', 
+                                  total_quantity='100 mL')
     
     with pytest.raises(TypeError, match='Solvent must be a Substance or a Container\\.'):
-        Container.create_solution(salt, 'water', concentration='0.5 M', total_quantity='100 mL')
+        Container.create_solution(salt, 'water', concentration='0.5 M', 
+                                  total_quantity='100 mL')
+    with pytest.raises(TypeError, match='Solvent must be a Substance or a Container\\.'):
+        Container.create_solution(salt, [water], concentration='0.5 M', 
+                                  total_quantity='100 mL')
 
 
     # ==========================================================================
@@ -1515,89 +1983,135 @@ def test_create_solution(water, dmso,
     # Revert Container.compute_solution_contents() to the true function.
     Container._compute_solution_contents = real_compute_solution_contents
     
-    """
-    Create a solution using each a quantity of each solvent and solute in each unit.
-    Try "0.001 numerator/denominator" and "0.01 numerator/10 denominator"
-    Ensure the correct amount of solvent, solute, and total solution is applied.
-    """
+    
+    # The following variables are used in the success cases of this unit test
     solvents = [water, dmso]
     solutes = [salt, triethylamine, sodium_sulfate]
     units = ['g', 'mol', 'mL']
+
+    # ==========================================================================
+    # Success Case: Create solution with one solute and Substance solvent
+    # ==========================================================================
+
+    # Create a solution using 'concentration' and 'total quantity' parameters
     for numerator, denominator, quantity_unit in product(units, repeat=3):
         for solute in solutes:
             for solvent in solvents:
-                if numerator == 'mL' and solute.is_solid() and solute.density == float('inf'):
-                    continue
-                con = Container.create_solution(solute, solvent, concentration=f"0.001 {numerator}/{denominator}",
+                # Create a solution with the 'value unit/unit' format for concentration.
+                con = Container.create_solution(solute, solvent, 
+                                                concentration=f"0.001 {numerator}/{denominator}",
                                                 total_quantity=f"10 {quantity_unit}")
-                assert all(value > 0 for value in con.contents.values())
-                total = sum(substance.convert_quantity(f"{value} {config.moles_storage_unit}", quantity_unit) 
-                                for substance, value in con.contents.items())
-                assert abs(total - 10) < epsilon, f"Making 10 {quantity_unit} of a 0.001 {numerator}/{denominator}" \
-                                                  f" solution of {solute} and {solvent} failed."
-                conc = con.get_concentration(solute, f"{numerator}/{denominator}")
-                assert abs(conc - 0.001) < epsilon, f"{solute} and {solvent} failed to create a 0.001 {numerator}/{denominator}"
+                
+                # Check that all contents have positive amounts
+                assert all(value > 0 for value in con.contents.values()), \
+                    f"Making 10 {quantity_unit} of a 0.001 {numerator}/{denominator}" \
+                    f" solution of {solute} and {solvent} failed."
 
+                # Check that all contents sum to the expected total quantity 
+                total = sum(substance.convert(value, config.moles_storage_unit, quantity_unit) 
+                                for substance, value in con.contents.items())
+                assert abs(total - 10) < epsilon, \
+                    "Total quantity does not match supplied argument."
+                
+                # Check that the solute has the correct concentration
+                conc = con.get_concentration(solute, f"{numerator}/{denominator}")
+                assert abs(conc - 0.001) < epsilon, \
+                    "Solute concentration does not match supplied argument."
+
+
+                # Create a solution with the 'value unit/value unit' format for concentration.
                 con = Container.create_solution(solute, solvent, concentration=f"0.01 {numerator}/10 {denominator}",
                                                 total_quantity=f"10 {quantity_unit}")
-                total = 0
-                for substance, value in con.contents.items():
-                    total += substance.convert(value, config.moles_storage_unit, quantity_unit)
-                assert abs(total - 10) < epsilon
+                
+                # Check that all contents have positive amounts
+                assert all(value > 0 for value in con.contents.values()), \
+                    f"Making 10 {quantity_unit} of a 0.01 {numerator}/10 {denominator}" \
+                    f" solution of {solute} and {solvent} failed."
+
+                # Check that all contents sum to the expected total quantity
+                total = sum(substance.convert(value, config.moles_storage_unit, quantity_unit) 
+                                for substance, value in con.contents.items())
+                assert abs(total - 10) < epsilon, \
+                    "Total quantity does not match supplied argument."
+
+                # Check that the solute has the correct concentration.
                 conc = con.get_concentration(solute, f"{numerator}/{denominator}")
-                assert abs(conc - 0.01/10) < epsilon
+                assert abs(conc - 0.01/10) < epsilon, \
+                    "Solute concentration does not match supplied argument."
 
 
+    # ==========================================================================
+    # Success Case: Create solution from multiple solutes and Substance solvent
+    # ==========================================================================
+
+    # Create a solution using 'quantity' and 'total quantity' parameters
+    for quantity_unit in units:
+        for solvent in solvents:
+            # Create a solution using a quantity of 1 {unit} for each solute
+            # and a total quantity of 10 {unit}.
+            con = Container.create_solution(solutes, solvent, 
+                                            quantity=[f"1 {quantity_unit}",
+                                                      f"1 {quantity_unit}", 
+                                                      f"1 {quantity_unit}"],
+                                            total_quantity=f"10 {quantity_unit}")
+            
+            # Check that all contents have positive amounts
+            assert all(value > 0 for value in con.contents.values()), \
+                f"Making a 10 {quantity_unit} solution of {solute} in {solvent}"\
+                    f" with 1 {quantity_unit} of each solute failed."
+
+            # Check that all contents sum to the expected total quantity 
+            total = sum(substance.convert(value, config.moles_storage_unit, quantity_unit) 
+                            for substance, value in con.contents.items())
+            assert abs(total - 10) < epsilon, \
+                    "Total quantity does not match supplied argument."
+            
+            # Check that the solutes have the correct quantities
+            for solute in solutes:
+                expected_qty = solute.convert(1, quantity_unit, 'g')
+                qty = con.get_mass(substance=solute)
+                assert abs(qty - expected_qty) < epsilon, \
+                     f"{solute} quantity does not match supplied argument."
 
 
+    # ==========================================================================
+    # Success Case: Create solution from single solute and Container solvent
+    # ==========================================================================
+    
+    water_stock = Container('water stock', initial_contents=(water, '100 L'))
+
+    # Create a solution using 'concentration' and 'quantity' parameters
+    for solvent in solvents:
+        for solute in solutes:
+            results = Container.create_solution(solute, water_stock, 
+                                                concentration=["0.05 M"],
+                                                quantity=["50 g"])
+            
+            # Check that two Containers have been returned
+            assert len(results) == 2
+            stock_2, con = results
+            
+            # Check that the solute has the correct concentration.
+            conc = con.get_concentration(solute, "M")
+            assert abs(conc - 0.05) < epsilon, \
+                "Solute concentration does not match supplied argument."
+
+            # Check that the solute has the correct quantity
+            expected_qty = solute.convert(50, 'g', config.moles_storage_unit)
+            qty = con.contents[solute]
+            assert abs(qty - expected_qty) < epsilon, \
+                     f"{solute} quantity does not match supplied argument."
+            
+            # Check that the new stock solution's volume has been reduced by
+            # the correct amount.
+            added_water = con.contents[water]
+            lost_water = water_stock.contents[water] - stock_2.contents[water]
+            assert lost_water == pytest.approx(added_water, rel=1e-12)
+            
+
+    
 
 
-# def test_get_concentration(water, salt, dmso):
-#     """
-
-#     Tests get_concentration method of Container.
-
-#     It checks the following scenarios:
-#     - The argument types are correctly validated.
-#     - The method returns the correct concentration of the substance in the container.
-#     - The method raises a ValueError if the substance is not in the container.
-
-#     """
-
-#     # Argument types checked
-#     container = Container('container', '10 mL')
-#     with pytest.raises(TypeError, match='Solute must be a Substance'):
-#         container.get_concentration('water')
-#     with pytest.raises(TypeError, match='Units must be a str'):
-#         container.get_concentration(water, 1)
-
-#     # Check if the method returns the correct concentration of the substance in the container
-#     for value in [0.1, 0.5, 1.0]:
-#         stock = Container.create_solution(salt, water, concentration=f"{value} M", total_quantity='100 mL')
-#         assert stock.get_concentration(salt) == pytest.approx(value, abs=1e-3)
-
-#     ratio = stock.contents[salt] / sum(stock.contents.values())
-#     assert pytest.approx(ratio, abs=1e-3) == stock.get_concentration(salt, 'mol/mol')
-#     # Try to get the concentration of a substance that is not in the container
-#     assert stock.get_concentration(dmso) == 0
-
-
-# def test_create_solution_from(water, salt):
-#     # Create a stock solution of 1 M salt water
-#     stock = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
-
-#     # Create a solution of 0.5 M salt water from the stock solution
-#     stock, solution = Container.create_solution_from(stock, salt,'0.5 M', water, '50 mL')
-
-#     # Should contain 25 mmol of salt and have a total volume of 50 mL
-#     assert pytest.approx(salt.convert_quantity('25 mmol', config.moles_storage_unit)) == solution.contents[salt]
-#     assert pytest.approx(water.convert_quantity('50 mL', config.volume_storage_unit)) == solution.volume
-#     assert pytest.approx(Unit.convert_from_storage(solution.volume, 'mL')) == 50.0
-
-#     # stock should have a volume of 75 mL and 75 mmol of salt
-#     # Try to create a solution with more volume than the source container holds
-#     with pytest.raises(ValueError, match='Not enough mixture left in source container'):
-#         Container.create_solution_from(stock, salt, '1 M', water, '100 mL')
 
 # def test_create_solution(water, salt, sodium_sulfate):
 

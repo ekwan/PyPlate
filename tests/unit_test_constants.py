@@ -1,5 +1,5 @@
 
-epsilon = 1e-3
+epsilon = 1e-6
 
 # Test examples should be inserted at the location of the 'e' character. 
 #
