@@ -793,30 +793,33 @@ class Container:
             return destination._transfer_slice(source, quantity)
         raise TypeError("Invalid source type.")
 
-    def _auto_generate_solution_name(solute : Iterable[Substance],
+    @staticmethod
+    def _auto_generate_solution_name(solute : Substance | Iterable[Substance],
                                      solvent : Substance | Container):
         
         """
         Automatically generates a name for a solution based on the specified
-        contents of the solution.
+        contents of the solution. This function is a helper for the function
+        `Container.create_solution()`.
 
         Args:
-            - solute - The set of solutes of the solution.
-            - solvent - The solvent of the solution, can be either a Substance
-            or a Container.
+            solute (Substance|Iterable[Substance]): The set of solutes of
+                the solution. Can be a single Substance or a list of Substances.     
+            solvent(Substance | Container): The solvent of the solution, can 
+                be either a Substance or a Container.
 
         Returns:
-            - The auto-generated name (as a 'str').
+            name (str): The automatically generated name.
         """
         # Check argument types
         if isinstance(solute, Substance):
             solute = [solute]
-        if not isinstance(solute, Iterable) or \
-            not any(isinstance(sub, Substance) for sub in solute):
+        if not isinstance(solute, Iterable) or len(solute) == 0 or \
+            any(not isinstance(sub, Substance) for sub in solute):
             raise TypeError("Solute(s) must be a Substance.")
         
         if not isinstance(solvent, (Substance, Container)):
-            raise TypeError("Solvent must be a Substance or Container.")
+            raise TypeError("Solvent must be a Substance or a Container.")
         
         # Create a list of the solute names separated by commas
         solute_names = ', '.join(substance.name for substance in solute)
@@ -878,7 +881,7 @@ class Container:
         # an internal hidden function, it is the responsibility of the functions
         # that call this function to make an iterable object from a single 
         # substance.
-        if not isinstance(solute, Iterable) or \
+        if not isinstance(solute, Iterable) or len(solute) == 0 or \
              any(not isinstance(substance, Substance) for substance in solute):
             raise TypeError("Solute(s) must be a Substance.")
 
@@ -1300,10 +1303,12 @@ class Container:
         # This check is necessary to correctly generate the solution name in the
         # case where it is not provided, otherwise it would have been moved to
         # Container._compute_solution_contents().
+        #
+        # NOTE: The zero length check is needed to raise a TypeError for any 
+        # iterable type that is empty.
         if isinstance(solute, Substance):
             solute = [solute]
-        elif not isinstance(solute, Iterable) or \
-            isinstance(solute, str):
+        elif not isinstance(solute, Iterable) or len(solute) == 0:
             raise TypeError("Solute must be a Substance or a set of Substances.")
         
         if any(not isinstance(substance, Substance) for substance in solute):
@@ -1319,7 +1324,7 @@ class Container:
             raise TypeError("Name must be a str.")
 
         # If no name is provided, automatically generate a name based on the
-        # solutes/solvent arguments
+        # solutes/solvent arguments.
         if not name:
             name = Container._auto_generate_solution_name(solute, solvent)
 

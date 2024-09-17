@@ -2246,8 +2246,80 @@ def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, m
     assert result == _transfer_slice_message, \
         "Container.transfer() failed to call Container._transfer_slice()"
 
+def test_Container__auto_generate_solution_name(salt, sodium_sulfate, water, 
+                                                water_stock, salt_water):
+    """
+    Unit Test for `Container._auto_generate_solution_name()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types result in raising a `TypeError`
+
+    This unit test checks the following success scenarios:
+    - Single solute and pure Substance solvent
+    - Multiple solutes and pure Substance solvent
+    - Single solute and Container solvent with one substance
+    - Multiple solutes and Container solvent with one substance
+    - Single solute and Container solvent with multiple substances
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
+    non_substances = [None, False, 1, 'water', {}, 
+                      [1], [water_stock], [salt, 1]]
+    for non_substance in non_substances:
+        with pytest.raises(TypeError, match=r'Solute\(s\) must be a Substance\.'):
+            Container._auto_generate_solution_name(non_substance, water)
+
+    for bad_solvent in [None, False, 1, 'water', [1], [water_stock], {}]:
+        with pytest.raises(TypeError, match='Solvent must be a Substance or a Container\\.'):
+            Container._auto_generate_solution_name(salt, bad_solvent)
+
+    
+    # ==========================================================================
+    # Success Case: Single solute and pure Substance solvent
+    # ==========================================================================
+    auto_name = Container._auto_generate_solution_name(salt, water)
+    assert auto_name == "Solution of NaCl in H2O"
+
+
+    # ==========================================================================
+    # Success Case: Multiple solutes and pure Substance solvent
+    # ==========================================================================
+    
+    auto_name = Container._auto_generate_solution_name([salt, sodium_sulfate], 
+                                                       water)
+    assert auto_name == "Solution of NaCl, Sodium sulfate in H2O"
+
+
+    # ==========================================================================
+    # Success Case: Single solute and Container solvent with one substance
+    # ==========================================================================
+    
+    auto_name = Container._auto_generate_solution_name(salt, water_stock)
+    assert auto_name == "Solution of NaCl in H2O"
+
+
+    # ==========================================================================
+    # Success Case: Multiple solutes and Container solvent with one substance
+    # ==========================================================================
+    
+    auto_name = Container._auto_generate_solution_name([salt, sodium_sulfate], 
+                                                       water_stock)
+    assert auto_name == "Solution of NaCl, Sodium sulfate in H2O"
+
+
+    # ==========================================================================
+    # Success Case: Single solute and Container solvent with multiple substances
+    # ==========================================================================
+    
+    auto_name = Container._auto_generate_solution_name(salt, salt_water)
+    assert auto_name == "Solution of NaCl in contents of Container 'salt water'"
+
 def test_Container_create_solution(mocker, water, dmso, 
-                        salt, triethylamine, sodium_sulfate):
+                        salt, triethylamine, sodium_sulfate,
+                        water_stock, salt_water):
     """
     Unit Test for the function `Container.create_solution()`
 
@@ -2265,27 +2337,27 @@ def test_Container_create_solution(mocker, water, dmso,
     # Failure Case: Invalid argument types (non-keyword)
     # ==========================================================================
 
-    with pytest.raises(TypeError, match='Solute must be a Substance or a set of Substances\\.'):
-        Container.create_solution('salt', water, concentration='0.5 M', total_quantity='100 mL')
-    with pytest.raises(TypeError, match='Solute must be a Substance or a set of Substances\\.'):
-        Container.create_solution([1], water, concentration='0.5 M', total_quantity='100 mL')
-
-    with pytest.raises(TypeError, match='Name must be a str\\.'):
-        Container.create_solution(salt, water, 1, conventration='0.5 M', 
-                                  total_quantity='100 mL')
-    with pytest.raises(TypeError, match='Name must be a str\\.'):
-        Container.create_solution(salt, water, [], conventration='0.5 M', 
-                                  total_quantity='100 mL')
-    with pytest.raises(TypeError, match='Name must be a str\\.'):
-        Container.create_solution(salt, water, False, conventration='0.5 M', 
-                                  total_quantity='100 mL')
+    # Solute type checking
+    non_substances = [None, False, 1, 'water', {}, 
+                      [1], [water_stock], [salt, 1]]
+    for non_substance in non_substances:
+        with pytest.raises(TypeError, match='Solute must be a Substance or a set of Substances\\.'):
+            Container.create_solution(non_substance, water, concentration='0.5 M', total_quantity='100 mL')
     
-    with pytest.raises(TypeError, match='Solvent must be a Substance or a Container\\.'):
-        Container.create_solution(salt, 'water', concentration='0.5 M', 
-                                  total_quantity='100 mL')
-    with pytest.raises(TypeError, match='Solvent must be a Substance or a Container\\.'):
-        Container.create_solution(salt, [water], concentration='0.5 M', 
-                                  total_quantity='100 mL')
+    # Solvent type checking
+    for bad_solvent in [None, False, 1, 'water', [1], [water_stock], {}]:
+        with pytest.raises(TypeError, match='Solvent must be a Substance or a Container\\.'):
+            Container.create_solution(salt, bad_solvent, 
+                                      concentration='0.5 M', 
+                                      total_quantity='100 mL')
+    
+    # Name type checking (NOTE: None and '' are both valid, as they are intended
+    # to be converted to an auto-generated name)
+    for non_str in [False, 1, 1.0, [], {}, [1.0], ['1']]:
+        with pytest.raises(TypeError, match='Name must be a str\\.'):
+            Container.create_solution(salt, water, non_str, 
+                                      conventration='0.5 M', 
+                                      total_quantity='100 mL')
 
 
     # ==========================================================================
