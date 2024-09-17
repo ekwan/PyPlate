@@ -21,6 +21,10 @@ def empty_container() -> Container:
 def water_stock(water) -> Container:
     return Container('water', initial_contents=((water, '10 mL'),))
 
+@pytest.fixture
+def salt_stock(salt):
+    return Container('salt_stock', initial_contents=(salt, '1 g'))
+
 
 @pytest.fixture
 def salt_water(water, salt) -> Container:

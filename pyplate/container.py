@@ -562,7 +562,8 @@ class Container:
     @cache
     def has_liquid(self) -> bool:
         """
-        Returns: True if any substance in the container is a liquid.
+        Returns: `True` if any substance in the container is a liquid, `False` 
+        otherwise.
         """
         return any(substance.is_liquid() for substance in self.contents)
 

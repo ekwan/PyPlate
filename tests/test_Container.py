@@ -1363,6 +1363,23 @@ def test_Container__transfer(water, dmso, salt, sodium_sulfate,
         assert_contents_helper(c1_prime, salt, 0, unit)
         assert c1_prime.volume == 0, assert_msg
 
+def test_Container_has_liquid(empty_container, water_stock, 
+                              salt_stock, salt_water):
+    """
+    Unit Test for `Container.has_liquid()`
+
+    This unit test checks the following scenarios:
+    - Empty container (should return False)
+    - Non-empty container with no liquid (should return False)
+    - Non-empty container with only liquid (should return True)
+    - Non-empty container with both solids and liquid (should return True)
+    """
+
+    assert not empty_container.has_liquid()
+    assert not salt_stock.has_liquid()
+    assert water_stock.has_liquid()
+    assert salt_water.has_liquid()  
+
 def test_Container_get_substances(empty_container, water, salt, sodium_sulfate,
                                   water_stock, salt_water):
     """
@@ -1733,85 +1750,7 @@ def test_Container_get_quantity(empty_container, water, salt, sodium_sulfate,
             volume = custom_water_stock.get_quantity(unit, substance)
             assert volume == 0
 
-def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, mocker):
-    """
-    Unit Test for the function `Container.transfer()`
-    
-    NOTE: There are separate unit tests for the hidden functions `Container._transfer()`
-    and `Container._transfer_slice()`. The purpose of this unit test is to ensure that 
-    the wrapper function `Container.transfer()` works correctly. 
-
-    This unit test checks the following scenarios:
-    - Arguments raise a `TypeError` if they are not the correct types
-    - Calling with the correct types with a Container as the source
-    - Calling with the correct types with a Plate as the source
-    """
-    # ==========================================================================
-    # Failure Case: Invalid argument types
-    # ==========================================================================
-    
-    with pytest.raises(TypeError, match='Destination must be a Container'):
-        Container.transfer(1, 1, '10 mL')
-    with pytest.raises(TypeError, match='Destination must be a Container'):
-        Container.transfer(1, None, '10 mL')
-    with pytest.raises(TypeError, match='Destination must be a Container'):
-        Container.transfer(1, [], '10 mL')
-    with pytest.raises(TypeError, match='Destination must be a Container\\.' + \
-                                    ' Use \'Plate\\.transfer\\(\\)\' to transfer' + \
-                                    ' to a Plate\\.'):
-        Container.transfer(1, empty_plate, '10 mL')
-    with pytest.raises(TypeError, match='Destination must be a Container\\.' + \
-                                    ' Use \'Plate\\.transfer\\(\\)\' to transfer' + \
-                                    ' to a Plate\\.'):
-        Container.transfer(1, water_plate, '10 mL')
-    with pytest.raises(TypeError, match='Invalid source type'):
-        Container.transfer(1, water_stock, '10 mL')
-
-
-    # ==========================================================================
-    # Success Cases
-    # ==========================================================================    
-
-    _transfer_message = "SUCCESSFUL CALL TO 'Container._transfer()'!"
-    _transfer_slice_message = "SUCCESSFUL CALL TO 'Container._transfer_slice()'!"
-
-    # Set up mocking for Container._transfer() and Container._transfer_slice()
-    def mock__transfer(container, source, quantity):
-        return _transfer_message
-    
-    def mock__transfer_slice(container, source, quantity):
-        return _transfer_slice_message
-
-    # Replace calls to Container._transfer and Container._transfer_slice functions
-    # with calls to the mock versions
-    mocker.patch.object(Container, '_transfer', mock__transfer)
-    mocker.patch.object(Container, '_transfer_slice', mock__transfer_slice)
-
-    # ==========================================
-    # Success case: call to _transfer()
-    # ==========================================    
-    #
-    result = Container.transfer(salt_water, water_stock, "1 mL")
-    assert result == _transfer_message, \
-        "Container.transfer() failed to call Container._transfer()"
-    
-    result = Container.transfer(water_stock, salt_water, "0.5 L")
-    assert result == _transfer_message, \
-        "Container.transfer() failed to call Container._transfer()"
-    
-    # ==========================================
-    # Success case: call to _transfer_slice()
-    # ==========================================    
-    #
-    result = Container.transfer(water_plate, water_stock, "50 uL")
-    assert result == _transfer_slice_message, \
-        "Container.transfer() failed to call Container._transfer_slice()"
-    
-    result = Container.transfer(water_plate, salt_water, ".25 L")
-    assert result == _transfer_slice_message, \
-        "Container.transfer() failed to call Container._transfer_slice()"
-
-def test_get_concentration(water, salt):
+def test_Container_get_concentration(water, salt):
     """
     Unit Test for `Container.get_concentration()`.
 
@@ -1900,7 +1839,181 @@ def test_get_concentration(water, salt):
 
     # TODO: Add additional success cases for more unit variations
 
-def test_create_solution(mocker, water, dmso, 
+def test_Container__add(mocker, empty_container, salt):
+    """
+    Unit Test for `Container._add()`
+
+    This unit test ensures that this function raises any errors raised in the 
+    sub-call to `Container._self_add()`. It also checks that the destination
+    container that is returned is NOT the same Python object as the original 
+    container.
+
+    This unit test does NOT fully test the functionality of the hidden function
+    `Container._self_add()`.
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types for subcall to Container._self_add()
+    # ==========================================================================
+    
+    # Store the true function in a variable so that it can be called later
+    real__add = Container._add
+
+    # Set up mock function for Container._add()
+    _type_error_message = "THIS IS A TEST TYPE ERROR!"
+
+    def mock__add_type_error(self, source, quantity):
+        raise TypeError(_type_error_message)
+
+    # Replace calls to Container.add() with the mock version.
+    mocker.patch.object(Container, '_add', mock__add_type_error)
+    
+    # Check that this function correctly raises any type errors for the keywords
+    # generated by the sub-call to Container._compute_solution_contents()
+    with pytest.raises(TypeError, match=_type_error_message):
+        empty_container._add(salt, '1 g')
+
+    # Revert Container._compute_solution_contents() to its original form
+    mocker.patch.object(Container, '_add', 
+                                    real__add)
+    
+
+    # ==========================================================================
+    # Failure Case: Invalid argument values for subcall to Container._self_add()
+    # ==========================================================================
+    
+    # Store the true function in a variable so that it can be called later
+    real__add = Container._add
+
+    # Set up mock function for Container._add()
+    _value_error_message = "THIS IS A TEST VALUE ERROR!"
+    def mock__add_value_error(self, source, quantity):
+        raise ValueError(_value_error_message)
+
+    # Replace calls to Container.add() with the mock version.
+    mocker.patch.object(Container, '_add', mock__add_value_error)
+    
+    # Check that this function correctly raises any type errors for the keywords
+    # generated by the sub-call to Container._compute_solution_contents()
+    with pytest.raises(ValueError, match=_value_error_message):
+        empty_container._add(salt, '1 g')
+
+    # Revert Container._compute_solution_contents() to its original form
+    mocker.patch.object(Container, '_add', 
+                                    real__add)
+    
+
+    # ==========================================================================
+    # Success Case: Non-zero transfer added quantity
+    # ==========================================================================
+    
+    salt_stock = empty_container._add(salt, '1 mol')
+    
+    # Ensure the two objects are not the same
+    assert salt_stock is not empty_container 
+    
+    # Ensure that the old object has not been affected by the added salt
+    assert salt not in empty_container.contents
+
+    # Ensure that the salt has been added to the new container as expected
+    assert salt in salt_stock.contents
+    assert salt_stock.contents[salt] == Unit.convert_to_storage(1, 'mol')
+    
+
+    # ==========================================================================
+    # Success Case: Zero transfer added quantity
+    # ==========================================================================
+    
+    salt_stock = empty_container._add(salt, '0 mol')
+    
+    # Ensure the two objects are not the same
+    assert salt_stock is not empty_container 
+    
+    # Ensure that the old object has not been affected by the added salt
+    assert salt not in empty_container.contents
+
+    # Ensure that salt has not been added to the new container's contents
+    assert salt not in salt_stock.contents
+
+def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, mocker):
+    """
+    Unit Test for the function `Container.transfer()`
+    
+    NOTE: There are separate unit tests for the hidden functions `Container._transfer()`
+    and `Container._transfer_slice()`. The purpose of this unit test is to ensure that 
+    the wrapper function `Container.transfer()` works correctly. 
+
+    This unit test checks the following scenarios:
+    - Arguments raise a `TypeError` if they are not the correct types
+    - Calling with the correct types with a Container as the source
+    - Calling with the correct types with a Plate as the source
+    """
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
+    with pytest.raises(TypeError, match='Destination must be a Container'):
+        Container.transfer(1, 1, '10 mL')
+    with pytest.raises(TypeError, match='Destination must be a Container'):
+        Container.transfer(1, None, '10 mL')
+    with pytest.raises(TypeError, match='Destination must be a Container'):
+        Container.transfer(1, [], '10 mL')
+    with pytest.raises(TypeError, match='Destination must be a Container\\.' + \
+                                    ' Use \'Plate\\.transfer\\(\\)\' to transfer' + \
+                                    ' to a Plate\\.'):
+        Container.transfer(1, empty_plate, '10 mL')
+    with pytest.raises(TypeError, match='Destination must be a Container\\.' + \
+                                    ' Use \'Plate\\.transfer\\(\\)\' to transfer' + \
+                                    ' to a Plate\\.'):
+        Container.transfer(1, water_plate, '10 mL')
+    with pytest.raises(TypeError, match='Invalid source type'):
+        Container.transfer(1, water_stock, '10 mL')
+
+
+    # ==========================================================================
+    # Success Cases
+    # ==========================================================================    
+
+    _transfer_message = "SUCCESSFUL CALL TO 'Container._transfer()'!"
+    _transfer_slice_message = "SUCCESSFUL CALL TO 'Container._transfer_slice()'!"
+
+    # Set up mocking for Container._transfer() and Container._transfer_slice()
+    def mock__transfer(container, source, quantity):
+        return _transfer_message
+    
+    def mock__transfer_slice(container, source, quantity):
+        return _transfer_slice_message
+
+    # Replace calls to Container._transfer and Container._transfer_slice functions
+    # with calls to the mock versions
+    mocker.patch.object(Container, '_transfer', mock__transfer)
+    mocker.patch.object(Container, '_transfer_slice', mock__transfer_slice)
+
+    # ==========================================
+    # Success case: call to _transfer()
+    # ==========================================    
+    #
+    result = Container.transfer(salt_water, water_stock, "1 mL")
+    assert result == _transfer_message, \
+        "Container.transfer() failed to call Container._transfer()"
+    
+    result = Container.transfer(water_stock, salt_water, "0.5 L")
+    assert result == _transfer_message, \
+        "Container.transfer() failed to call Container._transfer()"
+    
+    # ==========================================
+    # Success case: call to _transfer_slice()
+    # ==========================================    
+    #
+    result = Container.transfer(water_plate, water_stock, "50 uL")
+    assert result == _transfer_slice_message, \
+        "Container.transfer() failed to call Container._transfer_slice()"
+    
+    result = Container.transfer(water_plate, salt_water, ".25 L")
+    assert result == _transfer_slice_message, \
+        "Container.transfer() failed to call Container._transfer_slice()"
+
+def test_Container_create_solution(mocker, water, dmso, 
                         salt, triethylamine, sodium_sulfate):
     """
     Unit Test for the function `Container.create_solution()`
@@ -1985,8 +2098,8 @@ def test_create_solution(mocker, water, dmso,
     mocker.patch.object(Container, '_compute_solution_contents', 
                                     mock_compute_value_error)
 
-    # Check that this function correctly raises any type errors for the keywords
-    # generated by the sub-call to Container._compute_solution_contents()
+    # Check that this function correctly raises any value errors generated by 
+    # the subcall to Container._compute_solution_contents()
     with pytest.raises(ValueError, match=_value_error_message):
         Container.create_solution(salt, water)
 
