@@ -420,6 +420,52 @@ def test_Container___eq__(empty_container, empty_plate, water, dmso):
     # to avoid linking the containers' contents to the same object)
     test_container_water_1.contents = deepcopy(test_container_water_2.contents)
 
+def test_Container___hash__(empty_container, water_stock, 
+                            salt_stock, salt_water):
+    """
+    Unit Test for `Container.__hash__()`
+    
+    This unit test ensures that identical containers result in the same hashing.
+    Specifically it tests the following scenarios:
+    - Comparison of two calls to __hash__() by the same Container object.
+    - Comparison of the hash results of two identical Container objects.
+    """
+
+    containers = [empty_container, water_stock, salt_stock, salt_water]
+
+    # ==========================================================================
+    # Equal Case: Two hashes of the same container
+    # ==========================================================================
+
+    for container in containers:
+        assert container.__hash__() == container.__hash__()
+
+    # ==========================================================================
+    # Equal Case: Hashes of identical containers
+    # ==========================================================================
+
+    for container in containers:
+        # Recreate the max volume parameter from the maximum volume of the 
+        # current container.
+        max_volume_str = f"{container.max_volume} {config.volume_storage_unit}" 
+        
+        # Recreate the initial_contents parameter from the contents of the
+        # current container.
+        identical_contents = []
+        for substance, val in container.contents.items():
+            qty = f"{val} {config.moles_storage_unit}"
+            identical_contents.append((substance, qty))
+        
+        # For a given container, checks both a) an identical substance created 
+        # manually with the same arguments and b) a deepcopy of the substance
+        identical_container = Container(name=container.name,
+                                        max_volume=max_volume_str,
+                                        initial_contents=identical_contents)
+        identical_container_2 = deepcopy(container)
+
+        assert container.__hash__() == identical_container.__hash__()
+        assert container.__hash__() == identical_container_2.__hash__()
+
 def test_Container__self_add(water, dmso, salt, sodium_sulfate):
     """
     Unit Test for the function `Container._self_add()`.
@@ -1362,6 +1408,193 @@ def test_Container__transfer(water, dmso, salt, sodium_sulfate,
         assert_contents_helper(c1_prime, water, 0, unit)
         assert_contents_helper(c1_prime, salt, 0, unit)
         assert c1_prime.volume == 0, assert_msg
+
+def test_Container__transfer_slice(empty_container, empty_plate, water_plate,
+                                   water, mocker):
+    """
+    Unit Test for `Container._transfer_slice()`
+
+    This unit test checks for the following failure scenarios:
+    - Invalid argument type for source_slice results in raising a `TypeError`
+    - TypeErrors produced by the subcall to _transfer result in a `TypeError` 
+    - ValueErrors produced by the subcall to _tranfer result in a `ValueError`
+    - Transfer volume exceeds the volume of the source plate well
+    - Transfer results in overflowing the destination container
+
+    This unit test checks for the following success scenarios:
+    - Partial transfer of every well in plate to container
+    - Full transfer of every well plate contents to container
+    - Partial transfer of slice of wells in plate to container
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid source type
+    # ==========================================================================
+    
+    for non_plate in [None, False, 1, '1', (1,), [], {}, empty_container]:
+        with pytest.raises(TypeError, match="Invalid source type."):
+            empty_container._transfer_slice(non_plate, '1 mL')
+
+
+    # ==========================================================================
+    # Failure Case: TypeError from subcall to Container._transfer()
+    # ==========================================================================
+    
+    # Store the true function in a variable so that it can be called later
+    real__transfer = Container._transfer
+
+    # Set up mock function for Container._transfer()
+    _type_error_message = "THIS IS A TEST TYPE ERROR!"
+    def mock__transfer(container, source, quantity):
+        raise TypeError(_type_error_message)
+
+    # Replace calls to Container._transfer and Container._transfer_slice functions
+    # with calls to the mock versions
+    mocker.patch.object(Container, '_transfer', mock__transfer)
+    
+    # Check that this function correctly raises any type errors for the keywords
+    # generated by the sub-call to Container._compute_solution_contents()
+    with pytest.raises(TypeError, match=_type_error_message):
+        empty_container._transfer_slice(water_plate, '10 uL')
+
+    # Revert Container._transfer() to its original form
+    mocker.patch.object(Container, '_transfer', real__transfer)
+
+
+    # ==========================================================================
+    # Failure Case: ValueError from subcall to Container._transfer()
+    # ==========================================================================
+    
+    # Store the true function in a variable so that it can be called later
+    real__transfer = Container._transfer
+
+    # Set up mock function for Container._transfer()
+    _value_error_message = "THIS IS A TEST VALUE ERROR!"
+    def mock__transfer(container, source, quantity):
+        raise TypeError(_value_error_message)
+
+    # Replace calls to Container._transfer and Container._transfer_slice functions
+    # with calls to the mock versions
+    mocker.patch.object(Container, '_transfer', mock__transfer)
+    
+    # Check that this function correctly raises any type errors for the keywords
+    # generated by the sub-call to Container._compute_solution_contents()
+    with pytest.raises(TypeError, match=_value_error_message):
+        empty_container._transfer_slice(water_plate, '10 uL')
+
+    # Revert Container._transfer() to its original form
+    mocker.patch.object(Container, '_transfer', real__transfer)
+
+
+    # ==========================================================================
+    # Failure Case: Transfer exceeds the plate well volume
+    # ==========================================================================
+    
+    with pytest.raises(ValueError):
+        empty_container._transfer_slice(water_plate, '1 L')
+    
+    
+    # ==========================================================================
+    # Failure Case: Transfer overflows the destination container
+    # ==========================================================================
+    
+    # Create a container with a maximum volume of 500 uL
+    container = Container('container', '80 uL')
+
+
+    # Sub-Case: Overflow on first transfer
+    # -------------------------------------
+
+    # Attempt to transfer 200 uL from each well to the container.
+    with pytest.raises(ValueError):
+        container._transfer_slice(water_plate, '100 uL')
+
+
+    # Sub-Case: Overflow on midway transfer
+    # --------------------------------------
+
+    # Attempt to transfer 10 uL from each well to the container (this will 
+    # exceed the maximum volume of the container, as there are 96 wells in the
+    # plate, resulting in a total attempted transfer volume of 960 uL).
+    with pytest.raises(ValueError):
+        container._transfer_slice(water_plate, '10 uL')
+
+    # NOTE: This sub-case assumes that the water plate has more than 8 wells.
+    #       If this is ever changed, the test will need to be adjusted so that
+    #       the transfer still overflows the container.
+    
+    
+    # ==========================================================================
+    # Success Case: Partial transfer of all wells to the container
+    # ==========================================================================
+    
+    # Transfer 10 uL from each well of the water plate to the container. 
+    plate_2, water_cont = empty_container._transfer_slice(water_plate, '10 uL')
+
+    # Calculate the total volume of water trasnferred from the water plate
+    num_wells = water_plate.n_rows * water_plate.n_columns
+    transfer_vol = 10 * num_wells
+
+    # Ensure that the transfer was successful. The water plate should have
+    # 960 uL less water, and the container should have 960 uL of water.
+    transfer_amt = water.convert(transfer_vol, 'uL', config.moles_storage_unit)
+    assert water_cont.contents[water] == pytest.approx(transfer_amt, rel=1e-12)
+    assert plate_2.get_volume('uL') == water_plate.get_volume('uL') - transfer_vol
+
+
+    # ==========================================================================
+    # Success Case: Full transfer of all wells to the container
+    # ==========================================================================
+    
+    # Get the amount of water in each well of the well plate
+    total_vol = water_plate.get_volume('uL') 
+    transfer_vol = total_vol / num_wells
+
+    # Transfer 10 uL from each well of the water plate to the container.
+    qty = str(transfer_vol) + ' uL' 
+    plate_2, water_cont = empty_container._transfer_slice(water_plate, qty)
+
+    # Ensure that the transfer was successful. The water plate should have
+    # no water, and the container should have all of the water that was in the
+    # water plate.
+    transfer_amt = water.convert(total_vol, 'uL', config.moles_storage_unit)
+    assert water_cont.contents[water] == pytest.approx(transfer_amt, rel=1e-12)
+    assert plate_2.get_volume('uL') == 0
+    assert len(plate_2.get_substances()) == 0
+
+
+    # ==========================================================================
+    # Success Case: Partial transfer of slice of wells to the container
+    # ==========================================================================
+    
+    # Set the plate slice to the top left 2x2 wells of the water plate
+    plate_slice = water_plate['A':'B',1:2]
+
+    # Transfer 10 uL from each well of the water plate to the container. 
+    plate_2, water_cont = empty_container._transfer_slice(plate_slice, '10 uL')
+
+    # Ensure that the transfer was successful. The container should have 40 uL 
+    # of water, and the top-left 2x2 wells of the water plate should each have 
+    # 10 less uL of water.
+
+    # Ensure that the water was transferred to the new container.
+    transfer_amt = water.convert(40, 'uL', config.moles_storage_unit)
+    assert water_cont.contents[water] == pytest.approx(transfer_amt, rel=1e-12)
+
+    # Ensure that the total volume of the water plate has been reduced by 40 uL.
+    assert plate_2.get_volume('uL') == water_plate.get_volume('uL') - 40 
+
+    for i, j in product(range(plate_2.n_rows), range(plate_2.n_columns)):
+        # Ensure that the top-left 2x2 wells of the water plate have 10 uL less 
+        # water.        
+        if i < 2 and j < 2:
+            assert plate_2.wells[i,j].get_volume('uL') == \
+                    water_plate.wells[i,j].get_volume('uL') - 10
+        
+        # Ensure that all other wells of the water plate have the same volume
+        else:
+            assert plate_2.wells[i,j].get_volume('uL') == \
+                    water_plate.wells[i,j].get_volume('uL')
 
 def test_Container_has_liquid(empty_container, water_stock, 
                               salt_stock, salt_water):

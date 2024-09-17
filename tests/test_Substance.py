@@ -278,9 +278,8 @@ def test_Substance___hash__(salt, water, sodium_sulfate, dmso):
     """
     Unit Test for the function `Substance.__hash__()`
     
-    This unit test ensures that identical substances result in the same hashing, 
-    and non-identical substances hash to different results. Specifically it 
-    tests the following scenarios:
+    This unit test ensures that identical substances result in the same hashing.
+    Specifically it tests the following scenarios:
     - Comparison of two calls to __hash__() by the same Substance.
     - Comparison of the hash results of two identical Substances.
     """

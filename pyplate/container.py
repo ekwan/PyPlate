@@ -275,10 +275,10 @@ class Container:
                                                    unit : str):
             precision = config.precisions['default']
             raise ValueError( 
-                    f"Not enough mixture left in source container" +
+                    f"Not enough mixture left in source container " +
                     f"'{source_container.name}'. Only " +
-                    f"{container_quantity, precision} {unit} available, but " + 
-                    f"{quantity_to_transfer, precision} {unit} needed."
+                    f"{container_quantity:.{precision}f} {unit} available, but " +
+                    f"{quantity_to_transfer:.{precision}f} {unit} needed."
                     )
 
         # Compute the fraction of the container's total contents that will be
@@ -487,8 +487,8 @@ class Container:
         Move quantity ('10 mL', '5 mg') from each well in a slice to self.
 
         Arguments:
-            source_slice: Slice or Plate to transfer from.
-            quantity: How much to transfer.
+            source_slice (Plate | PlateSlicer): Slice or Plate from which to transfer.
+            quantity (str): The amount to transfer **from each well** of the plate.
 
         Returns:
             A new plate and a new container, both modified.
@@ -500,15 +500,17 @@ class Container:
         if not TYPE_CHECKING:
             from pyplate.plate import Plate, PlateSlicer
 
+        if isinstance(source_slice, Plate):
+            source_slice = source_slice[:]
+        if not isinstance(source_slice, PlateSlicer):
+            raise TypeError("Invalid source type.")
+
+        # Define a helper function for per-well transfers
         def helper_func(elem):
             """ Moves volume from elem to to_array[0]"""
             elem, to_array[0] = to_array[0]._transfer(elem, quantity)
             return elem
 
-        if isinstance(source_slice, Plate):
-            source_slice = source_slice[:]
-        if not isinstance(source_slice, PlateSlicer):
-            raise TypeError("Invalid source type.")
         to = deepcopy(self)
         source_slice = copy(source_slice)
         source_slice.plate = deepcopy(source_slice.plate)
@@ -1718,31 +1720,6 @@ class Container:
         else:
             return source, solvent, new_solution
 
-    def remove(self, what: (Substance | int) = Substance.LIQUID) -> Container:
-        """
-        Removes substances from `Container`
-
-        Arguments:
-            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
-
-        Returns: New Container with requested substances removed.
-
-        """
-        new_container = deepcopy(self)
-        new_container.contents = {substance: value for substance, value in self.contents.items()
-                                  if what not in (substance._type, substance)}
-        new_container.volume = 0
-        for substance, value in new_container.contents.items():
-            new_container.volume += substance.convert(value, config.moles_storage_unit, config.volume_storage_unit)
-
-        new_container.instructions = self.instructions
-        classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid'}
-        if what in classes:
-            new_container.instructions += f"Remove all {classes[what]}s."
-        else:
-            new_container.instructions += f"Remove all {what.name}s."
-        return new_container
-
     def dilute_in_place(self, solute: Substance, concentration: str, 
                         solvent: (Substance | Container), 
                         name=None) -> Container:
@@ -1989,3 +1966,30 @@ class Container:
         result.instructions += f"\nFill with {round(required_quantity, precision)} {unit} of {substance.name}."
         
         return result
+
+    def remove(self, what: (Substance | int) = Substance.LIQUID) -> Container:
+        """
+        Removes substances from `Container`
+
+        Arguments:
+            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
+
+        Returns: New Container with requested substances removed.
+
+        """
+        new_container = deepcopy(self)
+        new_container.contents = {substance: value for substance, value in self.contents.items()
+                                  if what not in (substance._type, substance)}
+        new_container.volume = 0
+        for substance, value in new_container.contents.items():
+            new_container.volume += substance.convert(value, config.moles_storage_unit, config.volume_storage_unit)
+
+        new_container.instructions = self.instructions
+        classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid'}
+        if what in classes:
+            new_container.instructions += f"Remove all {classes[what]}s."
+        else:
+            new_container.instructions += f"Remove all {what.name}s."
+        return new_container
+
+    
