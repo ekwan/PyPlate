@@ -334,8 +334,7 @@ class Unit:
             raise ValueError(parse_error_msg + " Resulting concentration was "
                              "NaN.")
 
-        return value, \
-                    numerator_unit, denom_unit
+        return value, numerator_unit, denom_unit
 
     @staticmethod
     def convert_to_storage(value: float, unit: str) -> float:

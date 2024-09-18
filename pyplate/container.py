@@ -1041,7 +1041,6 @@ class Container:
         
         # If the concentration constraint has been specified, define the 
         # equations that correspond to the specified concentrations.  
-        top = None 
         if concentration is not None:
             # Ensure that the concentration argument has the correct type (this 
             # is only part of the type checking, type checking for each 
