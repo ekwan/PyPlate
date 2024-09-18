@@ -282,6 +282,12 @@ def test_Unit_parse_quantity():
             with pytest.raises(ValueError):
                 Unit.parse_quantity(merged_test_quantity)
 
+    # Edge case: Unit is 'M', which is not considered valid for quantities
+    match_msg = "Invalid unit 'M'. " \
+                "Concentration units are not allowed for quantities."
+    with pytest.raises(ValueError, match=match_msg):
+        Unit.parse_quantity('1 M')
+
     
     # ==========================================================================
     # Success Case: Valid argument values
@@ -490,9 +496,9 @@ def test_Unit_parse_concentration():
             #
             # Because Unit.parse_concentration() returns everything in base
             # units, the value needs to be scaled down from mol/kg to mol/g.
-            assert expected_value == value
-            assert 'mol' == num_unit
-            assert ('L' if unit == 'M' else 'g') == denom_unit 
+            assert value == pytest.approx(expected_value, rel=1e-12)
+            assert num_unit == 'mol'
+            assert denom_unit == ('L' if unit == 'M' else 'g') 
 
 
     # ==========================================================================
@@ -736,7 +742,7 @@ def test_Unit_parse_concentration():
 
     for ex in examples:
         value, num_unit, denom_unit = Unit.parse_concentration(ex[0])
-        assert ex[1] == value
+        assert pytest.approx(ex[1], rel=1e-12) == value
         assert ex[2] == num_unit
         assert ex[3] == denom_unit
 

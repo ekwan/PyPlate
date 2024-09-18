@@ -224,6 +224,10 @@ class Unit:
         except ValueError as e:
             raise e
         
+        if base_unit == 'M':
+            raise ValueError("Invalid unit 'M'. Concentration units are not "
+                             "allowed for quantities.")
+        
         # Compute the value converted into the parsed base unit and return the 
         # value-unit pair.
         return value * multiplier, base_unit
@@ -297,11 +301,6 @@ class Unit:
         except ValueError as e:
             raise ValueError(parse_error_msg + " Invalid numerator.")
         
-        # Molarity is currently supported in Unit.parse_quantity(), but it 
-        # cannot be allowed in the numerator of the concentration.
-        if numerator_unit == 'M':
-            raise ValueError(parse_error_msg + " Invalid numerator.")
-        
         # Try to parse the denominator into a valid quantity OR a valid unit
         #
         # NOTE: It is quite difficult to distinguish between a user incorrectly
@@ -318,7 +317,7 @@ class Unit:
             except ValueError:
                 raise ValueError(parse_error_msg + " Invalid denominator.")
 
-        # Molarity is currently supported in Unit.parse_quantity(), but it 
+        # Molarity is currently supported in Unit.parse_prefixed_unit(), but it 
         # cannot be allowed in the denominator of the concentration.
         if denom_unit == 'M':
             raise ValueError(parse_error_msg + " Invalid denominator.")
@@ -335,7 +334,7 @@ class Unit:
             raise ValueError(parse_error_msg + " Resulting concentration was "
                              "NaN.")
 
-        return round(value, config.internal_precision), \
+        return value, \
                     numerator_unit, denom_unit
 
     @staticmethod

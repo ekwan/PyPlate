@@ -701,7 +701,7 @@ class Container:
                                      config.moles_storage_unit, unit)
 
     @cache
-    def get_concentration(self, solute: Substance, units: str = 'M') -> float:
+    def get_concentration(self, solute: Substance, unit: str = 'M') -> float:
         """
         Get the concentration of solute in the current solution.
 
@@ -717,28 +717,28 @@ class Container:
         """
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
-        if not isinstance(units, str):
+        if not isinstance(unit, str):
             raise TypeError("Units must be a str.")
 
         try:
-            mult, *units = Unit.parse_concentration('1 ' + units)
+            mult, *unit = Unit.parse_concentration('1 ' + unit)
         except ValueError as e:
             raise ValueError(f"{e}") from None
 
         numerator = solute.convert(self.contents.get(solute, 0), 
-                                      config.moles_storage_unit, units[0])
+                                      config.moles_storage_unit, unit[0])
 
         if numerator == 0:
             return 0
 
-        if units[1].endswith('L'):
-            denominator = self.get_volume(units[1])
+        if unit[1].endswith('L'):
+            denominator = self.get_volume(unit[1])
         else:
             denominator = 0
             for substance, amount in self.contents.items():
                 denominator += substance.convert(amount, 
                                                  config.moles_storage_unit,
-                                                   units[1])
+                                                   unit[1])
 
         return round(numerator / denominator / mult, config.internal_precision)
     
@@ -868,13 +868,21 @@ class Container:
         solutes are provided, the value will be used for all solutes.
 
         Arguments:
-            solute: What to dissolve. Can be a single Substance or a list of 
-                    Substances.
-            solvent: What to dissolve with. Can be a Substance or a Container.
-            concentration: Desired concentration(s). ('1 M', '0.1 umol/10 uL', 
-                           etc.)
-            quantity: Desired quantity of solute(s). ('3 mL', '10 g')
-            total_quantity: Desired total quantity. ('3 mL', '10 g')
+            solute (Iterable[Substance]): The solutes of the solution. Must be 
+                                          an iterable set of Substances.
+            solvent (Substance | Container): The solvent of the solution. Can be
+                                             a Substance or a Container.
+            concentration (str, optional): Desired concentration(s) of the 
+                                            solutes. E.g. '1 M', 
+                                            '0.1 umol/10 uL', etc.
+            quantity (str, optional): Desired quantity of the solute(s). E.g. 
+                                        '3 mL', '10 g', etc.
+            total_quantity (str, optional): Desired total quantity of the 
+                                            solution. E.g. '100 mL', '250 g', 
+                                            etc.
+        Returns:
+            moles (NDArray[float]): The moles of each solute and the solvent 
+                                    needed to create the solution.
         """
 
         # Check that solute is an iterable set of substances. Because this is
@@ -883,7 +891,7 @@ class Container:
         # substance.
         if not isinstance(solute, Iterable) or len(solute) == 0 or \
              any(not isinstance(substance, Substance) for substance in solute):
-            raise TypeError("Solute(s) must be a Substance.")
+            raise TypeError("Solutes must be a set of Substances.")
 
         # Ensure that the solutes are all distinct; raise a ValueError if there
         # are repeated solutes.
@@ -898,7 +906,7 @@ class Container:
         # transformed into pseudo-solvent substances before calling this hidden
         # function).
         if not isinstance(solvent, (Substance | Container)):
-            raise TypeError("Solvent must be a Substance or Container.")
+            raise TypeError("Solvent must be a Substance or a Container.")
         
         # To avoid later isinstance() checks, store the type of solvent with a 
         # boolean variable
@@ -946,28 +954,35 @@ class Container:
         solute_mole_fractions = np.zeros((num_solutes))
 
         # If the solvent is a substance, check if it matches any of the 
-        # solute substances, and if so set the coefficient to 1. Because solutes
-        # must not repeat, the loop can be terminated early if a matching 
-        # solute is found. 
+        # solute substances, and if so raise a ValueError. There is no one 
+        # way to determine the specific amounts of the solute and solvent that 
+        # should be added, as any combination of the two that adds to the 
+        # correct total amount will be a valid solution. 
         #
-        # NOTE: This is handling an extrmely likely scenario of adding the same
-        # compound as both a solute and solvent (e.g. a solution of water in
-        # water). In practice, this will maintain all zeroes for the mole 
-        # fractions.
+        # NOTE: From an error standpoint, allowing this type of input to 
+        # continue would result in the creation of a singular (non-invertible) 
+        # matrix for the system of equations, which is impossible to solve.
         if is_pure_solvent:
             for idx, current_solute in enumerate(solute):
                 if solvent == current_solute:
-                    solute_mole_fractions[idx] = 1
-                    break
-
-        # If the solvent is a container, compute the total amount of all the 
-        # solvent container's contents in 'molar storage units'. Then, compute
-        # the mole fraction of any overlapping solutes.
+                    raise ValueError("Solute and solvent cannot be identical.")
         else:
+            # If the solvent is a container, compute the total amount of all the 
+            # solvent container's contents in 'molar storage units'. Then, 
+            # compute the mole fraction of any overlapping solutes.
             total_solvent_amt = sum(solvent.contents.values())
             for idx, current_solute in enumerate(solute):
                 if current_solute in solvent.contents:
                     solute_mole_fractions[idx] = solvent.contents[current_solute] / total_solvent_amt
+            
+            non_overlapping_solutes = False
+            for sub in solvent.contents.keys():
+                if sub not in solute:
+                    non_overlapping_solutes = True
+                    break
+            if not non_overlapping_solutes:
+                raise ValueError("Solvent must contain at least one Substance "
+                                 "that is not also a solute.")
             
 
         # We now define a system of equations which will be used to solve for 
@@ -1025,14 +1040,16 @@ class Container:
         # TODO: Finish writing this explanation   
         
         # If the concentration constraint has been specified, define the 
-        # equations that correspond to the specified concentrations.   
+        # equations that correspond to the specified concentrations.  
+        top = None 
         if concentration is not None:
             # Ensure that the concentration argument has the correct type (this 
             # is only part of the type checking, type checking for each 
             # concentration is performed later as part of the loop)
             if isinstance(concentration, str):
                 concentration = [concentration] * len(solute)
-            elif not isinstance(concentration, Iterable):
+            elif not isinstance(concentration, Iterable) or \
+                len(concentration) == 0:
                 raise TypeError("Concentration(s) must be a str.")
 
             # Ensure that the number of specified concentrations matches the
@@ -1056,14 +1073,20 @@ class Container:
                 try:
                     c, numerator, denominator = Unit.parse_concentration(c)
                 except ValueError:
-                    raise ValueError(f"Invalid concentration. ({c})")
+                    raise ValueError(f"Invalid concentration '{c}'.") from None
+                
+                if not math.isfinite(c):
+                    raise ValueError("Concentration(s) must be finite.")
+                if not c >= 0:
+                    raise ValueError("Concentration(s) must be non-negative.")
+                
 
                 # Compute the terms of the 'bottom' part of the concentration
                 # constraint equation
 
                 # If the 'total quantity' coefficients have not already been 
                 # found, compute the mole-to-unit values for each of the solutes
-                #  and the solvent. 
+                # and the solvent. 
                 if denominator not in bottom_arrays:
                     # Create an num_solutes + 1 size array for storing the 
                     # coefficients
@@ -1154,7 +1177,7 @@ class Container:
             # is performed later as part of the loop).
             if isinstance(quantity, str):
                 quantity = [quantity] * len(solute)
-            elif not isinstance(quantity, Iterable):
+            elif not isinstance(quantity, Iterable) or len(quantity) == 0:
                 raise TypeError("Quantity(s) must be a str.")
             
             # Ensure that the number of quantities specified matches the number 
@@ -1169,8 +1192,17 @@ class Container:
                 if not isinstance(q, str):
                     raise TypeError("Quantity(s) must be a str.")
                 
-                # Parse the quantity as a value-unit pair.
-                q, unit = Unit.parse_quantity(q)
+                # Try to parse the quantity as a value-unit pair, raising an 
+                # error if unsuccessful
+                try:
+                    q, unit = Unit.parse_quantity(q)
+                except ValueError:
+                    raise ValueError(f"Invalid quantity '{q}'.") from None
+                
+                if not math.isfinite(q):
+                    raise ValueError("Quantity(s) must be finite.")
+                if not q >= 0:
+                    raise ValueError("Quantity(s) must be non-negative.")
 
                 # Set the equation coefficient corresponding to the solute (the
                 # i-th entry in the row) to the 'unit per mole' value for the 
@@ -1220,7 +1252,18 @@ class Container:
             if not isinstance(total_quantity, str):
                 raise TypeError("Total quantity must be a str.")
 
-            total_quantity, tq_unit = Unit.parse_quantity(total_quantity)
+            # Try to parse the total quantity as a value-unit pair, raising an 
+            # error if unsuccessful
+            tq = tq_unit = None
+            try:
+                tq, tq_unit = Unit.parse_quantity(total_quantity)
+            except ValueError:
+                raise ValueError(f"Invalid total quantity '{tq}'.") from None
+            
+            if not math.isfinite(tq):
+                raise ValueError("Total quantity must be finite.")
+            if not tq >= 0:
+                raise ValueError("Total quantity must be non-negative.")
 
             # Set the solute coefficients for this equation (all but the last
             # entry) to the 'quantity per mole' values.
@@ -1240,20 +1283,11 @@ class Container:
 
             # Set the right hand side of the equation to the value parsed from
             # the specified total quantity.
-            b[equation_index] = total_quantity
+            b[equation_index] = tq
 
         # Solve the system of equations to determine the number of moles of each
         # solute and the solvent needed to create the solution.
         xs = np.linalg.solve(a[:num_solutes + 1], b[:num_solutes + 1])
-
-        # Ensure that the solution is a true solution to the system of equations
-        # (as opposed to a least-squares best "solution") by checking if the 
-        # left and right sides are equal within a small tolerance.
-        for i in range(len(a)):
-            if abs(sum(a[i] * xs) - b[i]) > 1e-6:
-                raise ValueError("Solution is impossible to create. "
-                                 "The provided constraints cannot all be "
-                                 "satisfied.")
 
         # Ensure that the number of moles needed from each component is
         # non-negative. If any are negative, raise an error.
@@ -1261,6 +1295,18 @@ class Container:
             raise ValueError("Solution is impossible to create. "
                              "Negative amounts of substances are needed "
                              "to satisfy the constraints.")
+
+        # Ensure that the solution is a true solution to the system of equations
+        # (as opposed to a least-squares best "solution") by checking if the 
+        # left and right sides are equal within a small tolerance. This 
+        # tolerance is scaled by the largest term in the equation to account for
+        # different magnitudes of the terms.
+        for i in range(len(a)):
+            largest_term = max(np.max(np.abs(a[i] * xs)), abs(b[i]))
+            if abs(sum(a[i] * xs) - b[i]) > 1e-6 * largest_term:
+                raise ValueError("Solution is impossible to create. "
+                                 "The provided constraints cannot all be "
+                                 "satisfied.")
 
         return xs
 
