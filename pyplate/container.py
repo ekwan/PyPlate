@@ -707,7 +707,7 @@ class Container:
 
         Args:
             solute (Substance): Substance interested in.
-            units (str, optional): Units to return concentration in, 
+            unit (str, optional): Units to return concentration in, 
                                    defaults to Molar.
 
         Returns: 
@@ -718,7 +718,7 @@ class Container:
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
         if not isinstance(unit, str):
-            raise TypeError("Units must be a str.")
+            raise TypeError("Unit must be a str.")
 
         try:
             mult, *unit = Unit.parse_concentration('1 ' + unit)
@@ -1407,11 +1407,11 @@ class Container:
 
             # Trasnfer the amount of the solvent container necessary to create
             # the new solution
-            solvent, result = Container.transfer(solvent, result, solvent_amount)
+            new_solvent, result = Container.transfer(solvent, result, solvent_amount)
 
             # Compute the solvent volume needed for the transfer and convert the
             # result into a reading-friendly format.
-            solvent_volume = solvent.get_volume('L')
+            solvent_volume = solvent.get_volume('L') - new_solvent.get_volume('L')
             solvent_volume, unit = Unit.get_human_readable_unit(solvent_volume, 'L')
             solvent_volume = round(solvent_volume,
                                    config.precisions[unit] if unit in config.precisions else
@@ -1425,12 +1425,11 @@ class Container:
             
             # Return the post-transfer result for the solvent container and 
             # the new solution container
-            return solvent, result
+            return new_solvent, result
         
         # Otherwise, return just the newly created solution container.
         else:
-            # Create a new container which represents the newly created 
-            # solution.
+            # Create a new container which represents the newly created solution.
             result = Container(name, initial_contents=initial_contents)
 
             # Create a list of contents for the "instructions" attribute of the
@@ -1452,7 +1451,7 @@ class Container:
     @staticmethod
     def create_dilution(source: Container, solute: Substance, 
                             concentration: str, solvent: Substance | Container,
-                            quantity: str, name=None) -> (Tuple[Container, Container] |
+                            total_quantity: str, name=None) -> (Tuple[Container, Container] |
                                                           Tuple[Container, Container, Container]):
         """
         Create a diluted solution from an existing source solution and a 
@@ -1463,7 +1462,7 @@ class Container:
             solute: What to dissolve.
             concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
             solvent: What to dissolve with (if it is a Container, it can contain some solute).
-            quantity: Desired total quantity. ('3 mL', '10 g')
+            total_quantity: Desired total quantity. ('3 mL', '10 g')
             name: Optional name for new container.
 
         Returns:
@@ -1481,23 +1480,39 @@ class Container:
             raise TypeError("Concentration must be a str.")
         if not isinstance(solvent, (Substance, Container)):
             raise TypeError("Solvent must be a Substance or Container.")
-        if not isinstance(quantity, str):
-            raise TypeError("Quantity must be a str.")
+        if not isinstance(total_quantity, str):
+            raise TypeError("Total quantity must be a str.")
         if name is not None and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
-        quantity_value, quantity_unit = Unit.parse_quantity(quantity)
+        # Parse and validate the concentration argument.
+        try:
+            parse_result = Unit.parse_concentration(concentration)
+        except ValueError:
+            raise ValueError(f"Invalid concentration '{concentration}'.") from None
+        
+        concentration, numerator, denominator = parse_result
+        
+        if not math.isfinite(concentration):
+            raise ValueError("Concentration must be finite.")
+        if not concentration >= 0:
+            raise ValueError("Concentration must be non-negative.")
+        
+        # Parse and validate the total quantity argument.
+        try:
+            quantity_value, quantity_unit = Unit.parse_quantity(total_quantity)
+        except ValueError:
+            raise ValueError(f"Invalid total quantity '{total_quantity}'.") from None
         
         if not math.isfinite(quantity_value):
-            raise ValueError("Quantity must be finite.")
-        
+            raise ValueError("Total quantity must be finite.")
         if not quantity_value > 0:
-            raise ValueError("Quantity must be positive.")
+            raise ValueError("Total quantity must be positive.")
         
         if solute not in source.contents:
             raise ValueError(f"Source container does not contain {solute.name}.")
 
-        # TODO: Possibly rework this name geneeation to include the name/
+        # TODO: Possibly rework this name generation to include the name/
         #       contents of the source container. Currently, only the solute and
         #       solvent names are used. 
         if not name:
@@ -1543,14 +1558,12 @@ class Container:
             # Edge case: If the solvent and the solute are the same, then the
             # molar concentration of solute in the solvent is just the molar
             # density of the solvent. Otherwise, the concentration is 0.
-            m_y = 0 if solvent != solute else solvent.density / solvent.mol_weight
+            m_y = 0 if solvent != solute else solvent.density / solvent.mol_weight * 1000
 
         # Get the molecular weight and density of the solute (the shorter names 
         # will be useful for condensing later lines of code)
         mw_s = solute.mol_weight
         d_s = solute.density
-
-        concentration, numerator, denominator = Unit.parse_concentration(concentration)
 
         # Define a blank system of equations that will be filled with values 
         # that correspond to the specified constraints. This system of equations
@@ -1619,16 +1632,16 @@ class Container:
         # 
         # If we define 'top' and 'bottom' as shown below:
         # 
-        #   top = r_x * V_x + r_y * V_y 
-        #   bottom = s_x * V_x + s_y * V_y
+        #   top = [r_x, r_y] 
+        #   bottom = [s_x, s_y]
         #  
         # Then we can write the equation derived above as:
         #
-        #   C * bottom - top = 0
+        #   (C * bottom - top)[V_x  V_y]^T = 0
         #
         # This is the form of the equation that will be used to solve for the 
-        # dilution volumes. The various conversion factors are enumerated in the 
-        # two code blocks below. 
+        # dilution volumes V_x and V_y. The various conversion factors are 
+        # enumerated in the two code blocks below. 
 
         # Determine the appropriate conversion factors (r_x and r_y) for the 
         # 'top' quantities. These quantities express the quantity of SOLUTE
@@ -1645,7 +1658,7 @@ class Container:
             # Compute 'liters of solute' per 'mL of solution'.
             top = np.array([m_x * mw_s / (d_s * 1e6), m_y * mw_s / (d_s * 1e6)])
         else:
-            raise ValueError("Invalid numerator.")
+            raise ValueError("Invalid units for concentration numerator.")
         
         # Determine the appropriate conversion factors (s_x and s_y) for the 
         # 'bottom' quantities. These quantities express the TOTAL quantity
@@ -1663,7 +1676,7 @@ class Container:
             # (this one is just a simple conversion ratio from mL to L)
             bottom = np.array([1 / 1000., 1 / 1000.])
         else:
-            raise ValueError("Invalid denominator.")
+            raise ValueError("Invalid units for concentration denominator.")
 
         # Set the entries of a[0] based on the derivation above
         a[0] = concentration * bottom - top
@@ -1688,14 +1701,11 @@ class Container:
         # concentration, the values of s_x and s_y for this equation must be 
         # re-computed.
 
-        # Parse quantity into a value-unit pair
-        quantity_value, quantity_unit = Unit.parse_quantity(quantity)
-
         # Determine the appropriate conversion factors (s_x and s_y) to convert
         # from mL of solution to (mol/g/L) of solution, and set the values of 
         # the left-hand side of the equation accordingly. Units other than mol, 
         # g, or L in the quantity argument will raise an error.
-        if quantity_value == 'mol':
+        if quantity_unit == 'mol':
             # Compute 'moles of solution' per 'mL of solution'.
             a[1] = np.array([d_x / mw_x, d_y / mw_y])
         elif quantity_unit == 'g':
@@ -1715,12 +1725,19 @@ class Container:
         # ('V_x' & 'V_y') needed for the dilution.
         V_x, V_y = np.linalg.solve(a, b)
 
+        # print("Top:", top)
+        # print("A:", a)
+        # print("B:", b)
+        # print("V_x, V_y:", V_x, V_y)
+        # print("P_x:", top[0] * V_x)
+        # print("P_y:", top[1] * V_y)
+
         # If the volumes needed of either solution are negative, the solution is
         # impossible to create. This is likely because the specified dilution is
         # more concentrated in the solute than either the source or solvent 
         # solution.
         if V_x < 0 or V_y < 0:
-            raise ValueError("Solution is impossible to create. The specified" +
+            raise ValueError("Dilution is impossible to create. The specified" +
                              " concentration is likely higher than either the" +
                              " source or solvent concentrations.")
 

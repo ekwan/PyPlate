@@ -19,7 +19,7 @@ def empty_container() -> Container:
 
 @pytest.fixture
 def water_stock(water) -> Container:
-    return Container('water', initial_contents=((water, '10 mL'),))
+    return Container('water', initial_contents=((water, '1 L'),))
 
 @pytest.fixture
 def salt_stock(salt):
@@ -29,6 +29,18 @@ def salt_stock(salt):
 @pytest.fixture
 def salt_water(water, salt) -> Container:
     return Container('salt water', initial_contents=((water, '100 mL'), (salt, '50 mmol')))
+
+@pytest.fixture
+def salt_water_1M(water, salt) -> Container:
+    return Container.create_solution(salt, water, concentration='1 M', total_quantity='1 L')
+
+@pytest.fixture
+def salt_water_2M(water, salt) -> Container:
+    return Container.create_solution(salt, water, concentration='2 M', total_quantity='1 L')
+
+@pytest.fixture
+def brine(water, salt) -> Container:
+    return Container('brine', initial_contents=((water, '100 mL'), (salt, '0.72 mol')))
 
 
 @pytest.fixture
@@ -45,6 +57,7 @@ def sodium_sulfate() -> Substance:
 def triethylamine() -> Substance:
     return Substance.liquid("triethylamine", mol_weight=101.19, density=0.726)
 
+
 @pytest.fixture
 def invalid_substance() -> Substance:
     substance = Substance.solid('invalid', 1, 1)
@@ -52,6 +65,7 @@ def invalid_substance() -> Substance:
     substance.density = 0
     substance._type = 0
     return substance
+
 
 @pytest.fixture
 def empty_plate() -> Plate:
