@@ -1725,13 +1725,6 @@ class Container:
         # ('V_x' & 'V_y') needed for the dilution.
         V_x, V_y = np.linalg.solve(a, b)
 
-        # print("Top:", top)
-        # print("A:", a)
-        # print("B:", b)
-        # print("V_x, V_y:", V_x, V_y)
-        # print("P_x:", top[0] * V_x)
-        # print("P_y:", top[1] * V_y)
-
         # If the volumes needed of either solution are negative, the solution is
         # impossible to create. This is likely because the specified dilution is
         # more concentrated in the solute than either the source or solvent 
