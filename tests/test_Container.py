@@ -1,6 +1,6 @@
 import pytest
 import pytest_mock
-from itertools import product
+from itertools import product, cycle
 from copy import deepcopy
 
 import numpy as np
@@ -2669,11 +2669,24 @@ def test_Container__compute_solution_contents(water, salt, sodium_sulfate,
                 conc = qty_numer/total_qty_denom
                 assert conc == pytest.approx(0.0001, rel=1e-12), \
                     "Solute concentration does not match supplied argument."
-                
-    # Edge case: Very high total quantity
-    _csc([salt], water, 
-            concentration='0.5 M',
-            total_quantity='1e13 kL') 
+
+    # Edge Case: Very high total quantity
+    moles = _csc([salt], water, 
+                    concentration='0.5 M',
+                    total_quantity='1e13 kL') 
+    
+    # Check that all contents have positive amounts.
+    assert np.all(moles > 0)
+
+    # Check that all contents sum to the expected total quantity.
+    total_vol = sum([sub.convert(moles[idx], 'mol', 'L') 
+                        for idx, sub in enumerate([salt, water])])
+    assert total_vol == pytest.approx(1e16, rel=1e-12), \
+            "Total quantity does not match supplied argument."
+    
+    # Check that the solute has the correct concentration.
+    assert moles[0]/total_vol == pytest.approx(0.5, rel=1e-12), \
+            "Solute concentration does not match supplied argument."
 
     # Sub-Case: Quantity and total quantity provided
     for solute, solvent in product(solutes, pure_solvents):
@@ -2721,102 +2734,116 @@ def test_Container__compute_solution_contents(water, salt, sodium_sulfate,
         return False
 
     # Sub-Case: Single solute, concentration and quantity provided
-    for solute, solvent in product(single_solutes, pure_solvents):
-        for numerator, denominator, quantity_unit in product(test_units_subset, 
-                                                             repeat=3):
-            # Check to make sure the concentration is feasible (less than the 
-            # density of the solute)
-            if check_skip_case(solute, 0.001, numerator, denominator):
-                continue    
+    
+    # Create variations of solutes, solvents, and units
+    substance_variations = cycle(product(single_solutes, pure_solvents))
+    unit_variations = product(test_units_subset, repeat=3)
+    variations = zip(substance_variations, unit_variations)
+    
+    for (substances), (units) in variations:
+        solute, solvent = substances
+        numerator, denominator, quantity_unit = units
 
-            moles = _csc(solute, solvent, 
-                            concentration=f"0.001 {numerator}/{denominator}",
-                            quantity=f"1 {quantity_unit}")
+        # Check to make sure the concentration is feasible (less than the 
+        # density of the solute)
+        if check_skip_case(solute, 0.001, numerator, denominator):
+            continue    
 
-            # Check that all contents have positive amounts.
-            assert np.all(moles > 0)
+        moles = _csc(solute, solvent, 
+                        concentration=f"0.001 {numerator}/{denominator}",
+                        quantity=f"1 {quantity_unit}")
 
-            # Convert each solute amount to the quantity units, and check that
-            # it matches the supplied constraint.
-            for idx, sub in enumerate(solute):
-                qty = sub.convert(moles[idx], 'mol', quantity_unit)
-                assert qty == pytest.approx(1, rel=1e-12), \
-                    "Solute quantity does not match supplied argument."
+        # Check that all contents have positive amounts.
+        assert np.all(moles > 0)
 
-            # Compute the total quantity of the solution in terms of the 
-            # denominator units
-            total_qty_denom = 0
-            # Convert each solute amount to the denominator units
-            for idx, sub in enumerate(solute):
-                total_qty_denom += sub.convert(moles[idx], 'mol', 
-                                                     denominator)
-            # Convert the solvent to the denominator units
-            total_qty_denom += solvent.convert(moles[-1], 'mol', denominator)
-            
-            # Check that each solute has the correct concentration.
-            for idx, sub in enumerate(solute):
-                qty_numer = sub.convert(moles[idx], 'mol', numerator)
-                conc = qty_numer/total_qty_denom
-                assert conc == pytest.approx(0.001, rel=1e-12), \
-                    "Solute concentration does not match supplied argument." 
+        # Convert each solute amount to the quantity units, and check that
+        # it matches the supplied constraint.
+        for idx, sub in enumerate(solute):
+            qty = sub.convert(moles[idx], 'mol', quantity_unit)
+            assert qty == pytest.approx(1, rel=1e-12), \
+                "Solute quantity does not match supplied argument."
+
+        # Compute the total quantity of the solution in terms of the 
+        # denominator units
+        total_qty_denom = 0
+        # Convert each solute amount to the denominator units
+        for idx, sub in enumerate(solute):
+            total_qty_denom += sub.convert(moles[idx], 'mol', 
+                                                    denominator)
+        # Convert the solvent to the denominator units
+        total_qty_denom += solvent.convert(moles[-1], 'mol', denominator)
+        
+        # Check that each solute has the correct concentration.
+        for idx, sub in enumerate(solute):
+            qty_numer = sub.convert(moles[idx], 'mol', numerator)
+            conc = qty_numer/total_qty_denom
+            assert conc == pytest.approx(0.001, rel=1e-12), \
+                "Solute concentration does not match supplied argument." 
     
     # Sub-Case: Multiple solutes, concentration and quantity provided
     # 
     # NOTE: Constraints must form a linearly dependent system to be solvable.
     #       Constraints which fail to do so are handled in the failure cases.
-    for solute, solvent in product(multi_solutes, pure_solvents):       
-        for numerator, denominator, quantity_unit in product(test_units_subset, 
-                                                             repeat=3):
-            # Compute the ratios of the 'quantity unit per mole' properties of 
-            # the solutes 
-            qty_ratios = [sub.convert(1, numerator, quantity_unit) / 
-                        solute[0].convert(1, denominator, quantity_unit) \
-                        for sub in solute]
-            qty_vals = [1 * ratio for ratio in qty_ratios]
-            quantities = [f"{val} {quantity_unit}" for val in qty_vals]
+    
+    # Create variations of solutes, solvents, and units
+    substance_variations = cycle(product(multi_solutes, pure_solvents))
+    unit_variations = product(test_units_subset, repeat=3)
+    variations = zip(substance_variations, unit_variations)
 
-            # Check to make sure the concentration is feasible (less than the 
-            # density of the solute)
-            if check_skip_case(solute, 0.001, numerator, denominator):
-                continue  
+    for (substances), (units) in variations:
+        solute, solvent = substances
+        numerator, denominator, quantity_unit = units
+        
+        # Compute the ratios of the 'quantity unit per mole' properties of 
+        # the solutes 
+        qty_ratios = [sub.convert(1, numerator, quantity_unit) / 
+                    solute[0].convert(1, denominator, quantity_unit) \
+                    for sub in solute]
+        qty_vals = [1 * ratio for ratio in qty_ratios]
+        quantities = [f"{val} {quantity_unit}" for val in qty_vals]
 
-            moles = _csc(solute, solvent, 
-                            concentration=f"0.001 {numerator}/{denominator}",
-                            quantity=quantities)
-            
-            # Check that all contents have positive amounts.
-            assert np.all(moles > 0)
+        # Check to make sure the concentration is feasible (less than the 
+        # density of the solute)
+        if check_skip_case(solute, 0.001, numerator, denominator):
+            continue  
 
-            # Convert each solute amount to the quantity units, and check that
-            # it matches the supplied constraint.
-            for idx, sub in enumerate(solute):
-                qty = sub.convert(moles[idx], 'mol', quantity_unit)
-                assert qty == pytest.approx(qty_vals[idx], rel=1e-12), \
-                    "Solute quantity does not match supplied argument."
+        moles = _csc(solute, solvent, 
+                        concentration=f"0.001 {numerator}/{denominator}",
+                        quantity=quantities)
+        
+        # Check that all contents have positive amounts.
+        assert np.all(moles > 0)
 
-            # Compute the total quantity of the solution in terms of the 
-            # denominator units
-            total_qty_denom = 0
-            # Convert each solute amount to the denominator units
-            for idx, sub in enumerate(solute):
-                total_qty_denom += sub.convert(moles[idx], 'mol', 
-                                                     denominator)
-            # Convert the solvent to the denominator units
-            total_qty_denom += solvent.convert(moles[-1], 'mol', denominator)
-            
-            # Check that each solute has the correct concentration.
-            for idx, sub in enumerate(solute):
-                qty_numer = sub.convert(moles[idx], 'mol', numerator)
-                conc = qty_numer/total_qty_denom
-                assert conc == pytest.approx(0.001, rel=1e-12), \
-                    "Solute concentration does not match supplied argument." 
+        # Convert each solute amount to the quantity units, and check that
+        # it matches the supplied constraint.
+        for idx, sub in enumerate(solute):
+            qty = sub.convert(moles[idx], 'mol', quantity_unit)
+            assert qty == pytest.approx(qty_vals[idx], rel=1e-12), \
+                "Solute quantity does not match supplied argument."
+
+        # Compute the total quantity of the solution in terms of the 
+        # denominator units
+        total_qty_denom = 0
+        # Convert each solute amount to the denominator units
+        for idx, sub in enumerate(solute):
+            total_qty_denom += sub.convert(moles[idx], 'mol', 
+                                                    denominator)
+        # Convert the solvent to the denominator units
+        total_qty_denom += solvent.convert(moles[-1], 'mol', denominator)
+        
+        # Check that each solute has the correct concentration.
+        for idx, sub in enumerate(solute):
+            qty_numer = sub.convert(moles[idx], 'mol', numerator)
+            conc = qty_numer/total_qty_denom
+            assert conc == pytest.approx(0.001, rel=1e-12), \
+                "Solute concentration does not match supplied argument." 
     
 
     # ==========================================================================
     # Success Cases: Single/Multiple solutes and Container solvent (no 
     #                overlapping Substances)
     # ==========================================================================
-    
+
     # Sub-Case: Concentration and total quantity provided
     for solute, solvent in product(solutes, [water_stock]):
         for numerator, denominator in product(test_base_units, repeat=2):
@@ -2922,145 +2949,159 @@ def test_Container__compute_solution_contents(water, salt, sodium_sulfate,
                 "Total quantity does not match supplied argument."         
     
     # Sub-Case: Single solute, concentration and quantity provided
-    for solute, solvent in product(single_solutes, [water_stock]):
-        for numerator, denominator, quantity_unit in product(test_units_subset, 
-                                                             repeat=3):
-            # Check to make sure the concentration is feasible (less than the 
-            # density of the solute)
-            if check_skip_case(solute, 0.001, numerator, denominator):
-                continue  
-
-            moles = _csc(solute, solvent, 
-                            concentration=f"0.001 {numerator}/{denominator}",
-                            quantity=f"1 {quantity_unit}")
-
-            # Check that all contents have positive amounts.
-            assert np.all(moles > 0)
-
-            # Convert each solute amount to the quantity units, and check that
-            # it matches the supplied constraint.
-            for idx, sub in enumerate(solute):
-                qty = sub.convert(moles[idx], 'mol', quantity_unit)
-                assert qty == pytest.approx(1, rel=1e-12), \
-                    "Solute quantity does not match supplied argument."
-
-            # Compute the total quantity of the solution in terms of the 
-            # denominator units
-            total_qty_denom = 0
-            # Convert each solute amount to the denominator units
-            for idx, sub in enumerate(solute):
-                total_qty_denom += sub.convert(moles[idx], 'mol', 
-                                                     denominator)
+    
+    # Create variations of solutes, solvents, and units
+    substance_variations = cycle(product(single_solutes, [water_stock]))
+    unit_variations = product(test_units_subset, repeat=3)
+    variations = zip(substance_variations, unit_variations)
+    
+    for (substances), (units) in variations:
+        solute, solvent = substances
+        numerator, denominator, quantity_unit = units
             
-            # Compute the total contents of the solvent in storage units
-            total_solvent_amt = sum(val for val in solvent.contents.values())
-            # Compute the mole fraction of each substance in the solvent.
-            sub_frac_in_solvent = {}
-            for sub, val in solvent.contents.items():
-                sub_frac_in_solvent[sub] = val / total_solvent_amt
+        # Check to make sure the concentration is feasible (less than the 
+        # density of the solute)
+        if check_skip_case(solute, 0.001, numerator, denominator):
+            continue  
+
+        moles = _csc(solute, solvent, 
+                        concentration=f"0.001 {numerator}/{denominator}",
+                        quantity=f"1 {quantity_unit}")
+
+        # Check that all contents have positive amounts.
+        assert np.all(moles > 0)
+
+        # Convert each solute amount to the quantity units, and check that
+        # it matches the supplied constraint.
+        for idx, sub in enumerate(solute):
+            qty = sub.convert(moles[idx], 'mol', quantity_unit)
+            assert qty == pytest.approx(1, rel=1e-12), \
+                "Solute quantity does not match supplied argument."
+
+        # Compute the total quantity of the solution in terms of the 
+        # denominator units
+        total_qty_denom = 0
+        # Convert each solute amount to the denominator units
+        for idx, sub in enumerate(solute):
+            total_qty_denom += sub.convert(moles[idx], 'mol', 
+                                                    denominator)
+        
+        # Compute the total contents of the solvent in storage units
+        total_solvent_amt = sum(val for val in solvent.contents.values())
+        # Compute the mole fraction of each substance in the solvent.
+        sub_frac_in_solvent = {}
+        for sub, val in solvent.contents.items():
+            sub_frac_in_solvent[sub] = val / total_solvent_amt
+        
+        # Convert the transfer amount of each substance in the solvent 
+        # Container into the denominator units
+        for sub in solvent.contents.keys():
+            # Compute the mole amount of each substance that will be 
+            # transferred from the solvent to the new solution.
+            transfer_moles = sub_frac_in_solvent[sub] * moles[-1]
+
+            # Convert the mole amount to the denominator units
+            transfer_qty = sub.convert(transfer_moles, 'mol', denominator)
+
+            total_qty_denom += transfer_qty
+        
+        # Check that each solute has the correct concentration.
+        for idx, sub in enumerate(solute):
+            # Compute the pure solute's contrbution to the numerator
+            qty_numer = sub.convert(moles[idx], 'mol', numerator)
             
-            # Convert the transfer amount of each substance in the solvent 
-            # Container into the denominator units
-            for sub in solvent.contents.keys():
-                # Compute the mole amount of each substance that will be 
-                # transferred from the solvent to the new solution.
-                transfer_moles = sub_frac_in_solvent[sub] * moles[-1]
+            # Add the solvent's contribution to the numerator
+            mole_frac = sub_frac_in_solvent.get(sub, 0)
+            qty_numer += sub.convert(mole_frac * moles[-1], 'mol', numerator)
 
-                # Convert the mole amount to the denominator units
-                transfer_qty = sub.convert(transfer_moles, 'mol', denominator)
-
-                total_qty_denom += transfer_qty
-            
-            # Check that each solute has the correct concentration.
-            for idx, sub in enumerate(solute):
-                # Compute the pure solute's contrbution to the numerator
-                qty_numer = sub.convert(moles[idx], 'mol', numerator)
-                
-                # Add the solvent's contribution to the numerator
-                mole_frac = sub_frac_in_solvent.get(sub, 0)
-                qty_numer += sub.convert(mole_frac * moles[-1], 'mol', numerator)
-
-                # Compute the concentration of the solute and check if it 
-                # matches the supplied argument.
-                conc = qty_numer/total_qty_denom
-                assert conc == pytest.approx(0.001, rel=1e-12), \
-                    "Solute concentration does not match supplied argument."
+            # Compute the concentration of the solute and check if it 
+            # matches the supplied argument.
+            conc = qty_numer/total_qty_denom
+            assert conc == pytest.approx(0.001, rel=1e-12), \
+                "Solute concentration does not match supplied argument."
     
     # Sub-Case: Multiple solutes, concentration and quantity provided
     # 
     # NOTE: Constraints must form a linearly dependent system to be solvable.
     #       Constraints which fail to do so are handled in the failure cases.
-    for solute, solvent in product(multi_solutes, [water_stock]):       
-        for numerator, denominator, quantity_unit in product(test_units_subset, 
-                                                             repeat=3):
-            # Compute the ratios of the 'quantity unit per mole' properties of 
-            # the solutes 
-            qty_ratios = [sub.convert(1, numerator, quantity_unit) / 
-                        solute[0].convert(1, denominator, quantity_unit) \
-                        for sub in solute]
-            qty_vals = [1 * ratio for ratio in qty_ratios]
-            quantities = [f"{val} {quantity_unit}" for val in qty_vals]
+    
+    # Create variations of solutes, solvents, and units
+    substance_variations = cycle(product(multi_solutes, [water_stock]))
+    unit_variations = product(test_units_subset, repeat=3)
+    variations = zip(substance_variations, unit_variations)
+    
+    for (substances), (units) in variations:
+        solute, solvent = substances
+        numerator, denominator, quantity_unit = units
+        
+        # Compute the ratios of the 'quantity unit per mole' properties of 
+        # the solutes 
+        qty_ratios = [sub.convert(1, numerator, quantity_unit) / 
+                    solute[0].convert(1, denominator, quantity_unit) \
+                    for sub in solute]
+        qty_vals = [1 * ratio for ratio in qty_ratios]
+        quantities = [f"{val} {quantity_unit}" for val in qty_vals]
 
-            # Check to make sure the concentration is feasible (less than the 
-            # density of the solute)
-            if check_skip_case(solute, 0.001, numerator, denominator):
-                continue  
+        # Check to make sure the concentration is feasible (less than the 
+        # density of the solute)
+        if check_skip_case(solute, 0.001, numerator, denominator):
+            continue  
 
-            moles = _csc(solute, solvent, 
-                            concentration=f"0.001 {numerator}/{denominator}",
-                            quantity=quantities)
+        moles = _csc(solute, solvent, 
+                        concentration=f"0.001 {numerator}/{denominator}",
+                        quantity=quantities)
 
-            # Check that all contents have positive amounts.
-            assert np.all(moles > 0)
+        # Check that all contents have positive amounts.
+        assert np.all(moles > 0)
 
-            # Convert each solute amount to the quantity units, and check that
-            # it matches the supplied constraint.
-            for idx, sub in enumerate(solute):
-                qty = sub.convert(moles[idx], 'mol', quantity_unit)
-                assert qty == pytest.approx(qty_vals[idx], rel=1e-12), \
-                    "Solute quantity does not match supplied argument."
+        # Convert each solute amount to the quantity units, and check that
+        # it matches the supplied constraint.
+        for idx, sub in enumerate(solute):
+            qty = sub.convert(moles[idx], 'mol', quantity_unit)
+            assert qty == pytest.approx(qty_vals[idx], rel=1e-12), \
+                "Solute quantity does not match supplied argument."
 
-            # Compute the total quantity of the solution in terms of the 
-            # denominator units
-            total_qty_denom = 0
-            # Convert each solute amount to the denominator units
-            for idx, sub in enumerate(solute):
-                total_qty_denom += sub.convert(moles[idx], 'mol', 
-                                                     denominator)
+        # Compute the total quantity of the solution in terms of the 
+        # denominator units
+        total_qty_denom = 0
+        # Convert each solute amount to the denominator units
+        for idx, sub in enumerate(solute):
+            total_qty_denom += sub.convert(moles[idx], 'mol', 
+                                                    denominator)
+        
+        # Compute the total contents of the solvent in storage units
+        total_solvent_amt = sum(val for val in solvent.contents.values())
+        # Compute the mole fraction of each substance in the solvent.
+        sub_frac_in_solvent = {}
+        for sub, val in solvent.contents.items():
+            sub_frac_in_solvent[sub] = val / total_solvent_amt
+        
+        # Convert the transfer amount of each substance in the solvent 
+        # Container into the denominator units
+        for sub in solvent.contents.keys():
+            # Compute the mole amount of each substance that will be 
+            # transferred from the solvent to the new solution.
+            transfer_moles = sub_frac_in_solvent[sub] * moles[-1]
+
+            # Convert the mole amount to the denominator units
+            transfer_qty = sub.convert(transfer_moles, 'mol', denominator)
+
+            total_qty_denom += transfer_qty
+        
+        # Check that each solute has the correct concentration.
+        for idx, sub in enumerate(solute):
+            # Compute the pure solute's contrbution to the numerator
+            qty_numer = sub.convert(moles[idx], 'mol', numerator)
             
-            # Compute the total contents of the solvent in storage units
-            total_solvent_amt = sum(val for val in solvent.contents.values())
-            # Compute the mole fraction of each substance in the solvent.
-            sub_frac_in_solvent = {}
-            for sub, val in solvent.contents.items():
-                sub_frac_in_solvent[sub] = val / total_solvent_amt
-            
-            # Convert the transfer amount of each substance in the solvent 
-            # Container into the denominator units
-            for sub in solvent.contents.keys():
-                # Compute the mole amount of each substance that will be 
-                # transferred from the solvent to the new solution.
-                transfer_moles = sub_frac_in_solvent[sub] * moles[-1]
+            # Add the solvent's contribution to the numerator
+            mole_frac = sub_frac_in_solvent.get(sub, 0)
+            qty_numer += sub.convert(mole_frac * moles[-1], 'mol', numerator)
 
-                # Convert the mole amount to the denominator units
-                transfer_qty = sub.convert(transfer_moles, 'mol', denominator)
-
-                total_qty_denom += transfer_qty
-            
-            # Check that each solute has the correct concentration.
-            for idx, sub in enumerate(solute):
-                # Compute the pure solute's contrbution to the numerator
-                qty_numer = sub.convert(moles[idx], 'mol', numerator)
-                
-                # Add the solvent's contribution to the numerator
-                mole_frac = sub_frac_in_solvent.get(sub, 0)
-                qty_numer += sub.convert(mole_frac * moles[-1], 'mol', numerator)
-
-                # Compute the concentration of the solute and check if it 
-                # matches the supplied argument.
-                conc = qty_numer/total_qty_denom
-                assert conc == pytest.approx(0.001, rel=1e-12), \
-                    "Solute concentration does not match supplied argument." 
+            # Compute the concentration of the solute and check if it 
+            # matches the supplied argument.
+            conc = qty_numer/total_qty_denom
+            assert conc == pytest.approx(0.001, rel=1e-12), \
+                "Solute concentration does not match supplied argument." 
     
 
     # ==========================================================================
