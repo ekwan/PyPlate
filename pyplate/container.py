@@ -270,12 +270,12 @@ class Container:
 
         # Define an error raising hlper function for cases where the transfer
         # quantity exceeds the total quantity of the container's contents.
-        def transfer_exceeds_contents_error_helper(container_quantity : float,
-                                                   quantity_to_transfer : float,
-                                                   unit : str):
+        def transfer_not_enough_source_error_helper(container_quantity : float,
+                                                    quantity_to_transfer : float,
+                                                    unit : str):
             precision = config.precisions['default']
             raise ValueError( 
-                    f"Not enough mixture left in source container " +
+                    f"Not enough mixture in source container " +
                     f"'{source_container.name}'. Only " +
                     f"{container_quantity:.{precision}f} {unit} available, but " +
                     f"{quantity_to_transfer:.{precision}f} {unit} needed."
@@ -305,9 +305,9 @@ class Container:
                 volume_to_transfer = round(volume_to_transfer, config.precisions['default'])
 
                 # Raise error which describes the reason for the failure to transfer
-                transfer_exceeds_contents_error_helper(container_volume,
-                                                       volume_to_transfer, 
-                                                       unit)
+                transfer_not_enough_source_error_helper(container_volume,
+                                                        volume_to_transfer, 
+                                                        unit)
             
             # Compute the fraction of the container's contents that need to be
             # transferred based on the volume to transfer and the total volume
@@ -340,7 +340,7 @@ class Container:
                 mass_to_transfer = round(mass_to_transfer, config.precisions['default'])
 
                 # Raise error which describes the reason for the failure to transfer
-                transfer_exceeds_contents_error_helper(container_mass,
+                transfer_not_enough_source_error_helper(container_mass,
                                                        mass_to_transfer, 
                                                        unit)
 
@@ -370,7 +370,7 @@ class Container:
                 moles_to_transfer /= Unit.convert_prefix_to_multiplier(unit[:-3])
 
                 # Raise error which describes the reason for the failure to transfer
-                transfer_exceeds_contents_error_helper(container_moles,
+                transfer_not_enough_source_error_helper(container_moles,
                                                        moles_to_transfer, 
                                                        unit)
 
@@ -469,7 +469,8 @@ class Container:
         # If the total volume exceeds the maxmimum volume of the container,
         # raise a ValueError.
         if to.volume > to.max_volume:
-            raise ValueError(f"Exceeded maximum volume in {to.name}.")
+            raise ValueError("Exceeded maximum volume of destination container "
+                             f"'{to.name}'.")
         
         # Compute the total volume of the contents of the post-transfer source
         # container. Round to the internal precision.
@@ -1318,20 +1319,24 @@ class Container:
 
         Two out of concentration, quantity, and total_quantity must be specified.
 
-        Multiple solutes can be, optionally, provided as a list. Each solute will have the desired concentration
-        or quantity in the final solution.
+        Multiple solutes can be, optionally, provided as a list. Each solute 
+        will have the desired concentration or quantity in the final solution.
 
-        If one value is specified for concentration or quantity and multiple solutes are provided, the value will be
-        used for all solutes.
+        If one value is specified for concentration or quantity and multiple 
+        solutes are provided, the value will be used for all solutes.
 
         Arguments:
-            solute (Substance | Iterable[Substance]): What to dissolve. Can be a single Substance or an iterable
-                    set of Substances.
-            solvent (Substance | Container): What to dissolve with. Can be a Substance or a Container.
+            solute (Substance | Iterable[Substance]): What to dissolve. Can be
+                        a single Substance or an iterable set of Substances.
+            solvent (Substance | Container): What to dissolve with. Can be a 
+                        Substance or a Container.
             name (str, optional): Optional name for the new container.
-            concentration (str, optional): Desired concentration(s). ('1 M', '0.1 umol/10 uL', etc.)
-            quantity (str, optional): Desired quantity of solute(s). ('3 mL', '10 g')
-            total_quantity (str, optional): Desired total quantity. ('3 mL', '10 g')
+            concentration (str, optional): Desired concentration(s) 
+                            (e.g. '1 M', '0.1 umol/10 uL', etc.).
+            quantity (str, optional): Desired quantity of solute(s) 
+                            (e.g. '3 mL', '10 g').
+            total_quantity (str, optional): Desired total quantity
+                            (e.g. '3 mL', '10 g').
 
 
         Returns:
@@ -1363,8 +1368,7 @@ class Container:
         if not isinstance(solvent, (Substance, Container)):
             raise TypeError("Solvent must be a Substance or a Container.")
 
-        # Check that the name argument as the correct type (if it is not None
-        # or empty)
+        # Check that the name argument is None or has the correct type 
         if name is not None and not isinstance(name, str):
             raise TypeError("Name must be a str.")
 
@@ -1450,27 +1454,34 @@ class Container:
 
     @staticmethod
     def create_dilution(source: Container, solute: Substance, 
-                            concentration: str, solvent: Substance | Container,
-                            total_quantity: str, name=None) -> (Tuple[Container, Container] |
-                                                          Tuple[Container, Container, Container]):
+                            concentration: str, diluent: Substance | Container,
+                            total_quantity: str, 
+                            name: str = None, max_volume: str = 'inf L') \
+                                -> (Tuple[Container, Container] |
+                                    Tuple[Container, Container, Container]):
         """
-        Create a diluted solution from an existing source solution and a 
-        solvent.
+        Creates a diluted solution with a specified quantity from an existing 
+        source solution and a diluent.
 
         Arguments:
-            source: Solution to dilute.
-            solute: What to dissolve.
-            concentration: Desired concentration. ('1 M', '0.1 umol/10 uL', etc.)
-            solvent: What to dissolve with (if it is a Container, it can contain some solute).
-            total_quantity: Desired total quantity. ('3 mL', '10 g')
-            name: Optional name for new container.
+            source: The solution which will be diluted.
+            solute: The Substance that is the target of the dilution.
+            concentration: The desired concentration of the solute 
+                            (e.g. '1 M', '0.1 umol/10 uL', etc.).
+            diluent: The substance or solution used to dilute the source 
+                     solution. Can be a Substance or a Container.
+            total_quantity: The desired total quantity of the diluted result
+                            (e.g. '3 mL', '10 g').
+            name: Optional name for the new container.
+            max_volume: Optional maximum volume for the new container.
 
         Returns:
-            Residual from the source container (and possibly the solvent container)
-             and a new container with the desired solution.
+            Residual from the source container (and possibly the diluent 
+            container) and a new container with the desired solution.
 
         Raises:
-            ValueError: If the solution is impossible to create.
+            TypeError: If any of the arguments are of the wrong type.
+            ValueError: If the dilution is impossible to create.
         """
         if not isinstance(source, Container):
             raise TypeError("Source must be a Container.")
@@ -1478,12 +1489,14 @@ class Container:
             raise TypeError("Solute must be a Substance.")
         if not isinstance(concentration, str):
             raise TypeError("Concentration must be a str.")
-        if not isinstance(solvent, (Substance, Container)):
-            raise TypeError("Solvent must be a Substance or Container.")
+        if not isinstance(diluent, (Substance, Container)):
+            raise TypeError("Diluent must be a Substance or Container.")
         if not isinstance(total_quantity, str):
             raise TypeError("Total quantity must be a str.")
         if name is not None and not isinstance(name, str):
             raise TypeError("Name must be a str.")
+        if not isinstance(max_volume, str):
+            raise TypeError("Maximum volume must be a str.")
 
         # Parse and validate the concentration argument.
         try:
@@ -1510,16 +1523,17 @@ class Container:
             raise ValueError("Total quantity must be positive.")
         
         if solute not in source.contents:
-            raise ValueError(f"Source container does not contain {solute.name}.")
+            raise ValueError(f"Source container does not contain solute " 
+                             f"'{solute.name}'.")
 
         # TODO: Possibly rework this name generation to include the name/
         #       contents of the source container. Currently, only the solute and
-        #       solvent names are used. 
+        #       diluent names are used. 
         if not name:
-            name = Container._auto_generate_solution_name([solute], solvent)
+            name = Container._auto_generate_solution_name([solute], diluent)
 
         # For the following blocks of code, 'x' represents the source solution,
-        # 's' represents the solute, and 'y' represents the solvent.
+        # 's' represents the solute, and 'y' represents the diluent.
 
         mass = source.get_mass()
         moles = source.get_moles()
@@ -1534,31 +1548,31 @@ class Container:
         m_x = Unit.convert_from_storage(source.contents.get(solute, 0), 'mol') / (volume / 1000)
 
         # Compute the molecular weight, density, and molar concentration of the 
-        # solvent. 
+        # diluent. 
         # 
-        # If the solvent is a Container, compute the 'effective' properties as 
+        # If the diluent is a Container, compute the 'effective' properties as 
         # is done for the source solution.
-        if isinstance(solvent, Container):
-            mass = solvent.get_mass()
-            moles = solvent.get_moles('mol')
-            volume = Unit.convert_from_storage(solvent.volume, 'mL')
+        if isinstance(diluent, Container):
+            mass = diluent.get_mass()
+            moles = diluent.get_moles('mol')
+            volume = Unit.convert_from_storage(diluent.volume, 'mL')
 
             # Compute the 'effective density', 'effective molecular weight', and
-            # 'effective molar concentration of solute' of the solvent. Density 
+            # 'effective molar concentration of solute' of the diluent. Density 
             # is in units of 'g/mL', molecular weight is in terms of 'g/mol', 
             # and molar concentration is in terms of 'M' or 'mol/L'.
             d_y = mass / volume
             mw_y = mass / moles
-            m_y = Unit.convert_from_storage(solvent.contents.get(solute, 0), 'mol') / (volume / 1000)
+            m_y = Unit.convert_from_storage(diluent.contents.get(solute, 0), 'mol') / (volume / 1000)
         
-        # Otherwise, use the properties of the solvent substance.
+        # Otherwise, use the properties of the diluent substance.
         else:
-            d_y = solvent.density
-            mw_y = solvent.mol_weight
-            # Edge case: If the solvent and the solute are the same, then the
-            # molar concentration of solute in the solvent is just the molar
-            # density of the solvent. Otherwise, the concentration is 0.
-            m_y = 0 if solvent != solute else solvent.density / solvent.mol_weight * 1000
+            d_y = diluent.density
+            mw_y = diluent.mol_weight
+            # Edge case: If the diluent and the solute are the same, then the
+            # molar concentration of solute in the diluent is just the molar
+            # density of the diluent. Otherwise, the concentration is 0.
+            m_y = 0 if diluent != solute else diluent.density / diluent.mol_weight * 1000
 
         # Get the molecular weight and density of the solute (the shorter names 
         # will be useful for condensing later lines of code)
@@ -1567,7 +1581,7 @@ class Container:
 
         # Define a blank system of equations that will be filled with values 
         # that correspond to the specified constraints. This system of equations
-        # is in terms of the volumes (in mL) of the source and solvent that must
+        # is in terms of the volumes (in mL) of the source and diluent that must
         # be added to create the desired diluted solution.
         a = np.array([[0., 0.], [0., 0.]])
         b = np.array([0., 0.])
@@ -1584,7 +1598,7 @@ class Container:
         # concentration. 
         #  
         # To determine the values of the two terms of a[0], we must format this 
-        # equation in terms of the volumes of the source and solvent needed for
+        # equation in terms of the volumes of the source and diluent needed for
         # the dilution. Unfortunately, these terms are buried in the top/bottom
         # terms above, and are different for all the possible types of units
         # that are allowed for concentrations. However, if we choose general
@@ -1594,7 +1608,7 @@ class Container:
         #   C = p_Total / q_Total 
         # 
         # These total quantities can be broken up into the contributions of the 
-        # source and solvent solutions as follows:
+        # source and diluent solutions as follows:
         #  
         #   C = (p_x + p_y) / (q_x + q_y)
         #
@@ -1608,16 +1622,16 @@ class Container:
         #     contributed to the dilution by the SOURCE solution.
         #
         #   - p_y represents the quantity (moles, mass, or volume) of SOLUTE
-        #     contributed to the dilution by the SOLVENT solution.
+        #     contributed to the dilution by the DILUENT solution.
         #
         #   - q_x represents the TOTAL quantity (moles, mass, or volume) 
         #     contributed to the dilution by the SOURCE solution.
         #
         #   - q_y represents the TOTAL quantity (moles, mass, or volume)
-        #     contributed to the dilution by the SOLVENT solution.
+        #     contributed to the dilution by the DILUENT solution.
         # 
         # If we define conversion ratios from the volume of the source and 
-        # solvent solutions needed, V_x and V_y, to the quantities p_x/q_x and
+        # diluent solutions needed, V_x and V_y, to the quantities p_x/q_x and
         # p_y/q_y, we can write the above equation in terms of V_x and V_Y. 
         # 
         #   p_x = r_x * V_x
@@ -1645,7 +1659,7 @@ class Container:
 
         # Determine the appropriate conversion factors (r_x and r_y) for the 
         # 'top' quantities. These quantities express the quantity of SOLUTE
-        # (mol, g, or L) added per mL of source/solvent solution. Units other 
+        # (mol, g, or L) added per mL of source/diluent solution. Units other 
         # than (mol, g, or L) in the concentration numerator will raise an 
         # error.
         if numerator == 'mol':
@@ -1662,7 +1676,7 @@ class Container:
         
         # Determine the appropriate conversion factors (s_x and s_y) for the 
         # 'bottom' quantities. These quantities express the TOTAL quantity
-        # (mol, g, or L) added per mL of source/solvent solution. Units other 
+        # (mol, g, or L) added per mL of source/diluent solution. Units other 
         # than (mol, g, or L) in the concentration denominator will raise an 
         # error.
         if denominator == 'mol':
@@ -1721,128 +1735,168 @@ class Container:
         # Set the right-hand side of the equation to the total quantity.
         b[1] = quantity_value
 
-        # Solve the system of equations to compute the mL of source & solvent 
+        # Solve the system of equations to compute the mL of source & diluent 
         # ('V_x' & 'V_y') needed for the dilution.
         V_x, V_y = np.linalg.solve(a, b)
 
         # If the volumes needed of either solution are negative, the solution is
         # impossible to create. This is likely because the specified dilution is
-        # more concentrated in the solute than either the source or solvent 
+        # more concentrated in the solute than either the source or diluent 
         # solution.
         if V_x < 0 or V_y < 0:
             raise ValueError("Dilution is impossible to create. The specified" +
                              " concentration is likely higher than either the" +
-                             " source or solvent concentrations.")
+                             " source or diluent concentrations.")
+        
+        # Define a helper function for re-raising transfer errors with messages
+        # specific to dilutions.
+
+        # NOTE: This function will need to be updated if the error messages for
+        #       transfer errors are changed.
+        def _raise_modified_error(source_name: str, msg: str):
+            # Source container or diluent did not have enough volume for the 
+            # transfer
+            if msg.startswith("Not enough mixture in source"):
+                msg_period_idx = msg.find('.')
+                msg = f"{msg[:22]}{source_name}"\
+                      f"{msg[msg_period_idx:]}" 
+                raise ValueError(msg) from None
+            
+            # Dilution volume is greater than the specified maximum volume
+            elif msg.startswith("Exceeded maximum volume of destination"):
+                raise ValueError("The total volume of the dilution" 
+                                 f" ({V_x + V_y} mL) exceeds the specified "
+                                 f"maximum volume ({max_volume}).") from None
+            
+            # Other transfer errors (SHOULD NOT BE REACHED)
+            else:
+                raise ValueError("Dilution could not be created. Transfer from "
+                                 f"{source_name} failed. Reason: {msg}") \
+                                from None
 
         # Create the new solution using the calculated volumes 'V_x' and 'V_y'.
-        # If the solvent is a substance, the necessary amount can be added to
+        # If the diluent is a Substance, the necessary amount can be added to
         # the initial contents of the new dilution container. Otherwise, it must
-        # be transferred from the solvent Container object.
-        if isinstance(solvent, Substance):
-            # If 'V_y' is greater than zero, add 'V_y' mL of solvent to the 
-            # initial contents of the new container, otherwise leave the 
-            # container empty.
-            if V_y:
-                new_solution = Container(name, initial_contents=[(solvent, f"{V_y} mL")])
-            else:
-                new_solution = Container(name)
+        # be transferred from the diluent Container object.
+        new_solution = Container(name, max_volume)
+        
+        if V_y:
+            # If the diluent is a Substance, add 'V_y' mL of diluent to the 
+            # initial contents of the new container (Container is re-created).
+            if isinstance(diluent, Substance):
+                try:
+                    new_solution = Container(name, max_volume, 
+                                             [(diluent, f"{V_y} mL")])
+                except ValueError:
+                    msg = "Exceeded maximum volume of destination"
+                    _raise_modified_error("diluent", msg)
             
-            # If 'V_x' is greater than zero, transfer 'V_x' mL of the source 
-            # solution to the new container.
-            if V_x:
-                source, new_solution = Container.transfer(source, new_solution, f"{V_x} mL")
-        else:
-            # Create an empty container for the dilution result
-            new_solution = Container(name)
-
-            # If 'V_x' is greater than zero, transfer 'V_x' mL of the source 
-            # solution to the new container.
-            if V_x:
-                source, new_solution = Container.transfer(source, new_solution, f"{V_x} mL")
-
-            # If 'V_y' is greater than zero, transfer 'V_y' mL of the solvent 
-            # solution to the new container.
-            if V_y:
-                solvent, new_solution = Container.transfer(solvent, new_solution, f"{V_y} mL")
+            # Otherwise transfer 'V_y' mL from the diluent container to the new 
+            # container.
+            else:
+                try:
+                    result = Container.transfer(diluent, new_solution, f"{V_y} mL")
+                except ValueError as ve:
+                    _raise_modified_error("diluent", str(ve))
+                diluent, new_solution = result
+ 
+        # If 'V_x' is greater than zero, transfer 'V_x' mL of the source 
+        # solution to the new container.
+        if V_x:
+            try:
+                result = Container.transfer(source, new_solution, f"{V_x} mL")
+            except ValueError as ve:
+                    _raise_modified_error("source", str(ve))
+            source, new_solution = result
 
         # Set the new container's instructions attribute to accurately reflect
         # the details of the dilution.
         precision = config.precisions['mL'] if 'mL' in config.precisions else config.precisions['default']
-        new_solution.instructions = f"Add {round(V_y, precision)} mL of {solvent.name} to" + \
+        new_solution.instructions = f"Add {round(V_y, precision)} mL of {diluent.name} to" + \
                                     f" {round(V_x, precision)} mL of {source.name}."
 
-        # If the solvent is a Substance, return the modified post-transfer 
+        # If the diluent is a Substance, return the modified post-transfer 
         # source container and the new dilution container. Otherwise, return
         # the modified post-transfer source container, the modified post-
-        # transfer solvent container, and the new dilution container.
-        if isinstance(solvent, Substance):
+        # transfer diluent container, and the new dilution container.
+        if isinstance(diluent, Substance):
             return source, new_solution
         else:
-            return source, solvent, new_solution
+            return source, diluent, new_solution
 
     def dilute_in_place(self, solute: Substance, concentration: str, 
-                        solvent: (Substance | Container), 
-                        name=None) -> Container:
+                        diluent: (Substance | Container), 
+                        name=None) -> Container | tuple[Container, Container]:
         """
-        Dilutes this container with `solvent` until the concentration of 
-        `solute` matches `concentration`.
+        Creates a diluted solution by adding diluent to an existing source
+        solution. If a specific quantity is desired for the diluted solution,
+        use `Container.create_dilution()` instead.
 
         Args:
-            solute: Substance which is the subject of the dilution.
-            concentration: Desired concentration of the solute.
-            solvent: What to dilute with. Can be a Substance or a Container.
-            name: Optional name for new container.
+            solute: The Substance which is the subject of the dilution.
+            concentration: The desired concentration of the solute.
+            diluent: The substance or solution used to dilute the source 
+                     solution. Can be a Substance or a Container.
+            name: Optional name for the new container.
+        
+        Returns: 
+            A new (updated) container with the remainder of the original 
+            container, and the diluted solution.
 
-        Returns: A new (updated) container with the remainder of the original 
-        container, and the diluted solution.
-
-        If `solvent` is a Container, a new container with the remainder of the
-        solvent will be returned as well.
+        If `diluent` is a Container, a new container with the remainder of the
+        diluent will be returned as well.
         """
         if not isinstance(solute, Substance):
             raise TypeError("Solute must be a Substance.")
         if not isinstance(concentration, str):
             raise TypeError("Concentration must be a str.")
-        if not isinstance(solvent, (Substance, Container)):
-            raise TypeError("Solvent must be a Substance or a Container.")
-        if name and not isinstance(name, str):
-            raise TypeError("New name must be a str.")
+        if not isinstance(diluent, (Substance, Container)):
+            raise TypeError("Diluent must be a Substance or a Container.")
+        
+        # Check that the name argument is the correct type or None
+        if name is not None and not isinstance(name, str):
+            raise TypeError("Name must be a str.")
         
         if solute not in self.contents:
-            raise ValueError(f"Container does not contain {solute.name}.")
+            raise ValueError(f"This container does not contain solute "
+                             f"{solute.name}.")
         
-        # Save whether the solvent is a pure Substance to a local variable to 
+        # Save whether the diluent is a pure Substance to a local variable to 
         # avoid costlier calls to isinstance().
-        is_pure_solvent = isinstance(solvent, Substance)
+        is_pure_diluent = isinstance(diluent, Substance)
 
         # Parse the target concentration for the dilution and specified units 
         # from the concentration argument. The target units are combined for 
         # use in the later calls to get_concentration().
-        target_conc, num_unit, denom_unit = Unit.parse_concentration(concentration)
+        try:
+            parsed_result = Unit.parse_concentration(concentration)
+        except ValueError:
+            raise ValueError(f"Invalid concentration '{concentration}'.") from None
+        target_conc, num_unit, denom_unit = parsed_result
         target_units = f"{num_unit}/{denom_unit}"
 
         # Compute the concentration of solute in the starting source solution in
         # terms of the target units.
         source_conc = self.get_concentration(solute, target_units)
 
-        # Compute the concentration of solute in the solvent in terms of the
+        # Compute the concentration of solute in the diluent in terms of the
         # target units.
-        if is_pure_solvent:
-            if solvent != solute:
-                # If the solvent is NOT the same as the solute, then the solute
-                # concentration in the solvent is 0.
-                solvent_conc = 0
+        if is_pure_diluent:
+            if diluent != solute:
+                # If the diluent is NOT the same as the solute, then the solute
+                # concentration in the diluent is 0.
+                diluent_conc = 0
             else:
-                # Edge case: If the solvent IS the same as the solute, then the
-                # solute concentration in the solvent in terms of the target 
+                # Edge case: If the diluent IS the same as the solute, then the
+                # solute concentration in the diluent in terms of the target 
                 # units is the conversion factor between the denominator units 
                 # and the numerator units.
-                #   E.g. If concentration = 0.25 mol/L and the solute & solvent 
-                #        are both water, then the solvent concentration is
+                #   E.g. If concentration = 0.25 mol/L and the solute & diluent 
+                #        are both water, then the diluent concentration is
                 #        1 / 18.0153 mol/mL.
-                solvent_conc = solvent.convert(1, denom_unit, num_unit)
+                diluent_conc = diluent.convert(1, denom_unit, num_unit)
         else:
-            solvent_conc = solvent.get_concentration(solute, target_units)
+            diluent_conc = diluent.get_concentration(solute, target_units)
 
         # These two checks are placed BEFORE the early return because they are
         # for conditions that should NEVER arise in the container. 
@@ -1853,12 +1907,12 @@ class Container:
         # problem by throwing an error than it is to silently succeed.
 
         if not math.isfinite(target_conc):
-            raise ValueError("Target concentration cannot be non-finite!" +
-                             f"Target: {concentration}")
+            raise ValueError("Concentration must be finite. " +
+                             f"Concentration: {concentration}")
 
         if target_conc < 0:
-            raise ValueError("Target concentration cannot be negative." + 
-                             f"Target: {concentration}")
+            raise ValueError("Concentration must be non-negative. " + 
+                             f"Concentration: {concentration}")
         
         # If the current mole fraction of the solute is already within a small 
         # tolerance of the desired mole fraction, return the current container.
@@ -1867,91 +1921,137 @@ class Container:
         # unnecessary to copy the Container if no changes were made. May need to
         # be changed back if problems arise.        
         if abs(source_conc - target_conc) <= target_conc * 1e-6:
-            return self
+            if name is None:
+                new_container = self
+            else:
+                new_container = deepcopy(self)
+                new_container.name = name
+            
+            if is_pure_diluent:
+                return new_container
+            else:
+                return diluent, new_container
 
         # The remaining checks are placed AFTER the previous two lines of code 
         # so that otherwise invalid dilutions will succeed the container
         # already has the required concentration. 
 
         if target_conc == 0:
-            raise ValueError("The target concentration for the solute cannot " +
-                             "be zero if the source concentration is non-zero.")
+            raise ValueError("Cannot dilute to zero concentration if the " + \
+                             "source concentration is non-zero.")
         
-        # Compute the ratio of solvent to source solution needed for the
+        # Compute the ratio of diluent to source solution needed for the
         # dilution. This ratio is in terms of the denominator unit from the 
         # concentration argument, hereafter called "denom_units". If a zero-
-        # division error is raised, this means that the target and solvent
+        # division error is raised, this means that the target and diluent
         # concentrations are equal, which results in an impossible dilution.
         try:
-            ratio = (source_conc - target_conc) / (target_conc - solvent_conc)
+            ratio = (source_conc - target_conc) / (target_conc - diluent_conc)
         except ZeroDivisionError as zde:
-            raise ValueError("The target concentration for the solute cannot " +
-                             "match its concentration in the solvent." + 
-                             f"Target: {concentration}  " +
-                             f"Solvent: {solvent_conc} {target_units}")
+            target_conc_str = f"{target_conc} {target_units}"
+            diluent_conc_str = f"{diluent_conc} {target_units}"
+            raise ValueError("The target concentration cannot match the " 
+                             "concentration of the solute in the diluent.\n" 
+                             f"\t\tTarget: {target_conc_str}\n" 
+                             f"\t\tDiluent: {diluent_conc_str}") \
+                            from None
 
         # If the ratio is negative, then the target concentration lies outside
         # of the range between the source concentration and the solute 
         # concentration.
         if ratio < 0:
-            raise ValueError("The target concentration for the solute must " + 
-                             "lie between the source concentration and the " +
-                             f"solvent concentration. Target: {concentration}" +
-                             f"  Source: {source_conc} {target_units}  " + 
-                             f"  Solvent: {source_conc} {target_units}")
-        
+            target_conc_str = f"{target_conc} {target_units}"
+            source_conc_str = f"{source_conc} {target_units}"
+            diluent_conc_str = f"{diluent_conc} {target_units}"
+            raise ValueError("The target concentration for the solute must "  
+                             "lie between that of the source and the diluent.\n" 
+                             f"\t\tTarget: {target_conc_str}\n" 
+                             f"\t\tSource: {source_conc_str}\n"  
+                             f"\t\tDiluent: {source_conc} {target_units}") \
+                            from None
+
         # NOTE: the case of ratio = 0 means that the source and target 
         # concentrations are identical, which would already result in early 
         # termination from the check above. 
 
-
-        # Compute the volume of solvent needed for the dilution. This requires
+        # Compute the volume of diluent needed for the dilution. This requires
         # two steps. 
         
-        # First, the amount of solvent in "denom_units" is computed as the 
+        # First, the amount of diluent in "denom_units" is computed as the 
         # product of the amount of source solution in "denom units" and the 
         # previously computed ratio. 
-        try:
-            solvent_amt = self.get_quantity(denom_unit) * ratio
+        diluent_amt = self.get_quantity(denom_unit) * ratio
 
-        # If this fails, the get_quantity() error does not specify that the
-        # denominator unit of the concentration was the problem, so a new error
-        # is raised to include these details.
-        except ValueError as e:
-            raise ValueError("Invalid unit in concentration denominator: " + 
-                             f"{denom_unit}")
-        
-        # Second, the amount of solvent in "denom units" is multiplied by the 
-        # "volume of solvent per denom unit".
-        if is_pure_solvent:
-            vol_per_qty = solvent.convert(1, denom_unit, 'L')
-            solvent_volume = solvent_amt * vol_per_qty
+        # Second, the amount of diluent in "denom units" is multiplied by the 
+        # "volume of diluent per denom unit".
+        if is_pure_diluent:
+            vol_per_qty = diluent.convert(1, denom_unit, 'L')
+            diluent_volume = diluent_amt * vol_per_qty
         else:
-            vol_per_qty = solvent.get_volume('L') / solvent.get_quantity(denom_unit)
-            solvent_volume = solvent_amt * vol_per_qty
+            vol_per_qty = diluent.get_volume('L') / diluent.get_quantity(denom_unit)
+            diluent_volume = diluent_amt * vol_per_qty
 
-        
-        # Ensure the computed volume can fit in this container.
-        if self.volume + solvent_volume > self.max_volume:
-            raise ValueError("Dilute solution will not fit in the container.")
+        # Get the volume of the diluent in the storage units of the container.
+        diluent_storage_volume = Unit.convert_to_storage(diluent_volume, 'L')
 
-        # Add the solvent to this container to produce the diluted solution.
-        if is_pure_solvent:
-            result = self._add(solvent, f"{solvent_volume} L")
+        # Define a helper function for re-raising transfer errors with messages
+        # specific to dilutions.
+        #
+        # NOTE: This function will need to be updated if the error messages for
+        #       transfer errors are changed.
+        def _raise_modified_error(msg: str):
+            # Diluent did not have enough volume for the transfer
+            if msg.startswith("Not enough mixture in source"):
+                msg_period_idx = msg.find('.')
+                msg = f"{msg[:21]} diluent"\
+                      f"{msg[msg_period_idx:]}" 
+                raise ValueError(msg) from None
+            
+            # Dilution volume is greater than the container's maximum volume
+            elif msg.startswith("Exceeded maximum volume"):
+                vol_unit = config.volume_storage_unit
+                dilution_volume = self.volume + diluent_storage_volume
+                dil_vol = Unit.get_human_readable_unit(dilution_volume, vol_unit)
+                max_vol = Unit.get_human_readable_unit(self.max_volume, vol_unit)
+                raise ValueError("The total volume of the dilution " 
+                                f"({dil_vol[0]} {dil_vol[1]}) "
+                                f"exceeds this container's maximum volume "
+                                f"({max_vol[0]} {max_vol[1]}).") from None
+            
+            # Other transfer errors (SHOULD NOT BE REACHED)
+            else:
+                raise ValueError("Dilution could not be created. Transfer of "
+                                 f"diluent failed. Reason: {msg}") \
+                                from None
+
+        # Try to add the diluent to this container to produce the diluted 
+        # solution. Raise a modified error if the transfer fails.
+        if is_pure_diluent:
+            try:
+                result = self._add(diluent, f"{diluent_volume} L")
+            except ValueError as ve:
+                _raise_modified_error(str(ve))
         else:
-            result = Container.transfer(solvent, self, f"{solvent_volume} L")
+            try:
+                result = Container.transfer(diluent, self, f"{diluent_volume} L")
+            except ValueError as ve:
+                _raise_modified_error(str(ve))
 
-        diluted_solution = result if is_pure_solvent else result[1]
+        diluted_solution = result if is_pure_diluent else result[1]
 
+        print(f"Name: {name}")
         if name:
+            print(f"  Set name: {name}")
             diluted_solution.name = name
+        else:
+            print(f"  Name is None: {name}")
 
         # Set the instructions attribute of the diluted container based on the
         # details of the dilution.
-        solvent_volume, unit = Unit.get_human_readable_unit(solvent_volume, 'L')
+        diluent_volume, unit = Unit.get_human_readable_unit(diluent_volume, 'L')
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-        diluted_solution.instructions += f"\nDilute with {round(solvent_volume, precision)}" + \
-                                    f"{unit} of {solvent.name}."
+        diluted_solution.instructions += f"\nDilute with {round(diluent_volume, precision)}" + \
+                                         f"{unit} of {diluent.name}."
         
         return result
 

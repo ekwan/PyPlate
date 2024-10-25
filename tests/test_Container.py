@@ -25,7 +25,6 @@ from .unit_test_constants import epsilon, \
 
 from .common_mock_functions import mock_parse_quantity, mock_parse_concentration
 
-
 def test_Container___init__(water, salt):
     """
     Unit test for the `Container` constructor.
@@ -996,7 +995,7 @@ def test_Container__transfer(water, dmso, salt, sodium_sulfate,
             #  a) starts with the correct error phrase, and 
             #  b) contains the correct base unit
             with pytest.raises(ValueError, 
-                        match='Not enough mixture left in source container' + 
+                        match='Not enough mixture in source container' + 
                                 f'.*{base_unit}.*'):
                 container2._transfer(test_container, '20 ' + unit)
     
@@ -2169,7 +2168,8 @@ def test_Container__add(mocker, empty_container, salt):
     # Ensure that salt has not been added to the new container's contents
     assert salt not in salt_stock.contents
 
-def test_Container_transfer(water_stock, salt_water, empty_plate, water_plate, mocker):
+def test_Container_transfer(mocker: pytest_mock.MockerFixture, 
+                            water_stock, salt_water, empty_plate, water_plate):
     """
     Unit Test for the function `Container.transfer()`
     
@@ -3124,9 +3124,9 @@ def test_Container__compute_solution_contents(water, salt, sodium_sulfate,
             assert conc == pytest.approx(expected_conc, rel=1e-10), \
                 f"Solute concentration does not match supplied argument. {conc} M"
 
-def test_Container_create_solution(mocker, water, dmso, 
-                        salt, triethylamine, sodium_sulfate,
-                        water_stock, salt_water):
+def test_Container_create_solution(mocker: pytest_mock.MockerFixture, 
+                                   water, dmso, salt, triethylamine, 
+                                   sodium_sulfate, water_stock):
     """
     Unit Test for the function `Container.create_solution()`
 
@@ -3494,31 +3494,31 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
       raising a `ValueError` (scenario requires mocking to reach)
     - Impossible dilutions will result in raising a `ValueError`
         - Sub-Case: Attempting to dilute a solution to a concentration greater
-                    than either the source solution or the solvent.
+                    than either the source solution or the diluent.
             - Both much greater and slightly greater concentrations are tested
 
         - Sub-Case: Attempting to dilute a solution to a concentration lower
-                    than either the source solution or the solvent.
+                    than either the source solution or the diluent.
             - Both much lower and slightly lower concentrations are tested
 
     This unit test checks for the following success scenarios:
-    - Solvent is a Substance that is not the same as the solute.
+    - Diluent is a Substance that is not the same as the solute.
         - Standard Case - dilution of salt water to lower concentration
         - Edge Case - dilution of salt water to zero concentration
         - Edge Case - dilution of salt water to the same concentration
-    - (Edge Case) Solvent is a Substance that matches the solute.
-    - Solvent is a Container that does not contain any of the solute.
+    - (Edge Case) Diluent is a Substance that matches the solute.
+    - Diluent is a Container that does not contain any of the solute.
         - Edge Case - dilution of salt water to the same concentration
-            - This was checked for both a pure Substance solvent and a Container
-              solvent for 100% code coverage and to ensure that the solvent 
+            - This was checked for both a pure Substance diluent and a Container
+              diluent for 100% code coverage and to ensure that the diluent 
               Container volume was not reduced at all in this case.
-    - Solvent is a Container that does contain some amount of the solute.
+    - Diluent is a Container that does contain some amount of the solute.
     - Variations for the possible units for the concentrations. 
 
     For each success case, the dilution was checked to ensure that it matched 
     the provided concentration/total quantity. The source solution was also 
     checked to ensure it had been reduced by the appropriate volume. Finally, if
-    the solvent was a Container, it was checked to ensure it had been reduced by
+    the diluent was a Container, it was checked to ensure it had been reduced by
     the appropriate volume.
 
     This unit test depends on the correctness of the following functions:
@@ -3549,9 +3549,9 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
         with pytest.raises(TypeError, match="Concentration must be a str\\."):
             cd(salt_water, salt, NON_STR, water, "10 mL")
             
-    for INVALID_SOLVENT in [None, 1, [], {}, [None], [salt], (water,)]:
-        with pytest.raises(TypeError, match="Solvent must be a Substance or Container\\."):
-            cd(salt_water, salt, "0.001 M", INVALID_SOLVENT, "10 mL")
+    for INVALID_DILUENT in [None, 1, [], {}, [None], [salt], (water,)]:
+        with pytest.raises(TypeError, match="Diluent must be a Substance or Container\\."):
+            cd(salt_water, salt, "0.001 M", INVALID_DILUENT, "10 mL")
             
     for NON_STR in [None, 1, [], {}, salt, salt_water, [None], [""], ("",)]:
         with pytest.raises(TypeError, match="Total quantity must be a str\\."):
@@ -3560,6 +3560,10 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     for INVALID_NAME in [1, [], {}, salt, salt_water, [None], [""], ("",)]:
         with pytest.raises(TypeError, match="Name must be a str\\."):
             cd(salt_water, salt, "0.001 M", water, "10 mL", INVALID_NAME)
+    
+    for NON_STR in [None, 1, [], {}, salt, salt_water, [None], [""], ("",)]:
+        with pytest.raises(TypeError, match="Maximum volume must be a str\\."):
+            cd(salt_water, salt, "0.001 M", water, "10 mL", max_volume=NON_STR)
             
 
     # ==========================================================================
@@ -3619,11 +3623,11 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     # Failure Case: Invalid source/solute - solute not found in source container
     # ==========================================================================
     
-    match_msg = r'Source container does not contain'
-    with pytest.raises(ValueError, match=f"{match_msg} {dmso.name}"):
+    match_msg = r'Source container does not contain solute \''
+    with pytest.raises(ValueError, match=f"{match_msg}{dmso.name}"):
         cd(salt_water, dmso, "0.001 M", water, "10 mL")
     
-    with pytest.raises(ValueError, match=f"{match_msg} {sodium_sulfate.name}"):
+    with pytest.raises(ValueError, match=f"{match_msg}{sodium_sulfate.name}"):
         cd(salt_water, sodium_sulfate, "0.001 M", water, "10 mL")
         
     
@@ -3639,7 +3643,7 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     # function more robust.
 
     # Store the true function in a variable so that it can be called later
-    real_parse_quantity = Unit.parse_concentration
+    real_parse_concentration = Unit.parse_concentration
 
     # Replace calls to Unit.parse_concentration() with the mock version.
     mocker.patch.object(Unit, 'parse_concentration', mock_parse_concentration)
@@ -3661,7 +3665,7 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
                                       water, "10 mL")
     
     # Revert Container._compute_solution_contents() to its original form
-    mocker.patch.object(Unit, 'parse_concentration', real_parse_quantity)
+    mocker.patch.object(Unit, 'parse_concentration', real_parse_concentration)
     
 
     # ==========================================================================
@@ -3676,7 +3680,7 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     # function more robust.
 
     # Store the true function in a variable so that it can be called later
-    real_parse_quantity = Unit.parse_quantity
+    real_parse_concentration = Unit.parse_quantity
 
     # Replace calls to Unit.parse_quantity() with the mock version.
     mocker.patch.object(Unit, 'parse_quantity', mock_parse_quantity)
@@ -3691,7 +3695,7 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
                                       water, bad_qty)
     
     # Revert Container._compute_solution_contents() to its original form
-    mocker.patch.object(Unit, 'parse_quantity', real_parse_quantity)
+    mocker.patch.object(Unit, 'parse_quantity', real_parse_concentration)
     
 
     # ==========================================================================
@@ -3700,13 +3704,13 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     
     match_msg = r"Dilution is impossible to create\."
 
-    # Sub-Case: Target concentration is much higher than source/solvent 
+    # Sub-Case: Target concentration is much higher than source/diluent 
     # concentrations
     for num, denom in product(Unit.BASE_UNITS, repeat=2):
         with pytest.raises(ValueError, match=match_msg):
                 cd(salt_water, salt, f"200 {num}/{denom}", water, "10 mL")
 
-    # Sub-Case: Target concentration is slighly higher than the source/solvent
+    # Sub-Case: Target concentration is slighly higher than the source/diluent
     # concentrations (slightly higher than whichever is bigger)
     # 
     # NOTE: 'salt_water' fixture has a salt concentration of '0.493356... M' 
@@ -3715,22 +3719,84 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     with pytest.raises(ValueError, match=match_msg):
             cd(salt_water, salt, "0.49336 M", water_stock, "10 mL")
             
-    # Sub-Case: Target concentration is much lower than source/solvent 
+    # Sub-Case: Target concentration is much lower than source/diluent 
     # concentrations
     for num, denom in product(Unit.BASE_UNITS, repeat=2):
         with pytest.raises(ValueError, match=match_msg):
             cd(brine, salt, f"0.00001 {num}/{denom}", salt_water, "10 mL")
         
-    # Sub-Case: Target concentration is slightly lower than source/solvent 
+    # Sub-Case: Target concentration is slightly lower than source/diluent 
     # concentrations
     with pytest.raises(ValueError, match=match_msg):
         cd(brine, salt, "0.001 M", salt_water, "10 mL")
     with pytest.raises(ValueError, match=match_msg):
         cd(salt_water, salt, "0.001 M", brine, "10 mL")
-        
+
 
     # ==========================================================================
-    # Success Case: Create dilution with pure Substance solvent (does not
+    # Failure Case: Dilution requires more source than is available
+    # ==========================================================================
+    
+    match_msg = "Not enough mixture in source\\."
+    with pytest.raises(ValueError, match=match_msg):
+        cd(salt_water, salt, "0.1 M", water, "2000 L")
+    
+
+    # ==========================================================================
+    # Failure Case: Dilution requires more diluent than is available
+    # ==========================================================================
+    
+    match_msg = "Not enough mixture in diluent\\."
+    with pytest.raises(ValueError, match=match_msg):
+        cd(salt_water, salt, "0.00001 M", water_stock, "2000 L")
+
+
+    # ==========================================================================
+    # Failure Case: Dilution requires more volume than the specified max volume
+    # ==========================================================================
+    
+    match_msg = r"The total volume of the dilution \(.*\) exceeds the specified " \
+                r"maximum volume \(.*\)\."
+    
+    # Sub-Case: Pure Substance diluent exceeds max volume
+    with pytest.raises(ValueError, match=match_msg):
+        cd(brine, salt, "0.01 M", water, "20 mL", max_volume="5 mL")
+
+    # Sub-Case: Container diluent exceeds max volume
+    with pytest.raises(ValueError, match=match_msg):
+        cd(brine, salt, "0.1 M", water_stock, "20 mL", max_volume="5 mL")
+
+    # Sub-Case: Source exceeds max volume
+    with pytest.raises(ValueError, match=match_msg):
+        cd(brine, salt, "5 M", water, "6 mL", max_volume="5 mL")
+
+    
+    # ==========================================================================
+    # Failure Case: Dilution failed due to unknown transfer error
+    # ==========================================================================
+    
+    match_msg = r"Dilution could not be created. Transfer from .* failed. " \
+                r"Reason: .*"
+    
+    # Define a mock function that will raise an unknown error
+    def _mock_transfer_error(*args, **kwargs):
+        raise ValueError("This is an unknown transfer error!")
+
+    # Store the true function in a variable so that it can be called later
+    real_transfer = Container.transfer
+
+    # Set up mocking for Container.transfer()
+    mocker.patch.object(Container, 'transfer', _mock_transfer_error)
+
+    with pytest.raises(ValueError, match=match_msg):
+        cd(salt_water, salt, "0.001 M", water, "10 mL")
+
+    # Revert Container.transfer() to its original form
+    mocker.patch.object(Container, 'transfer', real_transfer)
+
+
+    # ==========================================================================
+    # Success Case: Create dilution with pure Substance diluent (does not
     #               overlap with solute)
     # ==========================================================================
     
@@ -3738,12 +3804,14 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     diluted_conc = 0.01
     dilution_vol = 0.1
     dilution_name = "Diluted Salt Water"
+    dilution_max_vol = "1 L" # Needs a space for proper parsing
 
-    for solvent in [water, dmso]:
+    for diluent in [water, dmso]:
         # Create a dilution of salt water using the pure substance
         source_left, dilution = cd(salt_water, salt, f"{diluted_conc} M",
-                                    solvent, f"{dilution_vol} L", 
-                                    name=dilution_name)
+                                    diluent, f"{dilution_vol} L", 
+                                    name=dilution_name,
+                                    max_volume=dilution_max_vol)
         
         # Check that the dilution has the correct concentration
         assert dilution.get_concentration(salt, "M") == diluted_conc
@@ -3754,12 +3822,17 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
         # Check that the name has been properly assigned
         assert dilution.name == dilution_name
 
+        # Check that the maximum volume has been properly assigned
+        amt, unit = dilution_max_vol.split(" ")
+        storage_vol = Unit.convert_to_storage(float(amt), unit)
+        assert dilution.max_volume == storage_vol
+
         # Check that the returned source container has lost the amount of solution
         # needed to create the dilution   
         src_concentration = salt_water.get_concentration(salt, "M")
 
-        # NOTE: These calculations assume that the solvent does not contain any 
-        # solute, they cannot be used for cases where the solvent is the solute or
+        # NOTE: These calculations assume that the diluent does not contain any 
+        # solute, they cannot be used for cases where the diluent is the solute or
         # contains some amount of the solute.
         salt_moles_needed = diluted_conc * dilution_vol
         expected_src_vol_used = salt_moles_needed / src_concentration
@@ -3769,7 +3842,7 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
 
 
     # ==========================================================================
-    # Success Case: (Edge Case) Create dilution with pure Substance solvent that
+    # Success Case: (Edge Case) Create dilution with pure Substance diluent that
     #               is also the solute.
     # ==========================================================================
     
@@ -3828,10 +3901,10 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     dilution_vol = 0.1
     dilution_name = "Diluted Salt Water"
 
-    for solvent in [water, dmso]:
+    for diluent in [water, dmso]:
         # Create a dilution of salt water using the pure substance
         source_left, dilution = cd(salt_water, salt, f"0 M",
-                                    solvent, f"{dilution_vol} L", 
+                                    diluent, f"{dilution_vol} L", 
                                     name=dilution_name)
         
         # Check that the dilution has the correct concentration
@@ -3848,7 +3921,7 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
 
 
     # ==========================================================================
-    # Success Case: Create dilution with Container solvent (does not overlap 
+    # Success Case: Create dilution with Container diluent (does not overlap 
     #               with solute)
     # ==========================================================================
     
@@ -3858,7 +3931,7 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     dilution_name = "Diluted Salt Water"
 
     # Create a dilution of salt water using the pure water stock solution
-    source_left, solvent_left, dilution = cd(salt_water, salt, f"{diluted_conc} M",
+    source_left, diluent_left, dilution = cd(salt_water, salt, f"{diluted_conc} M",
                                                 water_stock, f"{dilution_vol} L", 
                                                 name=dilution_name)
     
@@ -3875,8 +3948,8 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     # needed to create the dilution   
     src_concentration = salt_water.get_concentration(salt, "M")
 
-    # NOTE: These calculations assume that the solvent does not contain any 
-    # solute, they cannot be used for cases where the solvent is the solute or
+    # NOTE: These calculations assume that the diluent does not contain any 
+    # solute, they cannot be used for cases where the diluent is the solute or
     # contains some amount of the solute.
     salt_moles_needed = diluted_conc * dilution_vol
     expected_src_vol_used = salt_moles_needed / src_concentration
@@ -3884,16 +3957,16 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
 
     assert source_left.get_volume("L") == pytest.approx(expected_src_vol_left)
 
-    # Check that the returned solvent container has lost the amount of solution
+    # Check that the returned diluent container has lost the amount of solution
     # needed to create the dilution.
     expected_solv_vol_used = dilution_vol - expected_src_vol_used
     expected_solv_vol_left = water_stock.get_volume('L') - expected_solv_vol_used
 
-    assert solvent_left.get_volume('L') == pytest.approx(expected_solv_vol_left)
+    assert diluent_left.get_volume('L') == pytest.approx(expected_solv_vol_left)
 
 
     # ==========================================================================
-    # Success Case: Create dilution with Container solvent (overlaps with 
+    # Success Case: Create dilution with Container diluent (overlaps with 
     #               solute)
     # ==========================================================================
     
@@ -3903,9 +3976,11 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     dilution_name = "Concentrated Salt Water"
 
     # Create a dilution of 1 M salt water using 2 M salt water
-    source_left, solvent_left, dilution = cd(salt_water_1M, salt, f"{diluted_conc} M",
-                                                salt_water_2M, f"{dilution_vol} L", 
-                                                name=dilution_name)
+    source_left, diluent_left, dilution = cd(salt_water_1M, salt, 
+                                             f"{diluted_conc} M",
+                                             salt_water_2M, 
+                                             f"{dilution_vol} L", 
+                                             name=dilution_name)
     
     # Check that the dilution has the correct concentration
     assert dilution.get_concentration(salt, "M") == diluted_conc
@@ -3921,10 +3996,10 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     expected_src_vol_left = salt_water_1M.get_volume('L') - dilution_vol/2
     assert source_left.get_volume('L') == expected_src_vol_left
 
-    # Check that the returned solvent container has lost the amount of solution
+    # Check that the returned diluent container has lost the amount of solution
     # needed to create the dilution.
     expected_solv_vol_left = salt_water_2M.get_volume('L') - dilution_vol/2
-    assert solvent_left.get_volume('L') == pytest.approx(expected_solv_vol_left)
+    assert diluent_left.get_volume('L') == pytest.approx(expected_solv_vol_left)
 
 
     # ==========================================================================
@@ -3957,7 +4032,7 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
 
     # Sub-Case: Create a dilution of salt water using the pure water stock 
     # solution
-    source_left, solvent_left, dilution = cd(salt_water_1M, salt, f"1 M",
+    source_left, diluent_left, dilution = cd(salt_water_1M, salt, f"1 M",
                                              water_stock, f"{dilution_vol} L", 
                                              name=dilution_name)
     
@@ -3974,8 +4049,8 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     # volume
     assert source_left.get_volume("L") == salt_water_1M.get_volume("L") - 0.1
 
-    # Check that the returned solvent container has not lost any volume
-    assert solvent_left.get_volume("L") == water_stock.get_volume("L")
+    # Check that the returned diluent container has not lost any volume
+    assert diluent_left.get_volume("L") == water_stock.get_volume("L")
 
 
     # ==========================================================================
@@ -4008,7 +4083,392 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
         # Check that the dilution has the correct total amount
         assert dilution.get_quantity(unit=qty_unit) == pytest.approx(dilution_qty, rel=1e-12)
 
- 
+def test_Container_dilute_in_place(mocker: pytest_mock.MockerFixture,
+                                   water: Substance, salt: Substance,
+                                   dmso: Substance, sodium_sulfate: Substance,
+                                   water_stock: Container,
+                                   salt_water: Container, brine: Container,
+                                   salt_water_1M: Container,
+                                   salt_water_2M: Container):
+    """
+    Unit Test for the function `Container.dilute_in_place()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types will result in raising a `TypeError`
+    - Invalid concentration values will result in raising a `ValueError`
+        - Sub-Case: Concentration cannot be parsed
+        - Sub-Case: Concentration value is nonsensical for creating a solution
+    - Providing a solute that is not found in the source container will result
+      in raising a `ValueError`
+    - Impossible dilutions will result in raising a `ValueError`
+        - Sub-Case: Concentration is zero and the amount of solute in this 
+                    container is non-zero.
+        - Sub-Case: Concentration parameter matches the concentration of the
+                    solute in the diluent.
+        - Sub-Case: Concentration parameter is outside the range of the source 
+                    and diluent concentrations.
+    - Dilutions which require more diluent than is available will result in
+      raising a `ValueError`
+    - Dilutions which require more volume than the container's max volume will
+      result in raising a `ValueError`
+    - Dilutions which result in a transfer error when transferring diluent will 
+      result in raising a `ValueError`
+
+    This unit test checks the following success scenarios:
+    - Diluent is a pure Substance
+        - Standard Case: dilution of salt water to lower concentration
+        - Edge Case: diluent is the same Substance as the solute
+    - Diluent is a Container
+        - Sub-Case: diluent does not contain any of the solute
+        - Sub-Case: diluent contains a non-zero amount of the solute
+    - (Edge Case) Concentration parameter matches the starting concentration
+      of the source container.
+        - Sub-Cases are included for both Substance and Container diluent. 
+    - Variations for the possible units for the concentrations.
+
+    In each success case, the following checks were made:
+    - The dilution was checked to ensure that it matched the provided 
+      concentration. 
+    - If the volume of the dilution was easily calculable, it was also checked 
+      to ensure that it matched the provided volume. If not, an easier check was
+      used as a stand-in (e.g. checking that the amount of salt had not changed 
+      for a salt water dilution with water). 
+    - If the diluent was a Container, and the expected volume of diluent needed 
+      was easily calculable, the diluent was checked to ensure that it had been 
+      reduced by the appropriate volume.
+
+    This unit test depends on the correctness of the following functions:
+    - `Container.get_concentration()`
+    - `Container.get_volume()`
+    - `Container.get_moles()`
+    - `Container.create_solution()` (for 1 M and 2 M salt water fixtures)
+    """
+
+    # Create an alias for `Container.dilute_in_place()` to save on space
+    dip = Container.dilute_in_place
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+    
+    for NON_SUBSTANCE in [None, 1, "1", [], {}, salt_water, [None], [salt_water]]:
+        with pytest.raises(TypeError, match="Solute must be a Substance\\."):
+            dip(salt_water, NON_SUBSTANCE, "0.001 M", water)
+
+    for NON_STR in [None, 1, [], {}, salt, salt_water, [None], [""], ("",)]:
+        with pytest.raises(TypeError, match="Concentration must be a str\\."):
+            dip(salt_water, salt, NON_STR, water)
+
+    match_msg = "Diluent must be a Substance or a Container\\."
+    for INVALID_DILUENT in [None, 1, [], {}, [None], [salt], (water,)]:
+        with pytest.raises(TypeError, match=match_msg):
+            dip(salt_water, salt, "0.001 M", INVALID_DILUENT)
+
+    for INVALID_NAME in [1, [], {}, salt, salt_water, [None], [""], ("",)]:
+        with pytest.raises(TypeError, match="Name must be a str\\."):
+            dip(salt_water, salt, "0.001 M", water, INVALID_NAME)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid concentration value
+    # ==========================================================================
+    
+    # Sub-Case: Concentration cannot be parsed (i.e. the call to 
+    #           Unit.parse_concentration() raises a ValueError)
+    for BAD_CONCEN in ['0.1', '0.1 MaM', '0.1 M M', '0.1 M M M', '0.1 L/A',
+                       '0.1 mol', '0.1 g', '0.1 L', '12 kmol', '0.1 M/L',
+                       'NaN M']:
+        with pytest.raises(ValueError, match=r'Invalid concentration \'.*\'\.'):
+            dip(salt_water, salt, BAD_CONCEN, water)
+            
+    # Sub-Case: Concentration value is nonsensical for creating a solution
+    
+    # Sub-Sub-Case: Concentration is not finite
+    match_msg = r'Concentration must be finite\.'
+    for BAD_CONCEN in ['inf M', '-inf M']:
+        with pytest.raises(ValueError, match=match_msg):
+            dip(salt_water, salt, BAD_CONCEN, water)
+            
+    # Sub-Sub-Case: Concentration is negative
+    match_msg = r'Concentration must be non-negative\.'
+    for BAD_CONCEN in ['-1 M', '-0.01 L/L']:
+        with pytest.raises(ValueError, match=match_msg):
+            dip(salt_water, salt, BAD_CONCEN, water)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid source/solute - solute not found in source container
+    # ==========================================================================
+    
+    match_msg = r'This container does not contain solute'
+    with pytest.raises(ValueError, match=f"{match_msg} {dmso.name}"):
+        dip(salt_water, dmso, "0.001 M", water)
+    
+    with pytest.raises(ValueError, match=f"{match_msg} {sodium_sulfate.name}"):
+        dip(salt_water, sodium_sulfate, "0.001 M", water)
+
+    
+    # ==========================================================================
+    # Failure Case: Impossible dilution
+    # ==========================================================================
+
+    # Sub-Case: Concentration is zero and the amount of solute in the source
+    #           container is non-zero.
+    match_msg = r'Cannot dilute to zero concentration if the source ' \
+                r'concentration is non-zero\.'
+    with pytest.raises(ValueError, match=match_msg):
+        dip(salt_water, salt, "0 M", water)
+
+    # Sub-Case: Concentration parameter matches the concentration of the solute
+    #           in the diluent.
+    match_msg = r'The target concentration cannot match the concentration ' \
+                r'of the solute in the diluent\.'
+    with pytest.raises(ValueError, match=match_msg):
+        dip(salt_water_2M, salt, "1 M", salt_water_1M)
+
+    # Sub-Case: Concentration parameter lies outside the range between the 
+    #           source concentration and the diluent concentration.
+    match_msg = r'The target concentration for the solute must ' \
+                r'lie between that of the source and the diluent.'
+    with pytest.raises(ValueError, match=match_msg):
+        dip(salt_water_2M, salt, "0.5 M", salt_water_1M)
+    with pytest.raises(ValueError, match=match_msg):
+        dip(salt_water_2M, salt, "0.999999 M", salt_water_1M)
+
+
+    # ==========================================================================
+    # Failure Case: Dilution requires more diluent than is available
+    # ==========================================================================
+    
+    match_msg = "Not enough mixture in diluent\\."
+    with pytest.raises(ValueError, match=match_msg):
+        dip(salt_water, salt, "0.00001 M", water_stock)
+
+
+    # ==========================================================================
+    # Failure Case: Dilution requires more volume than the container's max 
+    #               volume
+    # ==========================================================================
+    
+    match_msg = r"The total volume of the dilution \(.*\) exceeds this " \
+                r"container's maximum volume \(.*\)\."
+    
+    salt_water_with_max_vol = Container('Salt Water', '150 mL',
+                                        [(salt, '0.72 mol'), (water, '100 mL')])
+    
+    # Sub-Case: Pure Substance diluent exceeds max volume
+    with pytest.raises(ValueError, match=match_msg):
+        dip(salt_water_with_max_vol, salt, "0.01 M", water)
+
+    # Sub-Case: Container diluent exceeds max volume
+    with pytest.raises(ValueError, match=match_msg):
+        dip(salt_water_with_max_vol, salt, "1 M", water_stock)
+
+    
+    # ==========================================================================
+    # Failure Case: Dilution failed due to unknown diluent transfer error
+    # ==========================================================================
+    
+    match_msg = r"Dilution could not be created. Transfer of diluent failed. " \
+                r"Reason: .*"
+    
+    # Define a mock function that will raise an unknown error
+    def _mock_transfer_error(*args, **kwargs):
+        raise ValueError("This is an unknown transfer error!")
+
+    # Store the true function in a variable so that it can be called later
+    real_transfer = Container.transfer
+
+    # Set up mocking for Container.transfer()
+    mocker.patch.object(Container, 'transfer', _mock_transfer_error)
+
+    with pytest.raises(ValueError, match=match_msg):
+        dip(salt_water, salt, "0.001 M", water_stock)
+
+    # Revert Container.transfer() to its original form
+    mocker.patch.object(Container, 'transfer', real_transfer)
+
+
+    # ==========================================================================
+    # Success Case: Pure Substance diluent
+    # ==========================================================================
+
+    # Set starting variables
+    diluted_conc = 0.01
+    dilution_name = "Diluted Salt Water"
+
+    # Create a dilution of salt water using the pure Substance water fixture
+    diluted_salt_water = dip(salt_water_1M, salt, f"{diluted_conc} M", water, 
+                                dilution_name)
+    
+    # Check that the dilution has the correct concentration
+    assert diluted_salt_water.get_concentration(salt, "M") == diluted_conc
+
+    # Check that the dilution has the expected volume
+    salt_moles = salt_water_1M.get_moles('mol', substance=salt)
+    expected_vol = salt_moles / diluted_conc
+    assert diluted_salt_water.get_volume('L') == pytest.approx(expected_vol)
+
+    # Check that the name has been properly assigned
+    assert diluted_salt_water.name == dilution_name
+
+    # (Edge Case) Diluent is the same Substance as the solute
+
+    # Set starting variables
+    diluted_conc = 1.5
+    dilution_name = "Concentrated Salt Water"
+
+    # Create a dilution of salt water using the pure Substance water fixture
+    concentrated_salt_water = dip(salt_water_1M, salt, f"{diluted_conc} M", salt, 
+                                dilution_name)
+    
+    # Check that the dilution has the correct concentration
+    assert concentrated_salt_water.get_concentration(salt, "M") == diluted_conc
+
+    # Check that the dilution has the same amount of water as the starting 
+    # container (this is being used as a proxy for checking the volume is
+    # an expected amount, as the volume of the salt needed is not known)
+    assert concentrated_salt_water.get_volume('L', water) == \
+            salt_water_1M.get_volume('L', water)
+
+    # Check that the name has been properly assigned
+    assert concentrated_salt_water.name == dilution_name
+
+
+    # ==========================================================================
+    # Success Case: Container diluent (no overlap with solute)
+    # ==========================================================================
+
+    # Set starting variables
+    diluted_conc = 0.75
+    dilution_name = "Diluted Salt Water"
+
+    # Create a dilution of salt water using the pure Substance water fixture
+    result = dip(salt_water_1M, salt, f"{diluted_conc} M", 
+                    water_stock, dilution_name)
+    
+    diluent_left, diluted_salt_water = result
+    
+    # Check that the dilution has the correct concentration
+    assert diluted_salt_water.get_concentration(salt, "M") == diluted_conc
+
+    # Check that the dilution has the expected volume
+    salt_moles = salt_water_1M.get_moles('mol', substance=salt)
+    expected_vol = salt_moles / diluted_conc
+    assert diluted_salt_water.get_volume('L') == pytest.approx(expected_vol)
+
+    # Check that the name has been properly assigned
+    assert diluted_salt_water.name == dilution_name
+
+    # Check that the diluent container has the expected volume remaining
+    expected_water_added = expected_vol - salt_water_1M.get_volume('L')
+    expected_vol_left = water_stock.get_volume('L') - expected_water_added
+    assert diluent_left.get_volume('L') == pytest.approx(expected_vol_left)
+
+
+    # ==========================================================================
+    # Success Case: Container diluent (overlaps with solute)
+    # ==========================================================================
+    
+    # Set starting variables
+    diluted_conc = 1.5
+    dilution_name = "1.5 M Salt Water"
+
+    # Create a dilution with a salt concentration of 1.5 M from 2 M salt water 
+    # using 1 M salt water as the diluent
+    result = dip(salt_water_2M, salt, f"{diluted_conc} M", salt_water_1M, 
+                 dilution_name)
+    diluent_left, diluted_salt_water = result
+
+    # Check that the dilution has the correct concentration
+    assert diluted_salt_water.get_concentration(salt, "M") == diluted_conc
+
+    # Check that the dilution has the expected volume
+    expected_vol = 2 * salt_water_1M.get_volume('L')
+    assert diluted_salt_water.get_volume('L') == expected_vol
+
+    # Check that the name has been properly assigned
+    assert diluted_salt_water.name == dilution_name
+
+    # Check that the diluent container has the expected volume remaining
+    exp_vol_left = salt_water_2M.get_volume('L') - salt_water_1M.get_volume('L')
+    assert diluent_left.get_volume('L') == pytest.approx(exp_vol_left)
+
+
+    # ==========================================================================
+    # Success Case: (Edge Case) Create dilution with target concentration that
+    #               matches the starting concentration.
+    # ==========================================================================
+
+    # Sub-Case: Solute is a pure water Substance; no name provided
+    dilution = dip(salt_water_1M, salt, f"1 M", water)
+
+    # Check that the dilution has the correct concentration
+    assert dilution.get_concentration(salt, "M") == 1
+
+    # Check that the dilution has the correct total amount
+    assert dilution.get_volume(unit="L") == salt_water_1M.get_volume("L")
+
+
+    # Sub-Case: Solute is a pure water Substance; name provided
+    dilution_name = "Diluted Salt Water"
+    dilution = dip(salt_water_1M, salt, f"1 M", water, name=dilution_name)
+
+    # Check that the dilution has the correct concentration
+    assert dilution.get_concentration(salt, "M") == 1
+
+    # Check that the dilution has the correct total amount
+    assert dilution.get_volume(unit="L") == salt_water_1M.get_volume("L")
+
+    # Check that the name has been properly assigned
+    assert dilution.name == dilution_name
+
+
+    # Sub-Case: Solute is a pure water Container 
+    diluent_left, dilution = dip(salt_water_1M, salt, f"1 M",
+                                 water_stock, name=dilution_name)
+
+    # Check that the dilution has the correct concentration
+    assert dilution.get_concentration(salt, "M") == 1
+
+    # Check that the dilution has the correct total amount
+    assert dilution.get_volume(unit="L") == salt_water_1M.get_volume("L")
+    
+    # Check that the name has been properly assigned
+    assert dilution.name == dilution_name
+
+    # Check that the diluent container has not lost any volume
+    assert diluent_left.get_volume("L") == water_stock.get_volume("L")
+
+
+    # ==========================================================================
+    # Success Case: Create dilution with various concentration/quantity units
+    # ==========================================================================
+    
+    # NOTE: The dilution concentration is left low so that combinations like L/g
+    # will still be valid concentrations (i.e not exceed the maximum value 
+    # achievable for the salt water fixture).
+    # 
+    # Ex: The maximum value for a L/g concentration of salt with the current
+    # fixture properties is ~0.0004608 L/g, as this is the concentration of pure
+    # salt. The maximum concentration possible for the salt water fixture is 
+    # ~1.31 x 10^-5 L/g.
+    dilution_conc = 1e-5 
+
+    for numerator, denominator in product(Unit.BASE_UNITS, repeat=2):
+        # Parse concentration/dilution volume from units
+        conc_units = f"{numerator}/{denominator}"
+        conc_str = f"{dilution_conc} {conc_units}"
+
+        dilution = dip(salt_water, salt, conc_str, water)
+
+        # Check that the dilution has the correct concentration
+        assert dilution.get_concentration(salt, conc_units) == pytest.approx(dilution_conc)
+
+        # Check that the dilution has the same amount of salt as the starting
+        # container (this is being used as a proxy for checking the volume is
+        # an expected amount, as the volume of water needed is not known)
+        assert dilution.get_moles(substance=salt) == salt_water.get_moles(substance=salt)
 
 
 
