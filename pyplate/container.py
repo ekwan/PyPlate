@@ -159,7 +159,14 @@ class Container:
 
         # Ensure the volume to add does not exceed the maximum volume .
         if self.volume + volume_to_add > self.max_volume:
-            raise ValueError("Exceeded maximum volume")
+            max_vol = Unit.get_human_readable_unit(self.max_volume, 
+                                                   config.volume_storage_unit)
+            total_vol = self.volume + volume_to_add
+            total_vol = Unit.get_human_readable_unit(total_vol,
+                                                    config.volume_storage_unit)
+            raise ValueError(f"Exceeded the maximum volume. "
+                             f"Volume needed: {total_vol[0]} {total_vol[1]}  "
+                             f"Maximum volume: {max_vol[0]} {max_vol[1]}")
         
         # If the volume rounds to 0, return without adding anything to the 
         # container's contents.
@@ -469,8 +476,8 @@ class Container:
         # If the total volume exceeds the maxmimum volume of the container,
         # raise a ValueError.
         if to.volume > to.max_volume:
-            raise ValueError("Exceeded maximum volume of destination container "
-                             f"'{to.name}'.")
+            raise ValueError("Exceeded the maximum volume of destination "
+                             f"container '{to.name}'.")
         
         # Compute the total volume of the contents of the post-transfer source
         # container. Round to the internal precision.
@@ -1763,10 +1770,11 @@ class Container:
                 raise ValueError(msg) from None
             
             # Dilution volume is greater than the specified maximum volume
-            elif msg.startswith("Exceeded maximum volume of destination"):
-                raise ValueError("The total volume of the dilution" 
-                                 f" ({V_x + V_y} mL) exceeds the specified "
-                                 f"maximum volume ({max_volume}).") from None
+            elif msg.startswith("Exceeded the maximum volume"):
+                raise ValueError("The total volume of the dilution exceeds the "
+                                 "specified maximum volume. "
+                                 f"Dilution volume: {V_x + V_y} mL  "
+                                 f"Maximum volume: {max_volume}") from None
             
             # Other transfer errors (SHOULD NOT BE REACHED)
             else:
@@ -1788,7 +1796,7 @@ class Container:
                     new_solution = Container(name, max_volume, 
                                              [(diluent, f"{V_y} mL")])
                 except ValueError:
-                    msg = "Exceeded maximum volume of destination"
+                    msg = "Exceeded the maximum volume"
                     _raise_modified_error("diluent", msg)
             
             # Otherwise transfer 'V_y' mL from the diluent container to the new 
@@ -1963,12 +1971,11 @@ class Container:
             target_conc_str = f"{target_conc} {target_units}"
             source_conc_str = f"{source_conc} {target_units}"
             diluent_conc_str = f"{diluent_conc} {target_units}"
-            raise ValueError("The target concentration for the solute must "  
-                             "lie between that of the source and the diluent.\n" 
-                             f"\t\tTarget: {target_conc_str}\n" 
-                             f"\t\tSource: {source_conc_str}\n"  
-                             f"\t\tDiluent: {source_conc} {target_units}") \
-                            from None
+            raise ValueError(
+                "The target concentration for the solute must lie between that "
+                f"of the source and the diluent. Target: {target_conc_str}  "
+                f"Source: {source_conc_str}  Diluent: {diluent_conc_str}"
+            ) from None
 
         # NOTE: the case of ratio = 0 means that the source and target 
         # concentrations are identical, which would already result in early 
@@ -2008,15 +2015,16 @@ class Container:
                 raise ValueError(msg) from None
             
             # Dilution volume is greater than the container's maximum volume
-            elif msg.startswith("Exceeded maximum volume"):
+            elif msg.startswith("Exceeded the maximum volume"):
                 vol_unit = config.volume_storage_unit
                 dilution_volume = self.volume + diluent_storage_volume
                 dil_vol = Unit.get_human_readable_unit(dilution_volume, vol_unit)
                 max_vol = Unit.get_human_readable_unit(self.max_volume, vol_unit)
                 raise ValueError("The total volume of the dilution " 
-                                f"({dil_vol[0]} {dil_vol[1]}) "
-                                f"exceeds this container's maximum volume "
-                                f"({max_vol[0]} {max_vol[1]}).") from None
+                                f"exceeds this container's maximum volume. "
+                                f"Dilution volume: {dil_vol[0]} {dil_vol[1]}  "
+                                f"Maximum volume: {max_vol[0]} {max_vol[1]}") \
+                                from None
             
             # Other transfer errors (SHOULD NOT BE REACHED)
             else:
@@ -2055,25 +2063,35 @@ class Container:
         
         return result
 
-    def fill_to(self, substance: Substance, quantity: str) -> Container:
+    def fill_to(self, fill_material: Substance | Container, 
+                quantity: str) -> Container | tuple[Container, Container]:
         """
-        Fills container with `substance` up to `quantity`.
+        Fills container with `substance` up to `quantity`. If the container
+        contents already match the desired quantity, the container is returned
+        without modification.
 
         Args:
-            substance: Substance to use to fill.
+            fill_material: Substance or mixture added to the container.
             quantity: Desired final quantity in container.
 
         Returns: New Container with desired final `quantity`
 
         """
         # Check that the argument types are correct.
-        if not isinstance(substance, Substance):
-            raise TypeError("Argument 'substance' must be a Substance.")
+        if not isinstance(fill_material, (Substance, Container)):
+            raise TypeError("Fill material must be a Substance or a Container.")
         if not isinstance(quantity, str):
             raise TypeError("Quantity must be a str.")
 
         # Parse the quantity as a value-unit pair
-        quantity, quantity_unit = Unit.parse_quantity(quantity)
+        try:
+            quantity, quantity_unit = Unit.parse_quantity(quantity)
+        except:
+            raise ValueError(f"Invalid quantity '{quantity}'.") from None
+
+        # Check that the quantity value is finite
+        if not math.isfinite(quantity):
+            raise ValueError("Quantity must be finite.")
 
         # Check that the quantity value is positive
         #
@@ -2081,17 +2099,11 @@ class Container:
         # it will handle 'nan' values correctly ('nan' values should be caught 
         # during quantity parsing, but it is worth making sure this behaves
         # properly in the case that they are not caught).
-        if not quantity > 0:
-            raise ValueError("Quantity must be positive.")
-        
-        # Check that the unit is valid
-        if quantity_unit not in ('L', 'g', 'mol'):
-            raise ValueError("Invalid quantity unit.")
+        if not quantity >= 0:
+            raise ValueError("Quantity must be non-negative.")
 
         # Compute the total amount of substances currently in the container.
-        current_quantity = sum(subst.convert_quantity(f"{value} {config.moles_storage_unit}", 
-                                            quantity_unit) 
-                                for subst, value in self.contents.items())
+        current_quantity = self.get_quantity(quantity_unit)
 
         # Compute the amount of the substance that would need to be added to
         # reached the specified 'fill to' quantity.
@@ -2108,23 +2120,48 @@ class Container:
         # during quantity parsing, but it is worth making sure this behaves
         # properly in the case that they are not caught).
         if not required_quantity >= 0:
-            raise ValueError(f"Argument quantity '{quantity} {quantity_unit}'" + \
-                             " must be greater than the current quantity within" + \
-                             f" the container '{current_quantity} {quantity_unit}'.")
+            spec_quantity = f"{quantity} {quantity_unit}"
+            cont_quantity = f"{current_quantity} {quantity_unit}"
+            raise ValueError("Quantity argument must be greater than the "
+                             "amount already in the container. "
+                             f"Specified quantity: {spec_quantity}  "
+                             f"Container quantity: {cont_quantity}")
 
-        # If the required volume needed is 0, return the same container without 
-        # adding anything to it.
+        # If the required volume needed is 0, return early
         if required_quantity == 0:
-            return self
+            if isinstance(fill_material, Substance):
+                return self
+            else:
+                return fill_material, self
 
         # Add the required quantity to the container
-        result = self._add(substance, f"{required_quantity} {quantity_unit}")
+        qty_to_add = f"{required_quantity} {quantity_unit}"
+        if isinstance(fill_material, Substance):
+            try:
+                result = self._add(fill_material, qty_to_add)
+            except ValueError as ve:
+                raise ValueError(str(ve)) from None
+            
+            # Set the new container to the result of the addition (only one 
+            # container is returned in this case).
+            new_container = result
+        else:
+            try:
+                result = self._transfer(fill_material, qty_to_add)
+            except ValueError as ve:
+                raise ValueError(str(ve)) from None
+            
+            # Set the new container to the second element of the result of the 
+            # transfer (two Containers are returned in this case).
+            new_container = result[1]
 
-        # Update the container's instructions with this filling step.
+        assert result is not None and new_container is not None
+
+        # Update this container's instructions with the filling step.
         required_quantity, unit = Unit.get_human_readable_unit(required_quantity, quantity_unit)
         precision = config.precisions[unit] if unit in config.precisions else config.precisions['default']
-        result.instructions += f"\nFill with {round(required_quantity, precision)} {unit} of {substance.name}."
-        
+        new_container.instructions += f"\nFill with {round(required_quantity, precision)} {unit} of {fill_material.name}."
+
         return result
 
     def remove(self, what: (Substance | int) = Substance.LIQUID) -> Container:

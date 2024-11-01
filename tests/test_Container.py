@@ -532,13 +532,13 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
     # ==========================================================================
     
     # Try to add more substance than the container can hold
-    with pytest.raises(ValueError, match='Exceeded maximum volume'):
+    with pytest.raises(ValueError, match='Exceeded the maximum volume'):
         container._self_add(water, '10 mL')
-    with pytest.raises(ValueError, match='Exceeded maximum volume'):
+    with pytest.raises(ValueError, match='Exceeded the maximum volume'):
         container._self_add(dmso, '20 mL')
-    with pytest.raises(ValueError, match='Exceeded maximum volume'):
+    with pytest.raises(ValueError, match='Exceeded the maximum volume'):
         container._self_add(salt, '5.01 mL')
-    with pytest.raises(ValueError, match='Exceeded maximum volume'):
+    with pytest.raises(ValueError, match='Exceeded the maximum volume'):
         container._self_add(sodium_sulfate, '400000 mL')
 
     substance_list = [water, dmso, salt, sodium_sulfate]
@@ -1015,7 +1015,7 @@ def test_Container__transfer(water, dmso, salt, sodium_sulfate,
     for unit in test_base_units:
         test_container = Container('tc', 
                                    initial_contents=[(water, '1.01 ' + unit)])
-        with pytest.raises(ValueError, match='Exceeded maximum volume'):
+        with pytest.raises(ValueError, match='Exceeded the maximum volume'):
             test_container2._transfer(test_container, '1.01 ' + unit)
 
 
@@ -3200,15 +3200,19 @@ def test_Container_create_solution(mocker: pytest_mock.MockerFixture,
     # ==========================================================================
 
     # Solute type checking
+    match_msg = r'Solute must be a Substance or an iterable set of Substances\.'
     non_substances = [None, False, 1, 'water', {}, 
                       [1], [water_stock], [salt, 1]]
     for non_substance in non_substances:
-        with pytest.raises(TypeError, match='Solute must be a Substance or a set of Substances\\.'):
-            Container.create_solution(non_substance, water, concentration='0.5 M', total_quantity='100 mL')
+        with pytest.raises(TypeError, match=match_msg):
+            Container.create_solution(non_substance, water, 
+                                      concentration='0.5 M', 
+                                      total_quantity='100 mL')
     
     # Solvent type checking
+    match_msg = r'Solvent must be a Substance or a Container\.'
     for bad_solvent in [None, False, 1, 'water', [1], [water_stock], {}]:
-        with pytest.raises(TypeError, match='Solvent must be a Substance or a Container\\.'):
+        with pytest.raises(TypeError, match=match_msg):
             Container.create_solution(salt, bad_solvent, 
                                       concentration='0.5 M', 
                                       total_quantity='100 mL')
@@ -3796,8 +3800,8 @@ def test_Container_create_dilution(mocker: pytest_mock.MockerFixture,
     # Failure Case: Dilution requires more volume than the specified max volume
     # ==========================================================================
     
-    match_msg = r"The total volume of the dilution \(.*\) exceeds the specified " \
-                r"maximum volume \(.*\)\."
+    match_msg = r"The total volume of the dilution exceeds the specified " \
+                r"maximum volume\. Dilution volume: .*  Maximum volume: .*"
     
     # Sub-Case: Pure Substance diluent exceeds max volume
     with pytest.raises(ValueError, match=match_msg):
@@ -4291,8 +4295,9 @@ def test_Container_dilute_in_place(mocker: pytest_mock.MockerFixture,
     #               volume
     # ==========================================================================
     
-    match_msg = r"The total volume of the dilution \(.*\) exceeds this " \
-                r"container's maximum volume \(.*\)\."
+    match_msg = r"The total volume of the dilution exceeds this " \
+                r"container's maximum volume\. " \
+                r"Dilution volume: .*  Maximum volume: .*"
     
     salt_water_with_max_vol = Container('Salt Water', '150 mL',
                                         [(salt, '0.72 mol'), (water, '100 mL')])
@@ -4511,6 +4516,347 @@ def test_Container_dilute_in_place(mocker: pytest_mock.MockerFixture,
         # an expected amount, as the volume of water needed is not known)
         assert dilution.get_moles(substance=salt) == salt_water.get_moles(substance=salt)
 
+def test_Container_fill_to(water: Substance, salt: Substance, 
+                           empty_container: Container, water_stock: Container, 
+                           salt_stock: Container, salt_water: Container):
+    """
+    Unit Test for the function `Container.fill_to()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types will result in raising a `TypeError`
+    - Invalid quantity values will result in raising a `ValueError`
+        - Sub-Case: Quantity cannot be parsed
+        - Sub-Case: Quantity is negative
+        - Sub-Case: Quantity is not finite
+    - Filling the container to a quantity less than the total quantity of the
+      current contents will result in raising a `ValueError`
+    - Filling the container to a quantity greater than the maximum volume of the
+      container will result in raising a `ValueError`
+    - Filling the container with a Container that contains less than the 
+      remaining amount needed to reach the specified quantity will result in 
+      raising a `ValueError`
+
+    This unit test checks the following success scenarios:
+    - Filling an empty Container with a pure Substance
+        - Edge Case: Filling to a volume of 0
+        - Edge Case: Filling with all of the fill material
+    - Filling a non-empty Container with a pure Substance
+        - Sub-Case: Fill material is not in the container
+        - Sub-Case: Fill material is already in the container
+    - Filling an empty Container with another Container
+    - Filling a non-empty Container with another Container
+        - Sub-Case: Fill material contents do NOT overlap with the contents of 
+                    the container
+        - Sub-Case: Fill material contents DO overlap with the contents of 
+                    the container
+    
+    Each success case checks the following:
+    - The container has been filled to the correct amount.
+    - The substances added have the expected amounts.
+    - The name of the Container has been maintained.
+    - The original container object has not been modified. 
+    
+    In cases where the fill material is a Container, the following additional
+    checks occur:
+    - The returned fill material Container has been reduced by the expected 
+      amount.
+    - The original fill material Container has not been modified.
+
+    This unit test depends on the correctness of the following functions:
+    - `Container.get_mass()`
+    - `Container.get_moles()`
+    - `Container.get_volume()`
+    - `Container.get_quantity()`
+    - `Substance.convert()`
+    """
+
+    max_vol_container = Container('Water', '100 mL')
+
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+
+    match_msg = "Fill material must be a Substance or a Container\\."
+    for INVALID_FILLER in [None, 1, [], {}, [None], [salt], (water_stock,)]:
+        with pytest.raises(TypeError, match=match_msg):
+            max_vol_container.fill_to(INVALID_FILLER, "50 mL")
+
+    match_msg = "Quantity must be a str\\."
+    for INVALID_QTY in [None, 1, [], {}, [None], [salt], (water_stock,), [""]]:
+        with pytest.raises(TypeError, match=match_msg):
+            max_vol_container.fill_to(water, INVALID_QTY)
+
+    
+    # ==========================================================================
+    # Failure Case: Quantity parameter is not valid
+    # ==========================================================================
+
+    # Sub-Case: Quantity cannot be parsed.
+    match_msg = "Invalid quantity \'.*\'\\."
+    for BAD_QTY in ['0.1', '0.1 L/L', '0.1 L/A', '0.1 mmmol', '0.1 C', 'nan L']:
+        with pytest.raises(ValueError, match=match_msg):
+            max_vol_container.fill_to(water, BAD_QTY)
+
+    # Sub-Case: Quantity is negative
+    match_msg = "Quantity must be non-negative\\."
+    for BAD_QTY in ["-50 mL", "-0.0001 mol", "-132.3 g"]:
+        with pytest.raises(ValueError, match=match_msg):
+            max_vol_container.fill_to(water, BAD_QTY)
+
+    # Sub-Case: Quantity is not finite
+    match_msg = "Quantity must be finite\\."
+    for BAD_QTY in ["-inf mL", "inf mol", "inf g"]:
+        with pytest.raises(ValueError, match=match_msg):
+            max_vol_container.fill_to(water, BAD_QTY)
+
+    
+    # ==========================================================================
+    # Failure Case: Filling the container to a quantity less than the total
+    #               quantity of the current contents
+    # ==========================================================================
+
+    match_msg = r"Quantity argument must be greater than the amount already "\
+                r"in the container\. Specified quantity: .*  "\
+                r"Container quantity: .*"
+    
+    # NOTE: This test relies on the volume of the water in the water stock
+    #       fixture being more than 50 of the units specified below. At the time
+    #       of writing this comment, the water stock fixture has 1 L of water.
+    for unit in ["mmol", 'mL', 'g', 'mg']:
+        with pytest.raises(ValueError, match=match_msg):
+            water_stock.fill_to(water, f"50 {unit}")
+
+
+    # ==========================================================================
+    # Failure Case: Filling the container to a quantity greater than the maximum
+    #               volume of the container.
+    # ==========================================================================
+
+    # Sub-Case: Filling the container with a pure Substance
+    match_msg = r"Exceeded the maximum volume."
+    with pytest.raises(ValueError, match=match_msg):
+        max_vol_container.fill_to(water, "150 mL") 
+
+    # Sub-Case: Filling the container with a Container
+    with pytest.raises(ValueError, match=match_msg):
+        max_vol_container.fill_to(water_stock, "150 mL")
+
+
+    # ==========================================================================
+    # Failure Case: Fill material is a Container with less than the specified 
+    #               quantity
+    # ==========================================================================
+
+    match_msg = r"Not enough mixture in source container .*\. "\
+                r"Only .* available, but .* needed\."
+    with pytest.raises(ValueError, match=match_msg):
+        empty_container.fill_to(water_stock, "1500 mL")
+    with pytest.raises(ValueError, match=match_msg):
+        empty_container.fill_to(water_stock, "1000.001 mL")
+    
+
+    # ==========================================================================
+    # Success Case: Fill an empty container with a pure Substance
+    # ==========================================================================
+    
+    test_amounts = ["50 mL", "1 mmol", "27 g", "51 mg", "9 mol", "626 L", 
+                    "0 L", # Edge case: filling to a volume of 0
+                    "1 L" # Edge case: filling with all of the fill material
+                    ]
+    for qty in test_amounts:
+        # Fill the container with the pure Substance water
+        result = empty_container.fill_to(water, qty)
+
+        # Separate the quantity into a value-unit pair
+        val, unit = qty.split(' ')
+        val = float(val)
+
+        # Check that the container has the expected quantity & volume (volume
+        # check is for redundancy, as the Container tracks volume as a variable)
+        assert result.get_quantity(unit) == pytest.approx(val)
+        water_vol = water.convert(val, unit, 'L')
+        assert result.get_volume('L') == pytest.approx(water_vol)
+
+        # Check that the name has been maintained
+        assert result.name == empty_container.name
+
+        # Check that the original container has not been modified
+        assert water not in empty_container.contents
+        assert empty_container.get_volume('L') == 0
+
+    
+    # ==========================================================================
+    # Success Case: Fill a non-empty container with a pure Substance
+    # ==========================================================================
+
+    # Sub-Case: Fill material is not in the container
+
+    # NOTE: This test relies on the salt stock fixture containing exactly 1 kg 
+    #       of salt. If this fixture is changed, the test will need to be 
+    #       updated.
+    test_amounts = ["2 L", "1 kmol", "27 kg"]
+    for qty in test_amounts:
+        # Fill the container with the pure Substance water
+        result = salt_stock.fill_to(water, qty)
+
+        # Separate the quantity into a value-unit pair
+        val, unit = qty.split(' ')
+        val = float(val)
+        salt_quantity = salt.convert(1, 'kg', unit)
+        expected_water = val - salt_quantity
+
+        # Check that the container has the expected quantity & volume (volume
+        # check is for redundancy, as the Container tracks volume as a variable)
+        assert result.get_quantity(unit) == pytest.approx(val)
+        assert result.get_mass('kg', salt) == pytest.approx(1)
+        assert result.get_quantity(unit, water) == pytest.approx(expected_water)
+
+        # Check that the name has been maintained
+        assert result.name == salt_stock.name
+
+        # Check that the original container has not been modified
+        assert water not in salt_stock.contents
+        assert salt_stock.get_mass('kg', salt) == 1
+
+
+    # Sub-Case: Fill material is already in the container
+
+    # NOTE: This test relies on the salt water fixture containing exactly 100 mL 
+    #       of water and 50 mmol of salt. If the fixture is changed, the test 
+    #       will need to be updated.
+    test_amounts = ["500 mL", "1 L", "10 L"]
+    for qty in test_amounts:
+        # Fill the container with the pure Substance water
+        result = salt_water.fill_to(water, qty)
+
+        # Separate the quantity into a value-unit pair
+        val, unit = qty.split(' ')
+        val = float(val)
+        salt_quantity = salt.convert(50, 'mmol', unit)
+        expected_water = val - salt_quantity
+
+        # Check that the container has the expected quantity & volume (volume
+        # check is for redundancy, as the Container tracks volume as a variable)
+        assert result.get_quantity(unit) == pytest.approx(val)
+        assert result.get_moles('mmol', salt) == 50
+        assert result.get_quantity(unit, water) == pytest.approx(expected_water)
+
+        # Check that the name has been maintained
+        assert result.name == salt_water.name
+
+        # Check that the original container has not been modified
+        assert salt_water.get_volume('mL', water) == pytest.approx(100)
+        assert salt_water.get_moles('mmol', salt) == 50
+
+
+    # ==========================================================================
+    # Success Case: Fill an empty container with a Container
+    # ==========================================================================
+
+    test_amounts = ["50 mL", "1 mmol", "27 g", "51 mg",
+                    "0 L" # Edge case: filling to a volume of 0
+                    ]
+    for qty in test_amounts:
+        # Fill the container with water from the water stock Container
+        water_left, result = empty_container.fill_to(water_stock, qty)
+
+        # Separate the quantity into a value-unit pair
+        val, unit = qty.split(' ')
+        val = float(val)
+
+        # Check that the container has the expected quantity & volume (volume
+        # check is for redundancy, as the Container tracks volume as a variable)
+        assert result.get_quantity(unit) == pytest.approx(val)
+        water_vol = water.convert(val, unit, 'L')
+        assert result.get_volume('L') == pytest.approx(water_vol)
+
+        # Check that the name has been maintained
+        assert result.name == empty_container.name
+
+        # Check that the returned filler container has the expected volume left
+        expected_vol_left = water_stock.get_volume('L') - water_vol
+        assert water_left.get_volume('L') == pytest.approx(expected_vol_left)
+
+        # Check that the original containers have not been modified
+        assert water not in empty_container.contents
+        assert empty_container.get_volume('L') == 0
+        assert water_stock.get_volume('L') == pytest.approx(1)
+
+
+    # ==========================================================================
+    # Success Case: Fill a non-empty container with a Container
+    # ==========================================================================
+
+    # Sub-Case: Fill material contents do not overlap with the container
+
+    # NOTE: This test relies on the salt stock fixture containing exactly 1 kg 
+    #       of salt and the water stock fixutre containing exactly 1 L of water.
+    #       If this fixture is changed, the test will need to be updated.
+    test_amounts = ["1.25 kg", "1.5 kg", "1.75 kg", "2 kg"]
+    for qty in test_amounts:
+        # Fill the container with the pure Substance water
+        water_left, result = salt_stock.fill_to(water_stock, qty)
+
+        # Separate the quantity into a value-unit pair
+        val, unit = qty.split(' ')
+        val = float(val)
+        salt_quantity = salt.convert(1, 'kg', unit)
+        expected_water = val - salt_quantity
+
+        # Check that the container has the expected quantity & volume (volume
+        # check is for redundancy, as the Container tracks volume as a variable)
+        assert result.get_quantity(unit) == pytest.approx(val)
+        assert result.get_mass('kg', salt) == pytest.approx(1)
+        assert result.get_quantity(unit, water) == pytest.approx(expected_water)
+
+        # Check that the name has been maintained
+        assert result.name == salt_stock.name
+
+        # Check that the returned filler container has the expected amount left
+        expected_amt_left = water_stock.get_quantity(unit) - expected_water
+        assert water_left.get_quantity(unit) == pytest.approx(expected_amt_left)
+
+        # Check that the original containers have not been modified
+        assert water not in salt_stock.contents
+        assert salt_stock.get_mass('kg', salt) == 1
+        assert water_stock.get_volume('L') == pytest.approx(1)
+
+    
+    # Sub-Case: Fill material is already in the container
+
+    # NOTE: This test relies on the salt water fixture containing exactly 100 mL 
+    #       of water and 50 mmol of salt. If the fixture is changed, the test 
+    #       will need to be updated.
+    test_amounts = ["500 mL", "750 mL", "1 L"]
+    for qty in test_amounts:
+        # Fill the container with the pure Substance water
+        water_left, result = salt_water.fill_to(water_stock, qty)
+
+        # Separate the quantity into a value-unit pair
+        val, unit = qty.split(' ')
+        val = float(val)
+        salt_quantity = salt.convert(50, 'mmol', unit)
+        expected_water = val - salt_quantity
+
+        # Check that the container has the expected quantity & volume (volume
+        # check is for redundancy, as the Container tracks volume as a variable)
+        assert result.get_quantity(unit) == pytest.approx(val)
+        assert result.get_moles('mmol', salt) == 50
+        assert result.get_quantity(unit, water) == pytest.approx(expected_water)
+
+        # Check that the name has been maintained
+        assert result.name == salt_water.name
+
+        # Check that the returned filler container has the expected amount left
+        transferred_water = expected_water - water.convert(100, 'mL', unit)
+        expected_amt_left = water_stock.get_quantity(unit) - transferred_water
+        assert water_left.get_quantity(unit) == pytest.approx(expected_amt_left)
+
+        # Check that the original containers have not been modified
+        assert salt_water.get_volume('mL', water) == pytest.approx(100)
+        assert salt_water.get_moles('mmol', salt) == 50
+        assert water_stock.get_volume('L') == pytest.approx(1)
+
 
 
 # def test_create_solution(water, salt, sodium_sulfate):
@@ -4599,29 +4945,4 @@ def test_Container_dilute_in_place(mocker: pytest_mock.MockerFixture,
 #                                                        concentration=['1 M', '1 M'],
 #                                                        quantity=['1 g', '0.5 g'])
 
-
-    # TODO: Move this to the _transfer() unit test
-    #
-    # initial_hashes = hash(water_stock), hash(salt_water)
-    # # water_stock is 10 mL, salt_water is 100 mL and 50 mmol
-    # salt_water_volume = Unit.convert_from_storage(salt_water.volume, 'mL')
-    # container1, container2 = Container.transfer(salt_water, water_stock, f"{salt_water_volume*0.1} mL")
-    # # 10 mL of water and 5 mol of salt should have been transferred
-    # assert container1.volume == water.convert_quantity('90 mL', config.volume_storage_unit) \
-    #        + salt.convert_quantity('45 mmol', config.volume_storage_unit)
-    # assert container1.contents[water] == water.convert_quantity('90 mL', config.moles_storage_unit)
-    # assert container1.contents[salt] == salt.convert_quantity('45 mmol', config.moles_storage_unit)
-    # assert container2.volume == water.convert_quantity('20 mL', config.volume_storage_unit)\
-    #        + salt.convert_quantity('5 mmol', config.volume_storage_unit)
-    # assert salt in container2.contents and container2.contents[salt] == \
-    #        salt.convert_quantity('5 mmol', config.moles_storage_unit)
-    # assert container2.contents[water] == pytest.approx(water.convert_quantity('20 mL', config.moles_storage_unit))
-
-    # # Original containers should be unchanged.
-    # assert initial_hashes == (hash(water_stock), hash(salt_water))
-
-    # salt_stock = Container('salt stock', initial_contents=[(salt, '10 g')])
-    # container1, container2 = Container.transfer(salt_stock, salt_water, '1 g')
-    # assert container2.contents[salt] == \
-    #        pytest.approx(salt_water.contents[salt] + salt.convert_quantity('1 g', config.moles_storage_unit))
 

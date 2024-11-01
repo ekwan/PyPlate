@@ -23,7 +23,7 @@ def water_stock(water) -> Container:
 
 @pytest.fixture
 def salt_stock(salt):
-    return Container('salt_stock', initial_contents=(salt, '1 g'))
+    return Container('salt_stock', initial_contents=(salt, '1 kg'))
 
 
 @pytest.fixture
