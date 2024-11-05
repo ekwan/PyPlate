@@ -1601,6 +1601,187 @@ def test_Container__transfer_slice(empty_container, empty_plate, water_plate,
             assert plate_2.wells[i,j].get_volume('uL') == \
                     water_plate.wells[i,j].get_volume('uL')
 
+def test_Container_dataframe(empty_container: Container,
+                             water_stock: Container,
+                             salt_water: Container):
+    """
+    Unit Test for `Container.dataframe()`
+
+    This unit test checks the following Container variations:
+    - Empty container
+    - Container with one substance
+    - Container with multiple substances of the same type
+    - Container with multiple substances of different types
+    - Container with a specified maximum volume
+    
+    Each of these success cases have the following checks:
+    - The dataframe has the correct columns
+    - The dataframe has two more rows than the number of substances in the
+      container (these extra rows are the 'Maximum Volume' row and the 'Total'
+      row).
+    - Each of the substances in the Container has a row in the dataframe.
+    - All dataframe rows have the expected values for 'Volume', 'Mass', and
+      'Moles'.
+
+    NOTE: The unit being tested, `Container.dataframe()`, heavily depends on the 
+    behavior of the function `Unit.get_human_readable_unit()`. Many of the
+    expected outputs were defined based on the precision of the returned results 
+    of the current implementation of that function. This means that changes to 
+    the behavior of that function will require those expected values to be 
+    updated. 
+          
+    Moreover, this test does not adequately cover all possibilities for the
+    types of units/rounding that can occur in the dataframe. This test should be
+    expanded to include more possibilities in future updates to the testing 
+    suite.
+    """
+
+    def _check_df_columns(df):
+        assert len(df.columns) == 3
+        for col in ['Volume', 'Mass', 'Moles']:
+            assert col in df.columns
+
+
+    # ==========================================================================
+    # Success Case: Empty container
+    # ==========================================================================
+    
+    df = empty_container.dataframe()
+
+    # Check that the dataframe has the correct columns
+    _check_df_columns(df)
+
+    # Check that the dataframe has the correct number of rows
+    assert len(df) == 2
+
+    # Check that the dataframe has the correct index values
+    assert df.index[0] == 'Maximum Volume'
+    assert df.index[-1] == 'Total'
+
+    # Check that the maximum volume row is correct
+
+    # NOTE: This test assumes that the empty container fixture does not have a 
+    #       maximum volume. If the fixture is changed, this test will need to
+    #       be updated.
+    assert df.loc['Maximum Volume', 'Volume'] == '∞'
+    assert df.loc['Maximum Volume', 'Mass'] == '-'
+    assert df.loc['Maximum Volume', 'Moles'] == '-'
+
+    # Check that the total row is correct
+    assert df.loc['Total', 'Volume'] == '0 L'
+    assert df.loc['Total', 'Mass'] == '0 g'
+    assert df.loc['Total', 'Moles'] == '0 mol'
+
+
+    # ==========================================================================
+    # Success Case: Single Substance container
+    # ==========================================================================
+    
+    df = water_stock.dataframe()
+
+    # Check that the dataframe has the correct columns
+    _check_df_columns(df)
+
+    # Check that the dataframe has the correct number of rows
+    assert len(df) == 3
+
+    # Check that the dataframe has the correct index values
+    assert df.index[0] == 'Maximum Volume'
+    assert df.index[-1] == 'Total'
+
+    assert df.index[1] == 'H2O'
+
+    # Check that the maximum volume row is correct
+
+    # NOTE: This test assumes that the empty container fixture does not have a 
+    #       maximum volume. If the fixture is changed, this test will need to
+    #       be updated.
+    assert df.loc['Maximum Volume', 'Volume'] == '∞'
+    assert df.loc['Maximum Volume', 'Mass'] == '-'
+    assert df.loc['Maximum Volume', 'Moles'] == '-'
+
+    # Check that the total row is correct
+    assert df.loc['Total', 'Volume'] == '1.0 L'
+    assert df.loc['Total', 'Mass'] == '1.0 kg'
+    assert df.loc['Total', 'Moles'] == '55.508 mol'
+
+    # Check that the water row is correct
+    assert df.loc['H2O', 'Volume'] == '1.0 L'
+    assert df.loc['H2O', 'Mass'] == '1.0 kg'
+    assert df.loc['H2O', 'Moles'] == '55.508 mol'
+
+
+    # ==========================================================================
+    # Success Case: Multi-Substance container
+    # ==========================================================================
+
+    df = salt_water.dataframe()
+
+    # Check that the dataframe has the correct columns
+    _check_df_columns(df)
+
+    # Check that the dataframe has the correct number of rows
+    assert len(df) == 4
+
+    # Check that the dataframe has the correct index values
+    assert df.index[0] == 'Maximum Volume'
+    assert df.index[-1] == 'Total'
+
+    assert 'H2O' in df.index
+    assert 'NaCl' in df.index
+
+    # Check that the maximum volume row is correct
+
+    # NOTE: This test assumes that the empty container fixture does not have a 
+    #       maximum volume. If the fixture is changed, this test will need to
+    #       be updated.
+    assert df.loc['Maximum Volume', 'Volume'] == '∞'
+    assert df.loc['Maximum Volume', 'Mass'] == '-'
+    assert df.loc['Maximum Volume', 'Moles'] == '-'
+
+    # Check that the water row is correct
+    assert df.loc['H2O', 'Volume'] == '100.0 mL'
+    assert df.loc['H2O', 'Mass'] == '100.0 g'
+    assert df.loc['H2O', 'Moles'] == '5.551 mol'
+
+    # Check that the salt row is correct
+    assert df.loc['NaCl', 'Volume'] == '1.347 mL'
+    assert df.loc['NaCl', 'Mass'] == '2.922 g'
+    assert df.loc['NaCl', 'Moles'] == '50.0 mmol'
+
+    # Check that the total row is correct
+    assert df.loc['Total', 'Volume'] == '101.347 mL'
+    assert df.loc['Total', 'Mass'] == '102.922 g'
+    assert df.loc['Total', 'Moles'] == '5.601 mol'
+
+
+    # ==========================================================================
+    # Success Case: Finite volume container
+    # ==========================================================================
+    
+    finite_container = Container('Finite Empty', max_volume='100 mL')
+    df = finite_container.dataframe()
+
+    # Check that the dataframe has the correct columns
+    _check_df_columns(df)
+
+    # Check that the dataframe has the correct number of rows
+    assert len(df) == 2
+
+    # Check that the dataframe has the correct index values
+    assert df.index[0] == 'Maximum Volume'
+    assert df.index[-1] == 'Total'
+
+    # Check that the maximum volume row is correct
+    assert df.loc['Maximum Volume', 'Volume'] == '100.0 mL'
+    assert df.loc['Maximum Volume', 'Mass'] == '-'
+    assert df.loc['Maximum Volume', 'Moles'] == '-'
+
+    # Check that the total row is correct
+    assert df.loc['Total', 'Volume'] == '0 L'
+    assert df.loc['Total', 'Mass'] == '0 g'
+    assert df.loc['Total', 'Moles'] == '0 mol'
+
 def test_Container_has_liquid(empty_container, water_stock, 
                               salt_stock, salt_water):
     """

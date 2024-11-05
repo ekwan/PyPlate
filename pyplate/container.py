@@ -535,10 +535,10 @@ class Container:
             df.loc['Maximum Volume'] = ['∞', '-', '-']
         else:
             unit = "L"
-            volume = Unit.convert_from_storage(self.max_volume, unit) # TODO: Add back in a "standard format"
-            volume = round(volume,
-                           config.precisions[unit] if unit in config.precisions else config.precisions['default'])
-            df.loc['Maximum Volume'] = [volume, '-', '-']
+            volume, vol_unit = Unit.get_human_readable_unit(self.max_volume,
+                                                    config.volume_storage_unit)
+            volume = round(volume, config.precisions[unit] if unit in config.precisions else config.precisions['default'])
+            df.loc['Maximum Volume'] = [f"{volume} {vol_unit}", '-', '-']
         totals = {'L': 0, 'g': 0, 'mol': 0}
         for substance, value in self.contents.items():
             columns = []
