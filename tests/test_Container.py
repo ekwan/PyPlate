@@ -891,6 +891,11 @@ def test_Container__transfer(water, dmso, salt, sodium_sulfate,
       - Subcases for non-empty destination container: no overlapping substances
         with source container vs. one or more overlapping substances with source
         container.
+
+    This unit test depends on the correctness of the following functions:
+    - `Substance.convert_quantity()`
+
+    TODO: Include checks for proper instruction generation.
     """
 
     # Create containers to use for type-checking and illegal argument value tests
@@ -4187,6 +4192,8 @@ def test_Container_dilute_in_place(mocker: pytest_mock.MockerFixture,
     - `Container.get_volume()`
     - `Container.get_moles()`
     - `Container.create_solution()` (for 1 M and 2 M salt water fixtures)
+
+    TODO: Include checks for proper instruction generation.
     """
 
     # Create an alias for `Container.dilute_in_place()` to save on space
@@ -4568,6 +4575,8 @@ def test_Container_fill_to(water: Substance, salt: Substance,
     - `Container.get_volume()`
     - `Container.get_quantity()`
     - `Substance.convert()`
+
+    TODO: Include checks for proper instruction generation.
     """
 
     max_vol_container = Container('Water', '100 mL')
@@ -4857,92 +4866,537 @@ def test_Container_fill_to(water: Substance, salt: Substance,
         assert salt_water.get_moles('mmol', salt) == 50
         assert water_stock.get_volume('L') == pytest.approx(1)
 
+def test_Container_remove(water: Substance, salt: Substance, 
+                          dmso: Substance, sodium_sulfate: Substance,
+                          water_stock: Container, salt_stock: Container,
+                          salt_water: Container, empty_container: Container):
+    """
+    Unit Test for the function `Container.remove()`
+
+    This unit test checks the following failure scenarios:
+    - Invalid argument types will result in raising a `TypeError`
+    - Invalid Substance types will result in raising a `ValueError`
+
+    This unit test checks the following success scenarios:
+    - Removing a single Substance from a Container
+        - Sub-Case: Substance exists in the container
+        - Sub-Case: Substance does not exist in the container
+            - Sub-Sub-Case: Container has solid substance, removal is with liquid
+            - Sub-Sub-Case: Container has liquid substance, removal is with solid
+    - Removing multiple Substances from a Container
+        - Sub-Case: Substances all exist in the container
+        - Sub-Case: Substances all do not exist in the container
+        - Sub-Case: Some Substances exist in the container, some do not
+    - Removing a single Substance type from a Container
+        - Sub-Case: Container contains a single substance of the removed type
+        - Sub-Case: Container contains multiple substances of the removed type
+        - Sub-Case: Container contains a single substance not of the removed 
+                    type
+        - Sub-Case: Container contains multiple substances all not of the 
+                    removed type
+        - Sub-Case: Container contains multiple substances, some of which are 
+                    the removed type, some of which are not
+    - Removing multiple Substance types from a Container
+        - Sub-Case: Container is empty
+        - Sub-Case: Container contains substances of one of the substance types
+        - Sub-Case: Container contains substances of all substance types
+    - Removing specific Substances as well as one Substance type from a 
+      Container
+        - Sub-Case: Removed substances/types do not cover all substances in the
+                    container.
+        - Sub-Case: Removed substances/types cover all substances in the 
+                    container.
+
+    For each success case, the following details are checked:
+    - The contents of the resulting container has the correct number of 
+      substances.
+    - The substances that should have been removed are not in the container's 
+      contents.
+    - The substances that should have reamined are in the container's contents. 
+    - The amounts of the substances that should have remained are unchanged.
+    - The volume of the container has been correctly updated.
+        - In cases where the resulting container is empty, the volume is 0.
+        - In cases where the container is unchanged, the volume is unchanged.
+        - In cases where the container is changed but not all substances are
+          removed, the volume is not directly checked. Instead, correct amounts
+          of the remaining substances are checked, and the volume is assumed to
+          be correct if these checks pass.
+    - The name of the container has been maintained.
+    - The original container has not been modified.
+
+    This unit test depends on the correctness of the following functions:
+    - `Container.get_mass()`
+    - `Container.get_moles()`
+    - `Container.get_volume()`
+
+    TODO: Include checks for proper instruction generation.
+    """
+    
+    # ==========================================================================
+    # Failure Case: Invalid argument types
+    # ==========================================================================
+
+    match_msg = "\'Remove Substances\' must be a Substance or an iterable set "\
+                "of Substances\\."
+    for INVALID_RS in [None, 1, "water", water_stock, [None], [salt_stock],
+                        ("water", water), [water, water_stock]]:
+          with pytest.raises(TypeError, match=match_msg):
+                water_stock.remove(INVALID_RS)
+    
+    match_msg = "\'Remove Types\' must be a supported Substance type "\
+                "or an iterable set of supported Substance types."
+    for INVALID_RT in [None, "water", water, water_stock, [None], [salt],
+                       [salt_stock], (water, Substance.LIQUID), 
+                       [Substance.SOLID, Substance.LIQUID, water]]:
+          with pytest.raises(TypeError, match=match_msg):
+                water_stock.remove(remove_types=INVALID_RT)
 
 
-# def test_create_solution(water, salt, sodium_sulfate):
+    # ==========================================================================
+    # Failure Case: Invalid Substance types
+    # ==========================================================================
 
-#     # create solution with just one solute
-#     simple_solution = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
+    match_msg = "Unsupported Substance type: .*"
+    for INVALID_SUB_TYPE in [0, 12, -2, 2147483647, -2147483648]:
+        with pytest.raises(ValueError, match=match_msg):
+            water_stock.remove(remove_types=INVALID_SUB_TYPE)
+        with pytest.raises(ValueError, match=match_msg):
+            water_stock.remove(remove_types=[Substance.SOLID, INVALID_SUB_TYPE])
 
-#     water_container = Container('water', initial_contents=[(water, '100 mL')])
+    
+    # ==========================================================================
+    # Success Case: Remove a single Substance from a Container
+    # ==========================================================================
 
-#     # create solution with multiple solutes
-#     conc_quant_solution = Container.create_solution([salt, sodium_sulfate], water,
-#                                                     concentration=['1 M', '1 M'],
-#                                                     quantity=['5.84428 g', '14.204 g'])
-#     conc_total_quant_solution = Container.create_solution([salt, sodium_sulfate], water,
-#                                                           concentration=['1 M', '1 M'],
-#                                                           total_quantity='100 mL')
+    # Sub-Case: Substance exists in the container
 
-#     qaunt_total_quant_solution = Container.create_solution([salt, sodium_sulfate], water,
-#                                                            quantity=['5.84428 g', '14.204 g'],
-#                                                            total_quantity='100 mL')
+    # NOTE: This test relies on the salt stock fixture containing exactly 1 kg
+    #       of salt. If this fixture is changed, the test will need to be 
+    #       updated.
+    empty = salt_stock.remove(salt)
+    
+    # Ensure the Substance has been removed
+    assert len(empty.contents) == 0
 
-#     # create solvent container
-#     water_container = Container('water', initial_contents=[(water, '100 mL')])
+    # Ensure the container name has been maintained
+    assert empty.name == salt_stock.name
 
-#     # create solvent container with solute in it
-#     invalid_solvent_container = Container.create_solution(salt, water, concentration='1 M', total_quantity='100 mL')
+    # Ensure the volume has been correctly updated
+    assert empty.volume == 0
+    assert empty.get_volume('L') == 0
+    
+    # Ensure the original container has not been modified
+    assert salt in salt_stock.contents
+    assert salt_stock.get_mass('kg', salt) == 1
 
+    # Sub-Case: Substance does not exist in the container
+    
+    # Sub-Sub-Case: Container has solid substance, removal is with liquid
 
-#     ## verify simple solution
-#     # verify solute amount
-#     assert (pytest.approx(salt.convert(100, 'mmol', config.moles_storage_unit)) ==
-#             simple_solution.contents[salt])
-#     # verify concentration
-#     assert simple_solution.get_concentration(salt) == pytest.approx(1)
-#     # verify total volume
-#     assert (pytest.approx(water.convert(100, 'mL', config.volume_storage_unit)) ==
-#             simple_solution.volume)
+    # NOTE: This test relies on the salt stock fixture containing exactly 1 kg
+    #       of salt. If this fixture is changed, the test will need to be 
+    #       updated.
+    non_empty = salt_stock.remove(water)
 
-#     ## verify conc_quant_solution
-#     # verify solute amounts
-#     assert (pytest.approx(salt.convert(5.84428, 'g', config.moles_storage_unit)) ==
-#             conc_quant_solution.contents[salt])
-#     assert (pytest.approx(sodium_sulfate.convert(14.204, 'g', config.moles_storage_unit)) ==
-#             conc_quant_solution.contents[sodium_sulfate])
-#     # verify concentration
-#     assert conc_quant_solution.get_concentration(salt) == pytest.approx(1)
-#     assert conc_quant_solution.get_concentration(sodium_sulfate) == pytest.approx(1)
-#     # verify total volume
-#     assert (pytest.approx(water.convert(100, 'mL', config.volume_storage_unit)) ==
-#             conc_quant_solution.volume)
+    # Ensure the container has not been modified
+    assert non_empty.contents == salt_stock.contents
+    assert non_empty.volume == pytest.approx(salt_stock.volume)
 
-#     ## verify conc_total_quant_solution
-#     # verify solute amounts
-#     assert (pytest.approx(salt.convert(5.84428, 'g', config.moles_storage_unit)) ==
-#             conc_total_quant_solution.contents[salt])
-#     assert (pytest.approx(sodium_sulfate.convert(14.204, 'g', config.moles_storage_unit)) ==
-#             conc_total_quant_solution.contents[sodium_sulfate])
-#     # verify concentration
-#     assert conc_total_quant_solution.get_concentration(salt) == pytest.approx(1)
-#     assert conc_total_quant_solution.get_concentration(sodium_sulfate) == pytest.approx(1)
-#     # verify total volume
-#     assert (pytest.approx(water.convert(100, 'mL', config.volume_storage_unit)) ==
-#             conc_total_quant_solution.volume)
+    # Ensure the container name has been maintained
+    assert non_empty.name == salt_stock.name
 
-#     ## verify qaunt_total_quant_solution
-#     # verify solute amounts
-#     assert (pytest.approx(salt.convert(5.84428, 'g', config.moles_storage_unit)) ==
-#             qaunt_total_quant_solution.contents[salt])
-#     assert (pytest.approx(sodium_sulfate.convert(14.204, 'g', config.moles_storage_unit)) ==
-#             qaunt_total_quant_solution.contents[sodium_sulfate])
-#     # verify concentration
-#     assert qaunt_total_quant_solution.get_concentration(salt) == pytest.approx(1)
-#     assert qaunt_total_quant_solution.get_concentration(sodium_sulfate) == pytest.approx(1)
-#     # verify total volume
-#     assert (pytest.approx(water.convert(100, 'mL', config.volume_storage_unit)) ==
-#             qaunt_total_quant_solution.volume)
+    # Ensure the original container has not been modified
+    assert len(salt_stock.contents) == 1
+    assert salt in salt_stock.contents
+    assert salt_stock.get_mass('kg', salt) == 1
 
-#     with pytest.raises(ValueError, match="Solution is impossible to create."):
-#         # create solution with solute in solvent container
-#         invalid_container_solution = Container.create_solution([salt, sodium_sulfate], invalid_solvent_container,
-#                                                                concentration='1 M', quantity=['1 g', '0.5 g'])
+    # Sub-Sub-Case: Container has liquid substance, removal is with solid
 
-#     with pytest.raises(ValueError, match="Solution is impossible to create."):
-#         # invalid quantity of solute
-#         container_solution = Container.create_solution([salt, sodium_sulfate], water_container,
-#                                                        concentration=['1 M', '1 M'],
-#                                                        quantity=['1 g', '0.5 g'])
+    # NOTE: This test relies on the salt stock fixture containing exactly 1 kg
+    #       of salt. If this fixture is changed, the test will need to be 
+    #       updated.
+    non_empty = water_stock.remove(salt)
+
+    # Ensure the container has not been modified
+    assert non_empty.contents == water_stock.contents
+    assert non_empty.volume == pytest.approx(water_stock.volume)
+
+    # Ensure the container name has been maintained
+    assert non_empty.name == water_stock.name
+
+    # Ensure the original container has not been modified
+    assert len(water_stock.contents) == 1
+    assert water in water_stock.contents
+    assert water_stock.get_volume('L', water) == 1
 
 
+    # ==========================================================================
+    # Success Case: Remove multiple Substances from a Container
+    # ==========================================================================
+
+    # Sub-Case: Substances all exist in the container
+
+    # NOTE: This test relies on the salt stock fixture containing exactly 1 kg
+    #       of salt. If this fixture is changed, the test will need to be 
+    #       updated.
+    empty = salt_water.remove([salt, water])
+    
+    # Ensure the Substance has been removed
+    assert len(empty.contents) == 0
+
+    # Ensure the container name has been maintained
+    assert empty.name == salt_water.name
+
+    # Ensure the volume has been correctly updated
+    assert empty.volume == 0
+    assert empty.get_volume('L') == 0
+    
+    # Ensure the original container has not been modified
+    assert salt in salt_water.contents
+    assert salt_water.get_moles('mmol', salt) == 50
+    assert water in salt_water.contents
+    assert salt_water.get_volume('mL', water) == pytest.approx(100)
+
+    # Sub-Case: Substances all do not exist in the container
+    
+    # NOTE: This test relies on the salt stock fixture containing exactly 1 kg
+    #       of salt. If this fixture is changed, the test will need to be 
+    #       updated.
+    non_empty = salt_stock.remove([water, dmso])
+
+    # Ensure the container has not been modified
+    assert non_empty.contents == salt_stock.contents
+    assert non_empty.volume == pytest.approx(salt_stock.volume)
+
+    # Ensure the container name has been maintained
+    assert non_empty.name == salt_stock.name
+
+    # Ensure the original container has not been modified
+    assert len(salt_stock.contents) == 1
+    assert salt in salt_stock.contents
+    assert salt_stock.get_mass('kg', salt) == 1
+
+    # Sub-Case: Some substances exist in the container, some do not
+
+    # NOTE: This test relies on the salt water fixture containing exactly 100 mL
+    #       of water and 50 mmol of salt. If this fixture is changed, the test 
+    #       will need to be updated.
+    non_empty = salt_water.remove([salt, dmso])
+
+    # Ensure the container has all the salt removed, but none of the water 
+    # removed
+    assert len(non_empty.contents) == 1
+    assert salt not in non_empty.contents
+    assert non_empty.get_moles('mmol', salt) == 0
+    assert water in non_empty.contents
+    assert non_empty.get_volume('mL') == pytest.approx(100)
+
+    # Ensure the container name has been maintained
+    assert non_empty.name == salt_water.name
+
+    # Ensure the original container has not been modified
+    assert salt in salt_water.contents
+    assert salt_water.get_moles('mmol', salt) == 50
+    assert water in salt_water.contents
+    assert salt_water.get_volume('mL', water) == pytest.approx(100)
+
+
+    # ==========================================================================
+    # Success Case: Remove single Substance type from Container
+    # ==========================================================================
+    
+    # Sub-Case: Container contains a single substance of the removed type
+    empty = water_stock.remove(remove_types=Substance.LIQUID)
+
+    # Ensure the Substance has been removed
+    assert len(empty.contents) == 0
+
+    # Ensure the container name has been maintained
+    assert empty.name == water_stock.name
+
+    # Ensure the volume has been correctly updated
+    assert empty.volume == 0
+    assert empty.get_volume('L') == 0
+
+    # Ensure the original container has not been modified
+    assert len(water_stock.contents) == 1
+    assert water in water_stock.contents
+    assert water_stock.get_volume('L', water) == 1
+
+    # Sub-Case: Container contains multiple substances all of the removed type
+    liquid_mixture = Container('Liquid Mixture', 
+                               initial_contents=[(water, '500 mL'), 
+                                                 (dmso, '500 mL')])
+    empty = liquid_mixture.remove(remove_types=Substance.LIQUID)
+
+    # Ensure the Substances have been removed
+    assert len(empty.contents) == 0
+
+    # Ensure the container name has been maintained
+    assert empty.name == liquid_mixture.name
+
+    # Ensure the volume has been correctly updated
+    assert empty.volume == 0
+    assert empty.get_volume('L') == 0
+
+    # Ensure the original container has not been modified
+    assert len(liquid_mixture.contents) == 2
+    assert water in liquid_mixture.contents
+    assert dmso in liquid_mixture.contents
+    assert liquid_mixture.get_volume('mL', water) == pytest.approx(500)
+    assert liquid_mixture.get_volume('mL', dmso) == pytest.approx(500)
+
+    # Sub-Case: Container contains a single substances not of the removed type
+    non_empty = water_stock.remove(remove_types=Substance.SOLID)
+
+    # Ensure the container has not been modified
+    assert non_empty.contents == water_stock.contents
+    assert non_empty.volume == pytest.approx(water_stock.volume)
+
+    # Ensure the container name has been maintained
+    assert non_empty.name == water_stock.name
+
+    # Ensure the original container has not been modified
+    assert len(water_stock.contents) == 1
+    assert water in water_stock.contents
+    assert water_stock.get_volume('L', water) == 1
+
+    # Sub-Case: Container contains multiple substances, none of which are the 
+    # removed type
+    non_empty = liquid_mixture.remove(remove_types=Substance.SOLID)
+
+    # Ensure the container has not been modified
+    assert non_empty.contents == liquid_mixture.contents
+    assert non_empty.volume == pytest.approx(liquid_mixture.volume)
+
+    # Ensure the container name has been maintained
+    assert non_empty.name == liquid_mixture.name
+
+    # Ensure the original container has not been modified
+    assert len(liquid_mixture.contents) == 2
+    assert water in liquid_mixture.contents
+    assert dmso in liquid_mixture.contents
+    assert liquid_mixture.get_volume('mL', water) == pytest.approx(500)
+    assert liquid_mixture.get_volume('mL', dmso) == pytest.approx(500)
+
+    # Sub-Case: Container contains multiple substances, some of which are the
+    # removed type, some of which are not
+
+    # Sub-Sub-Case: Removal type is liquid
+
+    # NOTE: This test relies on the salt water fixture containing exactly 50 
+    #       mmols of salt. If this fixture is changed, the test will need to be
+    #       updated.
+    non_empty = salt_water.remove(remove_types=[Substance.LIQUID])
+
+    # Ensure the container has all the liquid removed, but none of the solids
+    # removed
+    assert len(non_empty.contents) == 1
+    assert water not in non_empty.contents
+    assert non_empty.get_volume('mL', water) == 0
+    assert salt in non_empty.contents
+    assert non_empty.get_moles('mmol', salt) == 50
+
+    # Ensure the container name has been maintained
+    assert non_empty.name == salt_water.name
+
+    # Ensure the original container has not been modified
+    assert len(salt_water.contents) == 2
+    assert water in salt_water.contents
+    assert salt in salt_water.contents
+    assert salt_water.get_volume('mL', water) == pytest.approx(100)
+    assert salt_water.get_moles('mmol', salt) == 50
+
+    # Sub-Sub-Case: Removal type is soild
+
+    # NOTE: This test relies on the salt water fixture containing exactly 100 mL 
+    #       of water. If this fixture is changed, the test will need to be
+    #       updated.
+    non_empty = salt_water.remove(remove_types=[Substance.SOLID])
+
+    # Ensure the container has all the solid removed, but none of the liquid
+    # removed
+    assert len(non_empty.contents) == 1
+    assert salt not in non_empty.contents
+    assert non_empty.get_moles('mmol', salt) == 0
+    assert water in non_empty.contents
+    assert non_empty.get_volume('mL', water) == pytest.approx(100)
+
+    # Ensure the container name has been maintained
+    assert non_empty.name == salt_water.name
+
+    # Ensure the original container has not been modified
+    assert len(salt_water.contents) == 2
+    assert water in salt_water.contents
+    assert salt in salt_water.contents
+    assert salt_water.get_volume('mL', water) == pytest.approx(100)
+    assert salt_water.get_moles('mmol', salt) == 50
+
+
+    # ==========================================================================
+    # Success Case: Remove multiple Substance types from a Container
+    # ==========================================================================
+
+    # Sub-Case: Container is empty
+    empty = empty_container.remove(remove_types=[Substance.SOLID, 
+                                                 Substance.LIQUID])
+    
+    # Ensure the container is still empty
+    assert len(empty.contents) == 0
+    assert empty.volume == 0
+    assert empty.get_volume('L') == 0
+
+    # Ensure the container name has been maintained
+    assert empty.name == empty_container.name
+
+    # Sub-Case: Container contains one of the substance types
+    empty = water_stock.remove(remove_types=[Substance.SOLID, Substance.LIQUID])
+
+    # Ensure the container has been emptied
+    assert len(empty.contents) == 0
+    assert empty.volume == 0
+    assert empty.get_volume('L') == 0
+
+    # Ensure the container name has been maintained
+    assert empty.name == water_stock.name
+
+    # Ensure the original container has not been modified
+    assert len(water_stock.contents) == 1
+    assert water in water_stock.contents
+    assert water_stock.get_volume('L', water) == 1
+    
+    
+    # Sub-Case: Container contains both substance types
+    empty = salt_water.remove(remove_types=[Substance.SOLID, Substance.LIQUID])
+    
+    # Ensure the Substances have all been removed
+    assert len(empty.contents) == 0
+    
+    # Ensure the volume has been correctly updated
+    assert empty.volume == 0
+    assert empty.get_volume('L') == 0
+
+    # Ensure the container name has been maintained
+    assert empty.name == salt_water.name
+
+    # Ensure the original container has not been modified
+    assert len(salt_water.contents) == 2
+    assert water in salt_water.contents
+    assert salt in salt_water.contents
+    assert salt_water.get_volume('mL', water) == pytest.approx(100)
+    assert salt_water.get_moles('mmol', salt) == 50
+
+
+    # ==========================================================================
+    # Success Case: Remove both specific substances and a Substance type
+    # ==========================================================================
+    
+    solids_and_liquids = Container('Solid Liquid Mixture', 
+                                   initial_contents=[(water, '100 mL'),
+                                                     (dmso, '100 mL'),
+                                                     (salt, '10 g'),
+                                                     (sodium_sulfate, '10 g')])
+    
+    # Sub-Case: Remove a single Substance and a Substance type
+
+    # Sub-Sub-Case: Remove one liquid and all solids
+    non_empty = solids_and_liquids.remove(water, [Substance.SOLID])
+
+    # Ensure the water and solids have been removed, but the DMSO remains
+    assert len(non_empty.contents) == 1
+    assert water not in non_empty.contents
+    assert salt not in non_empty.contents
+    assert sodium_sulfate not in non_empty.contents
+    assert dmso in non_empty.contents
+    assert non_empty.get_volume('mL', dmso) == pytest.approx(100)
+
+    # Ensure the container name has been maintained
+    assert non_empty.name == solids_and_liquids.name
+
+    # Ensure the original container has not been modified
+    assert len(solids_and_liquids.contents) == 4
+    assert water in solids_and_liquids.contents
+    assert dmso in solids_and_liquids.contents
+    assert salt in solids_and_liquids.contents
+    assert sodium_sulfate in solids_and_liquids.contents
+    assert solids_and_liquids.get_volume('mL', water) == pytest.approx(100)
+    assert solids_and_liquids.get_volume('mL', dmso) == pytest.approx(100)
+    assert solids_and_liquids.get_mass('g', salt) == pytest.approx(10)
+    assert solids_and_liquids.get_mass('g', sodium_sulfate) == pytest.approx(10)
+
+    # Sub-Sub-Case: Remove one solid and all liquids
+    non_empty = solids_and_liquids.remove(salt, [Substance.LIQUID])
+
+    # Ensure the salt and liquids have been removed, but the sodium sulfate
+    # remains
+    assert len(non_empty.contents) == 1
+    assert salt not in non_empty.contents
+    assert water not in non_empty.contents
+    assert dmso not in non_empty.contents
+    assert sodium_sulfate in non_empty.contents
+    assert non_empty.get_mass('g', sodium_sulfate) == pytest.approx(10)
+
+    # Ensure the container name has been maintained
+    assert non_empty.name == solids_and_liquids.name
+
+    # Ensure the original container has not been modified
+    assert len(solids_and_liquids.contents) == 4
+    assert water in solids_and_liquids.contents
+    assert dmso in solids_and_liquids.contents
+    assert salt in solids_and_liquids.contents
+    assert sodium_sulfate in solids_and_liquids.contents
+    assert solids_and_liquids.get_volume('mL', water) == pytest.approx(100)
+    assert solids_and_liquids.get_volume('mL', dmso) == pytest.approx(100)
+    assert solids_and_liquids.get_mass('g', salt) == pytest.approx(10)
+    assert solids_and_liquids.get_mass('g', sodium_sulfate) == pytest.approx(10)
+
+    # Sub-Case: Remove multiple Substances and a Substance type
+
+    # Sub-Sub-Case: Remove both liquids and all solids
+    empty = solids_and_liquids.remove([water, dmso], [Substance.SOLID])
+
+    # Ensure all substance have been removed
+    assert len(empty.contents) == 0
+
+    # Ensure the volume has been correctly updated
+    assert empty.volume == 0
+    assert empty.get_volume('L') == 0
+
+    # Ensure the container name has been maintained
+    assert empty.name == solids_and_liquids.name
+
+    # Ensure the original container has not been modified
+    assert len(solids_and_liquids.contents) == 4
+    assert water in solids_and_liquids.contents
+    assert dmso in solids_and_liquids.contents
+    assert salt in solids_and_liquids.contents
+    assert sodium_sulfate in solids_and_liquids.contents
+    assert solids_and_liquids.get_volume('mL', water) == pytest.approx(100)
+    assert solids_and_liquids.get_volume('mL', dmso) == pytest.approx(100)
+    assert solids_and_liquids.get_mass('g', salt) == pytest.approx(10)
+    assert solids_and_liquids.get_mass('g', sodium_sulfate) == pytest.approx(10)
+
+    # Sub-Sub-Case: Remove both solids and all liquids
+    empty = solids_and_liquids.remove([salt, sodium_sulfate], 
+                                      [Substance.LIQUID])
+    
+    # Ensure all substance have been removed
+    assert len(empty.contents) == 0
+
+    # Ensure the volume has been correctly updated
+    assert empty.volume == 0
+    assert empty.get_volume('L') == 0
+
+    # Ensure the container name has been maintained
+    assert empty.name == solids_and_liquids.name
+
+    # Ensure the original container has not been modified
+    assert len(solids_and_liquids.contents) == 4
+    assert water in solids_and_liquids.contents
+    assert dmso in solids_and_liquids.contents
+    assert salt in solids_and_liquids.contents
+    assert sodium_sulfate in solids_and_liquids.contents
+    assert solids_and_liquids.get_volume('mL', water) == pytest.approx(100)
+    assert solids_and_liquids.get_volume('mL', dmso) == pytest.approx(100)
+    assert solids_and_liquids.get_mass('g', salt) == pytest.approx(10)
+    assert solids_and_liquids.get_mass('g', sodium_sulfate) == pytest.approx(10)

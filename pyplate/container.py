@@ -1366,10 +1366,12 @@ class Container:
         if isinstance(solute, Substance):
             solute = [solute]
         elif not isinstance(solute, Iterable) or len(solute) == 0:
-            raise TypeError("Solute must be a Substance or a set of Substances.")
+            raise TypeError("Solute must be a Substance or an iterable set of "
+                            "Substances.")
         
         if any(not isinstance(substance, Substance) for substance in solute):
-            raise TypeError("Solute must be a Substance or a set of Substances.")
+            raise TypeError("Solute must be a Substance or an iterable set of "
+                            "Substances.")
 
         # Check that the solvent argument has the correct type
         if not isinstance(solvent, (Substance, Container)):
@@ -2164,29 +2166,90 @@ class Container:
 
         return result
 
-    def remove(self, what: (Substance | int) = Substance.LIQUID) -> Container:
+    def remove(self, 
+               remove_substances: Substance | Iterable[Substance] = [],
+               remove_types: int | Iterable[int] = [],
+               ) -> Container:
         """
-        Removes substances from `Container`
+        Removes substances from the container.
 
         Arguments:
-            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
+            remove_substances (Substance | Iterable[Substance]): 
+                The specific Substance(s) to remove from the container.
+                Defaults to an empty list.
 
-        Returns: New Container with requested substances removed.
+            remove_type (int | Iterable[int]): The type(s) of substances to 
+                remove from the container. Must be supported Substance types.
+                Defaults to Substance.LIQUID.
 
+        Returns: 
+            The container with the specified substances removed.
+
+        NOTE: If both `remove_substances` and `remove_types` are specified, then
+                substances will be removed if they match either criterion.
         """
+
+        # Check that the arguments are of the correct type.
+        if isinstance(remove_substances, Substance):
+            remove_substances = [remove_substances]
+        elif not isinstance(remove_substances, Iterable):
+            raise TypeError("'Remove Substances' must be a Substance or an "
+                            "iterable set of Substances.")
+        if any(not isinstance(sub, Substance) for sub in remove_substances):
+            raise TypeError("'Remove Substances' must be a Substance or an "
+                            "iterable set of Substances.")
+        
+        if isinstance(remove_types, int):
+            remove_types = [remove_types]
+        elif not isinstance(remove_types, Iterable):
+            raise TypeError("'Remove Types' must be a supported Substance type "
+                            "or an iterable set of supported Substance types.")
+        
+        if any(not isinstance(type, int) for type in remove_types):
+            raise TypeError("'Remove Types' must be a supported Substance type "
+                            "or an iterable set of supported Substance types.")
+        
+        for type in remove_types:
+            if type not in Substance.classes:
+                raise ValueError(f"Unsupported Substance type: {type}")
+        
         new_container = deepcopy(self)
-        new_container.contents = {substance: value for substance, value in self.contents.items()
-                                  if what not in (substance._type, substance)}
+
+        # Copy all contents from the old container to the new container as long
+        # for all substances not in `remove_substances` and not of a type in
+        # `remove_types`.
+        new_container.contents = {substance: value
+                                  for substance, value in self.contents.items()
+                                  if substance not in remove_substances and 
+                                     substance._type not in remove_types}
+        
+        # Define helper function used in recomputing the volume of the container
+        # after substances are removed.
+        def _get_storage_vol(substance, value):
+            """
+            Helper for converting storage mole units of a substance to storage
+            volume units.
+            """
+            return substance.convert(value, config.moles_storage_unit, 
+                                            config.volume_storage_unit)
+
+        # Recompute the volume of the new container based on the updated
+        # contents.
         new_container.volume = 0
         for substance, value in new_container.contents.items():
-            new_container.volume += substance.convert(value, config.moles_storage_unit, config.volume_storage_unit)
+            new_container.volume += _get_storage_vol(substance, value)
 
+        # Update the instructions attribute of the new container to reflect the
+        # removal of substances.
         new_container.instructions = self.instructions
         classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid'}
-        if what in classes:
-            new_container.instructions += f"Remove all {classes[what]}s."
-        else:
-            new_container.instructions += f"Remove all {what.name}s."
+        if len(remove_types) > 0:
+            for type in remove_types:
+                new_container.instructions += f"\nRemove all {classes[type]}s."
+        if len(remove_substances) > 0:
+            for substance in remove_substances:
+                new_container.instructions += f"\nRemove all {substance.name}."
         return new_container
+
 
     
