@@ -567,7 +567,9 @@ class Container:
     @cache
     def __repr__(self):
         df = self.dataframe()
-        return tabulate(df, headers=[self.name] + list(df.columns), tablefmt='pretty')
+        return tabulate(df, 
+                        headers=[self.name] + list(df.columns), 
+                        tablefmt='pretty')
 
     @cache
     def has_liquid(self) -> bool:

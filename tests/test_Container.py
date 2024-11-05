@@ -1782,6 +1782,40 @@ def test_Container_dataframe(empty_container: Container,
     assert df.loc['Total', 'Mass'] == '0 g'
     assert df.loc['Total', 'Moles'] == '0 mol'
 
+def test_Container__repr_html_(empty_container: Container,
+                                water_stock: Container,
+                                salt_stock: Container,
+                                salt_water: Container):
+    """
+    Unit Test for `Container._repr_html_()`
+
+    At present, there are no specific requirements for the HTML representation
+    of a `Container` object. This unit test simply checks that the function
+    does not raise any errors when called on the fixtures tested.
+    """
+
+    empty_container._repr_html_()
+    water_stock._repr_html_()
+    salt_stock._repr_html_()
+    salt_water._repr_html_()
+
+def test_Container___repr__(empty_container: Container,
+                            water_stock: Container, 
+                            salt_stock: Container,
+                            salt_water: Container):
+    """
+    Unit Test for `Container.__repr__()`
+
+    At present, there are no specific requirements for the string representation
+    of a `Container` object. This unit test simply checks that the function
+    does not raise any errors when called on the fixtures tested.
+    """
+
+    empty_container.__repr__()
+    water_stock.__repr__()
+    salt_stock.__repr__()
+    salt_water.__repr__()
+
 def test_Container_has_liquid(empty_container, water_stock, 
                               salt_stock, salt_water):
     """
