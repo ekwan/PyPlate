@@ -197,17 +197,26 @@ class Plate:
         # noinspection PyProtectedMember
         return PlateSlicer._transfer(source, destination, quantity)
 
-    def remove(self, what=Substance.LIQUID) -> Plate:
+    def remove(self, 
+               remove_substances: Substance | Iterable[Substance] = [],
+               remove_types: int | Iterable[int] = [],
+               ) -> Plate:
         """
-        Removes substances from `Plate`
+        Removes substances from this plate.
 
         Arguments:
-            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
+            remove_substances (Substance | Iterable[Substance]): 
+                The specific Substance(s) to remove from the container.
+                Defaults to an empty list.
+
+            remove_type (int | Iterable[int]): The type(s) of substances to 
+                remove from the container. Must be supported Substance types.
+                Defaults to an empty list.
 
         Returns: New Plate with requested substances removed.
 
         """
-        return self[:].remove(what)
+        return self[:].remove(remove_substances, remove_types)
 
     def fill_to(self, solvent, quantity):
         """
@@ -533,18 +542,27 @@ class PlateSlicer(Slicer):
 
         return np.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)
 
-    def remove(self, what: (Substance | int) = Substance.LIQUID):
+    def remove(self, 
+               remove_substances: Substance | Iterable[Substance] = [],
+               remove_types: int | Iterable[int] = [],
+               ) -> Plate:
         """
         Removes substances from slice
 
         Arguments:
-            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
+            remove_substances (Substance | Iterable[Substance]): 
+                The specific Substance(s) to remove from the container.
+                Defaults to an empty list.
+
+            remove_type (int | Iterable[int]): The type(s) of substances to 
+                remove from the container. Must be supported Substance types.
+                Defaults to Substance.LIQUID.
 
         Returns: New Plate with requested substances removed.
 
         """
         self.plate = deepcopy(self.plate)
-        self.apply(lambda elem: elem.remove(what))
+        self.apply(lambda elem: elem.remove(remove_substances, remove_types))
         return self.plate
 
     def fill_to(self, solvent: Substance, quantity: str):

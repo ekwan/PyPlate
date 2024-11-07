@@ -2182,7 +2182,7 @@ class Container:
 
             remove_type (int | Iterable[int]): The type(s) of substances to 
                 remove from the container. Must be supported Substance types.
-                Defaults to Substance.LIQUID.
+                Defaults to an empty list.
 
         Returns: 
             The container with the specified substances removed.
@@ -2244,10 +2244,10 @@ class Container:
         # Update the instructions attribute of the new container to reflect the
         # removal of substances.
         new_container.instructions = self.instructions
-        classes = {Substance.SOLID: 'solid', Substance.LIQUID: 'liquid'}
+        classes = {Substance.SOLID: 'solids', Substance.LIQUID: 'liquids'}
         if len(remove_types) > 0:
             for type in remove_types:
-                new_container.instructions += f"\nRemove all {classes[type]}s."
+                new_container.instructions += f"\nRemove all {classes[type]}."
         if len(remove_substances) > 0:
             for substance in remove_substances:
                 new_container.instructions += f"\nRemove all {substance.name}."

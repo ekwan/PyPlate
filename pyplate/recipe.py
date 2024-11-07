@@ -14,6 +14,42 @@ from pyplate.unit import Unit
 from pyplate.config import config
 
 
+class RecipeBakeError(Exception):
+    """
+    Custom exception class for errors that occur while baking a Recipe. These
+    errors should never occur if the Recipe functions are implemented correctly.
+    Thus, if this exception is raised outside of intentional cases during 
+    testing, it means the library is bugged.
+    """
+    
+    def __init__(self, 
+                 message: str, 
+                 recipe_step: RecipeStep, 
+                 is_bug=False):
+        super().__init__(message)  # Call the base class constructor
+        
+        # Remove leading/trailing whitespace from the message
+        self.args[0] = self.args[0].strip()
+        
+        # If the message ends with a period, remove it
+        if self.args[0].endswith('.'):
+            self.args[0] = self.args[0][:-1]
+
+        self.operator = recipe_step.operator
+
+    def __str__(self):
+        msg = f"RecipeBakeError: {self.args[0]}. "\
+              f"Operator: '{self.operator}'. "
+        
+        # If the error is a bug, append an additional message for the user
+        if self.args[2]:
+            msg += "This error indicates a bug in the library, not an issue " \
+                   "with your script. If you are reading this, please report " \
+                   "the issue at https://github.com/ekwan/PyPlate/issues. " \
+                   "Thank you!"
+        
+        return msg
+
 class RecipeStep:
     """
     Stores information about a single step in a recipe.
@@ -24,11 +60,15 @@ class RecipeStep:
 
     """
 
-    def __init__(self, recipe: Recipe, operator: str, frm: Container | PlateSlicer | Plate,
-                 to: Container | PlateSlicer | Plate, *operands):
+    def __init__(self, recipe: Recipe, 
+                 operator: str, 
+                 frm: Container | PlateSlicer | Plate,
+                 to: Container | PlateSlicer | Plate, 
+                 *operands):
         """
         Creates a new RecipeStep.
         """
+
         self.frm_slice = None
         self.to_slice = None
         self.recipe = recipe
@@ -45,6 +85,7 @@ class RecipeStep:
         """
         Returns: HTML representation of the step.
         """
+
         precision = config.precisions[config.volume_display_unit] if config.volume_display_unit in config.precisions \
             else config.precisions['default']
         source_visual = None
@@ -226,7 +267,8 @@ class Recipe:
         self.stages[name] = slice(self.current_stage_start, len(self.steps))
         self.current_stage = 'all'
 
-    def uses(self, *args: Container | Plate | Iterable[Container | Plate]) -> Recipe:
+    def uses(self, 
+             *args: Container | Plate | Iterable[Container | Plate]) -> Recipe:
         """
         Declare *args (iterable of Containers and Plates) as being used in the recipe.
         """
@@ -247,7 +289,9 @@ class Recipe:
                 raise TypeError("Invalid type.")
         return self
 
-    def transfer(self, source: Container | Plate | PlateSlicer, destination: Container | Plate | PlateSlicer,
+    def transfer(self, 
+                 source: Container | Plate | PlateSlicer, 
+                 destination: Container | Plate | PlateSlicer,
                  quantity: str) -> None:
         """
         Adds a step to the recipe which will move quantity from source to destination.
@@ -273,25 +317,39 @@ class Recipe:
             destination = destination[:]
         self.steps.append(RecipeStep(self, 'transfer', source, destination, quantity))
 
-    def remove(self, destination: Container | Plate | PlateSlicer, what=Substance.LIQUID) -> None:
+    def remove(self, 
+               removal_source: Container | Plate | PlateSlicer, 
+               remove_substances: Substance | Iterable[Substance] = [],
+               remove_types: int | Iterable[int] = []) -> None:
         """
-        Adds a step to removes substances from destination.
+        Adds a step to removes substances from a destination Container, Plate,
+        or Plate slice.
 
         Arguments:
-            destination: What to remove from.
-            what: What to remove. Can be a type of substance or a specific substance. Defaults to LIQUID.
+            destination (Container | Plate | PlateSlicer): 
+                The container or plate from which the substances will be 
+                removed.
+        
+            remove_substances (Substance | Iterable[Substance]): 
+                The specific Substance(s) to remove from the container.
+                Defaults to an empty list.
+
+            remove_type (int | Iterable[int]): The type(s) of substances to 
+                remove from the container. Must be supported Substance types.
+                Defaults to an empty list.
         """
 
-        if isinstance(destination, PlateSlicer):
-            if destination.plate.name not in self.results:
-                raise ValueError(f"Destination {destination.plate.name} has not been previously declared for use.")
-        elif isinstance(destination, (Container, Plate)):
-            if destination.name not in self.results:
-                raise ValueError(f"Destination {destination.name} has not been previously declared for use.")
+        if isinstance(removal_source, PlateSlicer):
+            if removal_source.plate.name not in self.results:
+                raise ValueError(f"Destination {removal_source.plate.name} has not been previously declared for use.")
+        elif isinstance(removal_source, (Container, Plate)):
+            if removal_source.name not in self.results:
+                raise ValueError(f"Destination {removal_source.name} has not been previously declared for use.")
         else:
             raise TypeError(f"Invalid destination type: {type(destination)}")
 
-        self.steps.append(RecipeStep(self, 'remove', None, destination, what))
+        self.steps.append(RecipeStep(self, 'remove', None, removal_source, 
+                                     remove_substances, remove_types))
 
     def fill_to(self, destination: Container | Plate | PlateSlicer, solvent: Substance, quantity: str) -> None:
         """
@@ -389,10 +447,11 @@ class Recipe:
 
                 step.frm.append(self.results[source_name])
                 step.to.append(self.results[dest_name])
+            
             elif operator == 'remove':
                 dest = step.to[0]
                 step.frm.append(None)
-                what, = step.operands
+                remove_substances, remove_types = step.operands
                 dest_name = dest.plate.name if isinstance(dest, PlateSlicer) else dest.name
                 step.to[0] = self.results[dest_name]
                 self.used.add(dest_name)
@@ -403,12 +462,98 @@ class Recipe:
                 else:
                     dest = self.results[dest_name]
 
-                if isinstance(what, Substance):
-                    step.instructions = f"Remove {what.name} from '{dest_name}'."
+                # Type checking for 'remove_substances' operand
+                if isinstance(remove_substances, Substance):
+                    remove_substances = [remove_substances]
+                if not isinstance(remove_substances, Iterable):
+                    raise RecipeBakeError(
+                        "Invalid 'remove_substances' type - "
+                        f"{type(remove_substances)}.", 
+                        step,
+                        True
+                    )
+                for substance in remove_substances:
+                    if not isinstance(substance, Substance):
+                        raise RecipeBakeError(
+                            "Non-substance found in 'remove_substances' - "
+                            f"{type(substance)}.", 
+                            step,
+                            True
+                        )
+                
+                # Type checking for 'remove_types' operand
+                if isinstance(remove_types, int):
+                    remove_types = [remove_types]
+                if not isinstance(remove_types, Iterable):
+                    raise RecipeBakeError(
+                        "Invalid 'remove_types' type - "
+                        f"{type(remove_types)}.", 
+                        step,
+                        True
+                    )
+                for type in remove_types:
+                    if not isinstance(type, int):
+                        raise RecipeBakeError(
+                            "Non-integer found in 'remove_types' - "
+                            f"{type(type)}.", 
+                            step,
+                            True
+                        )
+                    
+                    if type not in Substance.classes:
+                        raise RecipeBakeError(
+                            f"Unsupported Substance type '{type}' found in "
+                            f"'remove_types'.", 
+                            step,
+                            True
+                        )
+
+
+                # Generate comma-separated strings for the substances/substance
+                # types to be removed
+                name_strings = [sub.name for sub in remove_substances]
+                subst_names = ", ".join(name_strings)
+
+                classes = {Substance.SOLID: 'solids', 
+                           Substance.LIQUID: 'liquids'}
+                type_strings = [classes[type] for type in remove_types]
+                subst_types = ", ".join(type_strings)
+
+                # Generate the instructions for the removal step
+                
+                # Examples:
+                #   "Remove nothing from 'plate'."
+                #   "Remove water from 'water stock'."
+                #   "Remove salt, water from 'salt water'."
+                #   "Remove all liquids from 'plate'."
+                #   "Remove all solids, liquids from 'container'."
+                #   "Remove water, dmso and all solids from 'mixture'."
+                #
+                step.instructions = "Remove "
+
+                if subst_names == "" and subst_types == "":
+                    # No substances removed
+                    step.instructions += f"nothing "
                 else:
-                    step.instructions = f"Remove all {Substance.classes[what]} from '{dest_name}'."
-                self.results[dest_name] = dest.remove(what)
+                    # Removal of specific substances
+                    if subst_names != "":
+                        step.instructions += f"{subst_names} "
+                        
+                        # Add an 'and' for removal of both specific substances 
+                        # and substance types
+                        if subst_types != "":
+                            step.instructions += f"and "
+
+                    # Removal of substances by type
+                    if subst_types != "":
+                        step.instructions += f"all {subst_types} "
+                
+                step.instructions += f"from '{dest_name}'."
+                
+                self.results[dest_name] = dest.remove(remove_substances, 
+                                                      remove_types)
                 step.to.append(self.results[dest_name])
+
                 # substances_used is everything that is in step.to[0] but not in step.to[1]
                 step.substances_used = set.difference(step.to[0].get_substances(), step.to[1].get_substances())
                 if isinstance(dest, Container):
@@ -417,6 +562,7 @@ class Recipe:
                     for well in step.to[0].wells.flatten():
                         for substance in step.substances_used:
                             step.trash[substance] = step.trash.get(substance, 0.) + well.contents.get(substance, 0.)
+            
             elif operator == 'fill_to':
                 dest = step.to[0]
                 dest_name = dest.plate.name if isinstance(dest, PlateSlicer) else dest.name
