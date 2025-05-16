@@ -24,24 +24,31 @@ else:
 
 class Container:
     """
-    Stores specified quantities of Substances in a vessel with a given maximum volume. Immutable.
+    Stores specified quantities of Substances in a vessel with a given maximum 
+    volume. Immutable.
 
     Attributes:
         name: Name of the Container.
-        contents: A dictionary of Substances to floats denoting how much of each Substance is the Container.
+        contents: A dictionary of Substances to floats denoting how much of each
+            Substance is the Container.
         volume: Current volume held in the Container in storage format.
         max_volume: Maximum volume Container can hold in storage format.
     """
 
-    def __init__(self, name: str, max_volume: str = 'inf L',
-                 initial_contents: Iterable[Tuple[Substance, str]] = None):
+    def __init__(self, name: str, 
+                 max_volume: str = 'inf L',
+                 initial_contents: Iterable[Tuple[Substance, str]] = None
+                 ) -> Container:
         """
-        Create a Container.
+        Creates a Container object.
 
         Arguments:
-            name: Name of container
-            max_volume: Maximum volume that can be stored in the container in mL
-            initial_contents: (optional) Iterable of tuples of the form (Substance, quantity)
+            name (str): The name of the container.
+            max_volume (str): The maximum volume that can be stored in the 
+                container. E.g. '100 mL'
+            initial_contents (Iterable[Substance, str], optional): The starting
+                contents of the container; must be provided as a set of tuples
+                of the form (Substance, quantity).
         """
 
         # Ensure name argument satisfies type and value pre-conditions
@@ -66,7 +73,8 @@ class Container:
 
         # Ensure the quantity represents a valid volume for a container
         if max_volume_unit != 'L':
-            raise ValueError("Maximum volume must have volume units (e.g. L, mL, uL, etc.).")
+            raise ValueError("Maximum volume must have volume units "
+                             "(e.g. L, mL, uL, etc.).")
         if not max_volume > 0:
             raise ValueError("Maximum volume must be positive.")
         
@@ -580,7 +588,7 @@ class Container:
         return any(substance.is_liquid() for substance in self.contents)
 
     @cache
-    def get_substances(self):
+    def get_substances(self) -> set[Substance]:
         """
         Returns: A set of substances present in the container.
         """
@@ -592,10 +600,11 @@ class Container:
         Returns the mass of the container's contents or a specific substance
         in the specified unit.
   
-        Args:
-            unit (str, optional): The unit in which the mass should be returned (default: 'g').
-            substance (Substance, optional): The specific substance for which to retrieve the mass.
-                                           If not provided, returns the total mass.
+        Arguments:
+            unit (str, optional): The unit in which the mass should be returned 
+                (default: 'g').
+            substance (Substance, optional): The specific substance for which to
+                retrieve the mass. If not provided, returns the total mass.
     
         Returns:
             mass (float): The mass in the specified unit.
@@ -622,10 +631,11 @@ class Container:
         Returns the moles of the container's contents or a specific substance
         in the specified unit.
   
-        Args:
-            unit (str, optional): The unit in which the moles should be returned (default: 'mol').
-            substance (Substance, optional): The specific substance for which to retrieve the moles.
-                                           If not provided, returns the total moles.
+        Arguments:
+            unit (str, optional): The unit in which the moles should be returned
+                (default: 'mol').
+            substance (Substance, optional): The specific substance for which to
+                retrieve the moles. If not provided, returns the total moles.
     
         Returns:
             moles (float): The moles in the specified unit.
@@ -652,10 +662,12 @@ class Container:
         Returns the volume of the container's contents or a specific substance
         in the specified unit.
   
-        Args:
-            unit (str, optional): The unit in which the volume should be returned (default: 'L').
-            substance (Substance, optional): The specific substance for which to retrieve the volume.
-                                           If not provided, returns the total volume.
+        Arguments:
+            unit (str, optional): The unit in which the volume should be 
+                returned (default: 'L').
+            substance (Substance, optional): The specific substance for which 
+                to retrieve the volume. If not provided, returns the total 
+                volume.
     
         Returns:
             volume (float): The volume in the specified unit.
@@ -681,7 +693,7 @@ class Container:
         Returns the quantity of the container's contents or a specific substance
         in the specified unit.
   
-        Args:
+        Arguments:
             unit (str, optional): The unit in which the quantity should be returned.
             substance (Substance, optional): The specific substance for which to retrieve the quantity.
                                            If not provided, returns the total quantity of the container's
@@ -715,7 +727,7 @@ class Container:
         """
         Get the concentration of solute in the current solution.
 
-        Args:
+        Arguments:
             solute (Substance): Substance interested in.
             unit (str, optional): Units to return concentration in, 
                                    defaults to Molar.

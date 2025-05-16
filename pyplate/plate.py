@@ -18,38 +18,98 @@ from pyplate.unit import Unit
 
 class Plate:
     """
-    A spatially ordered collection of Containers, like a 96 well plate.
+    A spatially ordered collection of Containers, like a 96-well plate.
     The spatial arrangement must be rectangular. Immutable.
     """
 
-    def __init__(self, name: str, max_volume_per_well: str, make: str = "generic", rows=8, columns=12):
+    def __init__(self, name: str, 
+                 max_volume_per_well: str, 
+                 make: str = "generic", 
+                 rows: int | Iterable[str] = 8, 
+                 columns: int | Iterable[str] = 12):
         """
-            Creates a generic plate.
+            Creates a Plate object.
 
-            Attributes:
-                name: name of plate
-                max_volume_per_well: maximum volume of each well. (50 uL)
-                make: name of this kind of plate
-                rows (int or list): number of rows or list of names of rows
-                columns (int or list): number of columns or list of names of columns
+            Rows and columns may either be specified with an overall count or 
+            with a set of names. If specified with an overall count, the rows 
+            will be assigned letters as names (e.g. ['A', 'B', 'C', ...]), and 
+            the columns will be assigned indices starting with 1 as names. 
+            
+            Each well is named with the format 'Well [ROW_NAME]_[COLUMN_NAME]. 
+            E.g. if overall counts are provided for both rows and columns, the 
+            first row of wells will be named 'Well A_1', 'Well A_2', 'Well A_3',
+            etc. 
+
+            Arguments:
+                name (str): The name of plate.
+                max_volume_per_well (str): The maximum volume of each well.
+                make (str): The brand name or an equivalent descriptor for the 
+                    type of plate. 
+                rows (int | Iterable[str]): The number of rows or a set of row 
+                    names.
+                columns (int | Iterable[str]): The number of columns or a set of 
+                    column names.
         """
 
-        if not isinstance(name, str) or len(name) == 0:
-            raise ValueError("invalid plate name")
-        self.name = name
+        # Ensure name argument satisfies type and value pre-conditions
+        if not isinstance(name, str):
+            raise TypeError("Name must be a str.")
+        if len(name) == 0:
+            raise ValueError("Name must not be empty.")
+        if len(name.strip()) == 0:
+            raise ValueError("Name must contain non-whitespace characters.")
 
-        if not isinstance(make, str) or len(make) == 0:
-            raise ValueError("invalid plate make")
-        self.make = make
-
+        # Ensure make argument satisfies type and value pre-conditions        
+        if not isinstance(make, str):
+            raise TypeError("Make must be a str.")
+        if len(make) == 0:
+            raise ValueError("Make must not be empty.")
+        if len(make.strip()) == 0:
+            raise ValueError("Make must contain non-whitespace characters.")
+        
+        # Ensure maximum volume per well argument satisfies type requirement       
         if not isinstance(max_volume_per_well, str):
-            raise TypeError("Maximum volume must be a str, ('10 mL').")
-        max_volume_per_well, _ = Unit.parse_quantity(max_volume_per_well)
+            raise TypeError("Maximum volume must be a str.")
+        
+        # Attempt to parse maximum volume argument into a value-unit pair  
+        try:
+            parsed_result = Unit.parse_quantity(max_volume_per_well)
+        except ValueError as e:
+            raise ValueError(f"Could not parse maximum volume per well "
+                             f"'{max_volume_per_well}'. {e}")\
+                  from None
+        max_volume_per_well, max_volume_unit = parsed_result
 
-        if isinstance(rows, int):
+        # Ensure the quantity represents a valid volume for a container
+        if max_volume_unit != 'L':
+            raise ValueError("Maximum volume per well must have volume units "
+                             "(e.g. L, mL, uL, etc.).")
+        if not max_volume_per_well > 0:
+            raise ValueError("Maximum volume per well must be positive.")
+
+        # Set plate name, make and maximum volume attributes based on arguments
+        self.name = name
+        self.make = make
+        self.max_volume_per_well = Unit.convert_to_storage(max_volume_per_well, 
+                                                           'L')
+
+        # Ensure rows argument satisfies type and value pre-conditions
+        row_type_error_msg = "Rows must be an integer or an iterable set " \
+                             "of row names."
+        if isinstance(rows, int) and not isinstance(rows, bool):
             if rows < 1:
-                raise ValueError("illegal number of rows")
+                raise ValueError("Number of rows must be positive. " \
+                                f"Rows: {rows}")
             self.n_rows = rows
+            
+            # Define row names as alphabetic strings based on row index. 
+            # E.g. 1 -> A
+            #      2 -> B
+            #       ...
+            #      26 -> Z
+            #      27 -> AA
+            #      28 -> AB
+            #       ...
             self.row_names = []
             for row_num in range(1, rows + 1):
                 result = []
@@ -58,52 +118,78 @@ class Plate:
                     result.append(chr(ord('A') + row_num % 26))
                     row_num //= 26
                 self.row_names.append(''.join(reversed(result)))
-        elif isinstance(rows, list):
+        
+        elif isinstance(rows, Iterable) and not isinstance(rows, str):
             if len(rows) == 0:
-                raise ValueError("must have at least one row")
+                raise ValueError("Number of rows must be positive. " \
+                                f"Rows: {rows}")
             for row in rows:
                 if not isinstance(row, str):
-                    raise ValueError("row names must be strings")
+                    raise TypeError(f"{row_type_error_msg} " \
+                                    f"Non-string element: {row}")
+                if len(row) == 0:
+                    raise ValueError("Row names must not be empty.")
                 if len(row.strip()) == 0:
-                    raise ValueError(
-                        "zero length strings are not allowed as column labels"
-                    )
+                    raise ValueError("Row names must contain non-whitespace " \
+                                     "characters.")
+                
             if len(rows) != len(set(rows)):
-                raise ValueError("duplicate row names found")
+                raise ValueError("Row names must not be duplicated.")
+            
             self.n_rows = len(rows)
             self.row_names = rows
+        
         else:
-            raise ValueError("rows must be int or list")
+            raise TypeError(row_type_error_msg)
 
-        if max_volume_per_well <= 0:
-            raise ValueError("max volume per well must be greater than zero")
-        self.max_volume_per_well = Unit.convert_to_storage(max_volume_per_well, 'L')
-
-        if isinstance(columns, int):
+        # Ensure columns argument satisfies type and value pre-conditions
+        col_type_error_msg = "Columns must be an integer or an iterable set " \
+                             "of column names."
+        if isinstance(columns, int) and not isinstance(columns, bool):
             if columns < 1:
-                raise ValueError("illegal number of columns")
+                raise ValueError("Number of columns must be positive. " \
+                                f"Columns: {columns}")
             self.n_columns = columns
+            
+            # Define column names as one-index column indices.
+            # E.g. 0 -> 1
+            #      1 -> 2
+            #      2 -> 3
+            #      ...
             self.column_names = [f"{i + 1}" for i in range(columns)]
-        elif isinstance(columns, list):
+        
+        elif isinstance(columns, Iterable) and not isinstance(columns, str):
             if len(columns) == 0:
-                raise ValueError("must have at least one column")
+                raise ValueError("Number of columns must be positive. " \
+                                f"Columns: {columns}")
+            
             for column in columns:
                 if not isinstance(column, str):
-                    raise ValueError("column names must be strings")
+                    raise TypeError(f"{col_type_error_msg} " \
+                                    f"Non-string element: {column}")
+                if len(column) == 0:
+                    raise ValueError("Column names must not be empty.")
                 if len(column.strip()) == 0:
-                    raise ValueError(
-                        "zero length strings are not allowed as column labels"
-                    )
+                    raise ValueError("Column names must contain non-" \
+                                     "whitespace characters.")
+                
             if len(columns) != len(set(columns)):
-                raise ValueError("duplicate column names found")
+                raise ValueError("Column names must not be duplicated.")
+            
             self.n_columns = len(columns)
             self.column_names = columns
+        
         else:
-            raise ValueError("columns must be int or list")
-
-        self.wells = np.array([[Container(f"well {row},{col}",
-                                             max_volume=f"{max_volume_per_well} L")
-                                   for col in self.column_names] for row in self.row_names])
+            raise TypeError(col_type_error_msg)
+        
+        self.wells = np.array([
+            [
+                Container(f"Well {row}_{col}", 
+                          max_volume=f"{max_volume_per_well} L")
+                for col in self.column_names
+            ]
+            for row in self.row_names
+        ])
 
     def __getitem__(self, item) -> PlateSlicer:
         return PlateSlicer(self, item)

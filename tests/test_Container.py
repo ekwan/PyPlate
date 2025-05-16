@@ -196,7 +196,7 @@ def test_Container___init__(water, salt):
     
 
     # ==========================================================================
-    # Success Case: name and max_volume provided
+    # Success Case: Name and max_volume provided
     # ==========================================================================
     
     # Pre-compute parsed quantities to save time
@@ -217,7 +217,7 @@ def test_Container___init__(water, salt):
     
 
     # ==========================================================================
-    # Success Case: name and initial_contents are provided
+    # Success Case: Name and initial_contents are provided
     # ==========================================================================
 
     # TODO: Ideally improve the variations here, and possibly move to 
@@ -260,7 +260,7 @@ def test_Container___init__(water, salt):
 
 
     # ==========================================================================
-    # Success Case: name, max_volume, and initial_contents are provided
+    # Success Case: Name, max_volume, and initial_contents are provided
     # ==========================================================================
 
     for test_name in test_names:
