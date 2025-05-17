@@ -4,7 +4,7 @@ from itertools import product
 from typing import Iterable
 
 import numpy
-from pyplate import Plate, Unit, config, Container
+from pyplate import config, Container, Plate, Substance, Unit
 
 from .unit_test_constants import epsilon, \
                             test_names, \
@@ -20,11 +20,31 @@ from .unit_test_constants import epsilon, \
 
 def test_Plate___init__():
     """
-    Unit Test for `Plate.__init__()`
+    Unit Test for `Plate.__init__()`.
 
-    This unit test checks the following failure scenarios:
+    This unit test checks the following scenarios:
+
+    Failure Cases:
     - Invalid argument types result in raising a `TypeError`
+    - Invalid argument values result in raising a `ValueError` with an 
+      appropriate message.
 
+    Success Cases:
+    - Plate is successfully created with:
+      1. Only 'name' and 'max_volume_per_well' provided.
+      2. 'name', 'max_volume_per_well', and 'make' provided.
+      3. 'name', 'max_volume_per_well', and 'rows' provided.
+      4. 'name', 'max_volume_per_well', and 'columns' provided.
+      5. All arguments ('name', 'max_volume_per_well', 'make', 'rows', 'columns') provided.
+
+    - For all success cases, the following attributes are verified:
+      1. 'name' matches the constructor argument.
+      2. 'max_volume_per_well' matches the parsed and converted value.
+      3. 'make' matches the constructor argument or default value.
+      4. 'n_rows' and 'n_columns' match the constructor arguments or defaults.
+      5. 'row_names' and 'column_names' match the constructor arguments if provided.
+      6. 'wells' array shape matches the specified rows and columns.
+      7. The first well's name matches the expected format.
     """
 
     # ==========================================================================
@@ -536,6 +556,104 @@ def test_Plate___init__():
             "Plate's first well name did not match the expected result."   
 
     
+def test_Plate___getitem__(empty_plate:Plate,
+                           water_plate:Plate):
+    """
+    Unit test for `Plate.__get_item__()`.
+
+    This unit test is only present to ensure the function is defined and returns
+    a value for both Plate fixtures; the functionality is tested by the unit 
+    test for the PlateSlicer constructor.
+    """
+    assert empty_plate[1,1] is not None
+    assert water_plate[1,1] is not None
+
+
+def test_Plate___repr__(empty_plate:Plate,
+                        water_plate:Plate):
+    """
+    Unit test for `Plate.__repr__()`.
+
+    At present, there are no specific requirements for the string representation
+    of a `Plate` object. This unit test simply checks that the function returns
+    a value for both Plate fixtures.
+    """
+
+    assert empty_plate.__repr__() is not None
+    assert water_plate.__repr__() is not None
+
+
+def test_Plate_get_volumes(empty_plate:Plate,
+                           water_plate:Plate):
+    """
+    Unit test for `Plate.get_volumes()`.
+
+    This is a minimal unit test which ensures the function is defined and 
+    returns reasonable results for both Plate fixtures; the functionality is 
+    robustly tested by the unit test for `PlateSlicer.get_volumes()`.
+    """
+
+    empty_volumes = empty_plate.get_volumes()  
+    assert empty_volumes is not None
+    assert numpy.all(empty_volumes == 0), \
+        "Not all volumes in empty_plate are zero."
+
+    water_volumes = water_plate.get_volumes()
+    assert water_volumes is not None
+    assert numpy.all(water_volumes > 0), \
+        "Not all volumes in water_plate are greater than zero."
+
+
+def test_Plate_get_substances(empty_plate:Plate, 
+                              water_plate:Plate,
+                              water:Substance):
+    """
+    Unit test for `Plate.get_substances()`.
+
+    This is a minimal unit test which ensures the function is defined and 
+    returns reasonable results for both Plate fixtures; the functionality is 
+    robustly tested by the unit test for `PlateSlicer.get_substances()`.
+    """
+
+    empty_substances = empty_plate.get_substances()
+    assert empty_substances is not None
+    assert len(empty_substances) == 0, \
+        "Substances were incorrectly returned for the empty plate."
+
+    water_plate_substances = water_plate.get_substances()
+    assert water_plate_substances is not None
+    assert len(water_plate_substances) != 0, \
+        "No substances were returned for the water plate."
+    assert len(water_plate_substances) == 1, \
+        "More than one substance was returned for the water plate."
+    assert water in water_plate_substances, \
+        "Water was not found in the substances of the water plate."
+    
+
+def test_Plate_get_moles(empty_plate:Plate, 
+                         water_plate:Plate,
+                         water:Substance):
+    """
+    Unit test for `Plate.get_moles()`.
+
+    This is a minimal unit test which ensures the function is defined and 
+    returns reasonable results for both Plate fixtures; the functionality is 
+    robustly tested by the unit test for `PlateSlicer.get_moles()`.
+    """
+
+    # TODO: Come back and rework these if/when PlateSlicer.get_moles() is 
+    # refactored
+
+    empty_moles = empty_plate.get_moles(water)  
+    assert empty_moles is not None
+    assert numpy.all(empty_moles == 0), \
+        "Not all moles in empty_plate are zero."
+
+    water_moles = water_plate.get_moles(water)
+    assert water_moles is not None
+    assert numpy.all(water_moles > 0), \
+        "Not all moles in water_plate are greater than zero."
+
 
 
 # def test_volume_and_volumes(salt, water, dmso, empty_plate):

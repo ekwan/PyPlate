@@ -474,7 +474,7 @@ def test_Container__self_add(water, dmso, salt, sodium_sulfate):
     - 'quantity' argument raises a `ValueError` if it is not positive or zero.
     - 'quantity' argument raises a `ValueError` if adding it to the container
       would exceed the volume of the container.
-    - Adding zero of a substance does not add it to the 
+    - Adding zero of a substance does not add it to the container
     - The substance is correctly added to the container in the following cases:
       1. Substance is added to an empty container
       2. Substance is added to a non-empty container that did not already 
@@ -1808,13 +1808,13 @@ def test_Container___repr__(empty_container: Container,
 
     At present, there are no specific requirements for the string representation
     of a `Container` object. This unit test simply checks that the function
-    does not raise any errors when called on the fixtures tested.
+    returns a value when called on the fixtures tested.
     """
 
-    empty_container.__repr__()
-    water_stock.__repr__()
-    salt_stock.__repr__()
-    salt_water.__repr__()
+    empty_container.__repr__() is not None
+    water_stock.__repr__() is not None
+    salt_stock.__repr__() is not None
+    salt_water.__repr__() is not None
 
 def test_Container_has_liquid(empty_container, water_stock, 
                               salt_stock, salt_water):
