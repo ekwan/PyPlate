@@ -18,6 +18,7 @@ classifiers = [
 dependencies = [
     "numpy",
     "pandas",
+    "jinja2",
     "pyyaml",
     "tabulate",
     "matplotlib",

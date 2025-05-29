@@ -960,7 +960,7 @@ def test_Container__transfer(water, dmso, salt, sodium_sulfate,
     #               Unit.parse_quantity() to reach the error)
     # ==========================================================================
     
-    # Save a copy of the real Unit.parse_quantity so it can be reselt at the end
+    # Save a copy of the real Unit.parse_quantity so it can be reset at the end
     # of this test.
     real_parse_quantity = Unit.parse_quantity
 

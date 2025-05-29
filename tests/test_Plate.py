@@ -5,6 +5,7 @@ from typing import Iterable
 
 import numpy
 from pyplate import config, Container, Plate, Substance, Unit
+from pyplate.plate import PlateSlicer
 
 from .unit_test_constants import epsilon, \
                             test_names, \
@@ -604,6 +605,156 @@ def test_Plate_get_volumes(empty_plate:Plate,
         "Not all volumes in water_plate are greater than zero."
 
 
+def test_Plate_get_volume(empty_plate:Plate, 
+                          water_plate:Plate,
+                          water:Substance,
+                          salt:Substance,
+                          dmso:Substance,
+                          water_stock:Container):
+    """
+    Unit test for `Plate.get_volume()`.
+    """
+    # TODO: Come back and rework these if/when PlateSlicer.get_volumes() is 
+    # refactored
+
+    # ==========================================================================
+    # Failure Case: Invalid Argument Types
+    # ==========================================================================
+    
+    # Note: The TypeErrors are thrown by `PlateSlicer.get_volumes()`, so the 
+    # messages are not checked here to avoid coupling this test to the 
+    # implementation details of `PlateSlicer.get_volumes()`.
+
+    for bad_substance in [False, 1, 1.0, "1",
+                          ["10 mL"], ("10 L",),
+                          water_stock, water_plate]:
+        with pytest.raises(TypeError):
+            empty_plate.get_volume(substance=bad_substance)
+
+    for bad_unit in [False, 1, 1.0, [], {}, ["1"], water_stock, water_plate]:
+        with pytest.raises(TypeError):
+            empty_plate.get_volume(unit=bad_unit)
+
+
+    # ==========================================================================
+    # Failure Case: Invalid Unit Values
+    # ==========================================================================
+
+    # Note: The ValueErrors are thrown by `PlateSlicer.get_volumes()`, so the 
+    # messages are not checked here to avoid coupling this test to the 
+    # implementation details of `PlateSlicer.get_volumes()`.
+
+    for bad_unit in test_invalid_units:
+        with pytest.raises(ValueError):
+            empty_plate.get_volume(unit=bad_unit)
+
+
+    # ==========================================================================
+    # Success Case: Empty Plate
+    # ==========================================================================
+
+    # Test that an empty plate returns a volume of zero
+    empty_volume = empty_plate.get_volume()  
+    assert empty_volume is not None
+    assert empty_volume == 0, \
+        "Volume of the empty plate should be zero."
+
+    empty_volume_mL = empty_plate.get_volume(unit='mL')  
+    assert empty_volume_mL is not None
+    assert empty_volume_mL == 0, \
+        "Volume of the empty plate should be zero."
+
+
+    # ==========================================================================
+    # Success Case: Non-empty Plate with a Single Substance
+    # ==========================================================================
+
+    # Test that a non-empty plate returns a volume greater than zero
+    # CURRENTLY THIS FAILS FOR unit='L' DUE TO ROUNDING
+    water_volume = water_plate.get_volume(unit='mL')  
+    assert water_volume is not None
+    assert water_volume > 0, \
+        "Total volume of the water plate should be greater than zero."
+    
+    # Test that a non-empty plate returns a volume greater than zero for
+    # the added substance
+    water_volume = water_plate.get_volume(water, 'mL')
+    assert water_volume is not None
+    assert water_volume > 0, \
+        "Volume of water in the water plate should be greater than zero."
+
+    # Test that a substance not added to the plate returns a volume of zero
+    salt_volume = water_plate.get_volume(salt, 'uL')
+    assert salt_volume is not None
+    assert salt_volume == 0, \
+        "Volume of salt in the water plate should be zero."
+
+    # Construct a Plate by manually adding water to each well
+    sum_test_plate = Plate("Sum Test Plate", "100 mL", rows=10, columns=10)
+    for row in sum_test_plate.wells:
+        for idx, well in enumerate(row):
+            assert isinstance(well, Container), \
+                "Invalid Plate - " \
+                "Not all wells in the plate are Container objects."
+            
+            row[idx] = well._add(water, '10 mL')
+
+    # Test that the total volume of the test plate is equal to the sum of the 
+    # manually added volumes
+    total_volume = sum_test_plate.get_volume(unit='mL')
+    assert total_volume is not None
+    assert total_volume == 1000, \
+        "Total volume of the sum test plate should be equal to the sum of the "\
+        "volumes of all wells (100 mL)."
+    
+
+    # ==========================================================================
+    # Success Case: Non-empty Plate with Multiple Substances
+    # ==========================================================================
+
+    # Construct a Plate by manually adding water and salt to each well
+    multi_test_plate = Plate("Multi Test Plate", "100 mL", rows=10, columns=10)
+    for row in multi_test_plate.wells:
+        for idx, well in enumerate(row):
+            assert isinstance(well, Container), \
+                "Invalid Plate - " \
+                "Not all wells in the plate are Container objects."
+            
+            if idx % 2 == 0:
+                row[idx] = well._add(water, '10 mL')
+            else:
+                row[idx] = well._add(salt, '10 mL')
+
+    # Test that the total volume of the test plate is equal to the sum of the
+    # manually added volumes for each substance
+    total_volume = multi_test_plate.get_volume(unit='mL')
+    assert total_volume is not None
+    assert total_volume == 1000, \
+        "Total volume of the multi test plate should be equal to the sum of " \
+        "the volumes of all wells (100 mL)."
+    
+    # Test that the total volume of each substance in the test plate is equal to
+    # the sum of the manually added volumes for the individual substances
+    water_volume = multi_test_plate.get_volume(water, unit='mL')
+    assert water_volume is not None
+    assert water_volume == 500, \
+        "Volume of water in the multi-substance test plate should be equal to "\
+        "the sum of the volumes of all wells containing water (500 mL)."
+
+    salt_volume = multi_test_plate.get_volume(salt, unit='mL')
+    assert salt_volume is not None
+    assert salt_volume == 500, \
+        "Volume of salt in the multi-substance test plate should be equal to "\
+        "the sum of the volumes of all wells containing salt (500 mL)."
+    
+    # Test that the total volume of a substance not added to the plate is zero
+    dmso_volume = multi_test_plate.get_volume(dmso, unit='mL')
+    assert dmso_volume is not None
+    assert dmso_volume == 0, \
+        "Volume of substance not added to the multi-substance test plate " \
+        "should be zero."
+
+
 def test_Plate_get_substances(empty_plate:Plate, 
                               water_plate:Plate,
                               water:Substance):
@@ -654,6 +805,150 @@ def test_Plate_get_moles(empty_plate:Plate,
     assert numpy.all(water_moles > 0), \
         "Not all moles in water_plate are greater than zero."
 
+
+def test_Plate_dataframe(empty_plate:Plate, 
+                         water_plate:Plate,
+                         water:Substance):
+    """
+    Unit test for `Plate.dataframe()`.
+
+    This is a minimal unit test which ensures the function is defined and 
+    returns reasonable results for both Plate fixtures; the functionality is 
+    robustly tested by the unit test for `PlateSlicer.dataframe()`.
+    """
+
+    # TODO: Come back and rework these if/when PlateSlicer.dataframe() is 
+    # refactored
+
+    empty_df = empty_plate.dataframe()  
+    assert empty_df is not None
+    assert (empty_df.data == 0).all().all(), \
+        "Not all entries in the empty_plate dataframe are zero."
+
+    water_df = water_plate.dataframe(substance=water)
+    assert water_df is not None
+    assert (water_df.data > 0).all().all(), \
+        "Not all entres in the water_plate dataframe are greater than zero."
+
+
+def test_Plate_transfer(empty_plate:Plate,
+                        water_plate:Plate,
+                        water:Substance,
+                        water_stock:Container,
+                        mocker):
+    """
+    Unit test for `Plate.transfer()`.
+
+    This is a minimal unit test which ensures the function is defined, throws 
+    the appropriate TypeErrors for invalid inputs, and returns reasonable 
+    results for both Plate fixtures; the functionality is robustly tested by the
+    unit test for `PlateSlicer._transfer()`.
+    """
+
+    # ==========================================================================
+    # Failure Case: Invalid Argument Types
+    # ==========================================================================
+    
+    # Check Source Type
+    match_msg = "Source must be a Container, Plate, or PlateSlicer"
+    for bad_source in [False, 1, 1.0, "1",
+                          ["10 mL"], ("10 L",),
+                          water, [water_plate, water_stock],]:
+        with pytest.raises(TypeError, match=match_msg):
+            empty_plate.transfer(source=bad_source,
+                                 destination=empty_plate,
+                                 quantity='1 mL')
+
+    # Check Destination Type
+    match_msg = "Destination must be a Plate or PlateSlicer"
+    for bad_destination in [False, 1, 1.0, "1",
+                            ["10 mL"], ("10 L",),
+                            water, water_stock, [water_plate, water_stock],
+                            ]:
+            with pytest.raises(TypeError, match=match_msg):
+                empty_plate.transfer(source=water_plate,
+                                     destination=bad_destination,
+                                     quantity='1 mL')
+
+    # Check Quantity Type
+    match_msg = "Quantity must be a str"
+    for bad_quantity in [False, 1, 1.0, 10,
+                            ["10 mL"], ("10 L",),
+                            water, water_plate, water_stock]:
+            with pytest.raises(TypeError, match=match_msg):
+                empty_plate.transfer(source=water_plate,
+                                     destination=empty_plate,
+                                     quantity=bad_quantity)
+                
+    
+    # ==========================================================================
+    # Failure Case: TypeError from subcall to PlateSlicer._transfer()
+    # ==========================================================================
+
+    # Store the true function in a variable so that it can be called later
+    real__transfer = PlateSlicer._transfer
+
+    # Set up mock function for PlateSlicer._transfer()
+    _type_error_message = "THIS IS A TEST TYPE ERROR!"
+    def mock__transfer(source, destination, quantity):
+        raise TypeError(_type_error_message)
+
+    # Replace calls to PlateSlicer._transfer() with the mock version
+    mocker.patch.object(PlateSlicer, '_transfer', mock__transfer)
+
+    # Check that this function correctly raises any type errors for the keywords
+    with pytest.raises(TypeError, match=_type_error_message):
+        Plate.transfer(water_plate, empty_plate, '10 uL')
+
+    # Revert PlateSlicer._transfer() to its original form
+    mocker.patch.object(PlateSlicer, '_transfer', real__transfer)
+
+
+    # ==========================================================================
+    # Failure Case: ValueError from subcall to PlateSlicer._transfer()
+    # ==========================================================================
+
+    # Store the true function in a variable so that it can be called later
+    real__transfer = PlateSlicer._transfer
+
+    # Set up mock function for PlateSlicer._transfer()
+    _value_error_message = "THIS IS A TEST VALUE ERROR!"
+    def mock__transfer(source, destination, quantity):
+        raise ValueError(_value_error_message)
+
+    # Replace calls to PlateSlicer._transfer() with the mock version
+    mocker.patch.object(PlateSlicer, '_transfer', mock__transfer)
+
+    # Check that this function correctly raises any value errors for the 
+    # keywords
+    with pytest.raises(ValueError, match=_value_error_message):
+        Plate.transfer(water_plate, empty_plate, '10 uL')
+
+    # Revert PlateSlicer._transfer() to its original form
+    mocker.patch.object(PlateSlicer, '_transfer', real__transfer)
+
+
+    # ==========================================================================
+    # Success Case: Ensure function returns Plate._transfer() result
+    # ==========================================================================
+
+    # Save a copy of the real PlateSlicer._transfer so it can be reset at the end
+    # of this test.
+    real__transfer = PlateSlicer._transfer
+
+    def mock__transfer(source, destination, quantity):
+        return "Transfer Successful", "Transfer Successful"
+
+    # Replace the realPlateSlicer._transfer() with the mock version
+    mocker.patch.object(PlateSlicer, '_transfer', mock__transfer)
+
+    # Check that the Plate.transfer() function returns the expected result
+    result = Plate.transfer(water_plate, empty_plate, '10 uL')
+    assert result == ("Transfer Successful", "Transfer Successful"), \
+        "Plate.transfer() did not return the expected result."
+  
+    # Revert PlateSlicer._transfer() to its original form
+    mocker.patch.object(PlateSlicer, '_transfer', real__transfer)
 
 
 # def test_volume_and_volumes(salt, water, dmso, empty_plate):

@@ -8,6 +8,7 @@ from copy import deepcopy, copy
 
 import numpy as np
 import pandas
+from pandas.io.formats.style import Styler
 
 from pyplate.config import config
 from pyplate.container import Container
@@ -21,6 +22,15 @@ class Plate:
     A spatially ordered collection of Containers, like a 96-well plate.
     The spatial arrangement must be rectangular. Immutable.
     """
+
+    name: str
+    make: str
+    max_volume_per_well: float
+    n_rows: int
+    n_columns: int
+    row_names: list[str]
+    column_names: list[str]
+    wells: np.ndarray[Container]
 
     def __init__(self, name: str, 
                  max_volume_per_well: str, 
@@ -197,7 +207,9 @@ class Plate:
     def __repr__(self):
         return f"Plate: {self.name}"
 
-    def get_volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> np.ndarray:
+    def get_volumes(self, 
+                    substance:(Substance|Iterable[Substance]) = None,
+                    unit:str = None) -> np.ndarray:
         """
 
         Arguments:
@@ -212,6 +224,17 @@ class Plate:
         # Arguments are type checked in PlateSlicer.volumes
         return self[:].get_volumes(substance=substance, unit=unit)
 
+    def get_volume(self, 
+                   substance:(Substance|Iterable[Substance]) = None,
+                   unit:str = None) -> float:
+        """
+        Arguments:
+            unit: unit to return volumes in.
+
+        Returns: total volume stored in slice in uL.
+        """
+        return self.get_volumes(substance=substance, unit=unit).sum()
+
     def get_substances(self) -> set[Substance]:
         """
 
@@ -220,7 +243,9 @@ class Plate:
         """
         return self[:].get_substances()
 
-    def get_moles(self, substance: (Substance | Iterable[Substance]), unit: str = None) -> np.ndarray:
+    def get_moles(self, 
+                  substance:(Substance|Iterable[Substance]), 
+                  unit:str = None) -> np.ndarray:
         """
 
         Arguments:
@@ -233,9 +258,11 @@ class Plate:
         # Arguments are type checked in PlateSlicer.moles
         return self[:].get_moles(substance=substance, unit=unit)
 
-    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all',
-                  cmap: str = None, highlight=False) \
-            -> pandas.io.formats.style.Styler:
+    def dataframe(self, 
+                  unit:str = None, 
+                  substance:(str|Substance|Iterable[Substance]) = 'all',
+                  cmap:str = None, 
+                  highlight=False) -> Styler:
         """
 
         Arguments:
@@ -250,19 +277,15 @@ class Plate:
         # Types are checked in PlateSlicer.dataframe
         if unit is None:
             unit = config.volume_display_unit
-        return self[:].dataframe(substance=substance, unit=unit, cmap=cmap, highlight=highlight)
-
-    def get_volume(self, unit: str = 'uL') -> float:
-        """
-        Arguments:
-            unit: unit to return volumes in.
-
-        Returns: total volume stored in slice in uL.
-        """
-        return self.get_volumes(unit=unit).sum()
+        return self[:].dataframe(substance=substance, 
+                                 unit=unit, 
+                                 cmap=cmap, 
+                                 highlight=highlight)
 
     @staticmethod
-    def transfer(source: Container | Plate | PlateSlicer, destination: Plate | PlateSlicer, quantity: str) \
+    def transfer(source: Container | Plate | PlateSlicer, 
+                 destination: Plate | PlateSlicer, 
+                 quantity: str) \
             -> Tuple[Container | Plate | PlateSlicer, Plate]:
         """
         Move quantity ('10 mL', '5 mg') from source to destination,
@@ -276,8 +299,15 @@ class Plate:
         Returns:
             A tuple of (T, Plate) where T is the type of the source.
         """
+        if not isinstance(source, (Container, Plate, PlateSlicer)):
+            raise TypeError("Source must be a Container, Plate, or PlateSlicer.")
         if not isinstance(destination, (Plate, PlateSlicer)):
-            raise TypeError("You can only use Plate.transfer into a Plate")
+            raise TypeError("Destination must be a Plate or PlateSlicer.")
+        if not isinstance(quantity, str):
+            raise TypeError("Quantity must be a str.")
+        
+        if isinstance(source, Plate):
+            source = source[:]
         if isinstance(destination, Plate):
             destination = destination[:]
         # noinspection PyProtectedMember
@@ -294,7 +324,6 @@ class Plate:
             remove_substances (Substance | Iterable[Substance]): 
                 The specific Substance(s) to remove from the container.
                 Defaults to an empty list.
-
             remove_type (int | Iterable[int]): The type(s) of substances to 
                 remove from the container. Must be supported Substance types.
                 Defaults to an empty list.
@@ -304,13 +333,15 @@ class Plate:
         """
         return self[:].remove(remove_substances, remove_types)
 
-    def fill_to(self, solvent, quantity):
+    def fill_to(self, 
+                solvent:Substance, 
+                quantity:str):
         """
         Fills all wells in plate with `solvent` up to `quantity`.
 
-        Args:
-            solvent: Substance to use to fill.
-            quantity: Desired final quantity in each well.
+        Arguments:
+            solvent (Substance): Substance to use to fill.
+            quantity (str): Desired final quantity in each well.
 
         Returns: New Plate with desired final `quantity` in each well.
 
@@ -376,11 +407,16 @@ class PlateSlicer(Slicer):
         self.plate.wells = array
 
     def get_dataframe(self):
-        return pandas.DataFrame(self.plate.wells, columns=self.plate.column_names,
+        return pandas.DataFrame(self.plate.wells, 
+                                columns=self.plate.column_names,
                                 index=self.plate.row_names)
 
     @staticmethod
-    def _transfer(frm: Container | PlateSlicer, to: PlateSlicer, quantity):
+    def _transfer(frm:(Container | PlateSlicer), 
+                  to:(PlateSlicer), 
+                  quantity:str
+            ) -> Tuple[Container | Plate, Plate]:
+        
         if isinstance(frm, Container):
             to = copy(to)
             to.plate = deepcopy(to.plate)
@@ -462,7 +498,7 @@ class PlateSlicer(Slicer):
 
         return frm.plate, to.plate
 
-    def highlight_wells(self, styler: pandas.io.formats.style.Styler) -> pandas.io.formats.style.Styler:
+    def highlight_wells(self, styler:Styler) -> Styler:
         highlight_wells = []
         if isinstance(self.slices, list):
             for slice_ in self.slices:
@@ -487,8 +523,11 @@ class PlateSlicer(Slicer):
         styler.apply(highlight_func)
         return styler
 
-    def dataframe(self, unit: str = None, substance: (str | Substance | Iterable[Substance]) = 'all',
-                  cmap: str = None, highlight: bool = False):
+    def dataframe(self, 
+                  unit:str = None, 
+                  substance:(str|Substance|Iterable[Substance]) = 'all',
+                  cmap:str = None, 
+                  highlight:bool = False) -> Styler:
         """
 
         Arguments:
@@ -548,7 +587,9 @@ class PlateSlicer(Slicer):
             styler = styler.background_gradient(cmap, vmin=0, vmax=vmax)
         return styler
 
-    def get_volumes(self, substance: (Substance | Iterable[Substance]) = None, unit: str = None) -> np.ndarray:
+    def get_volumes(self, 
+                    substance:(Substance|Iterable[Substance]) = None, 
+                    unit:str = None) -> np.ndarray:
         """
 
         Arguments:
@@ -599,7 +640,9 @@ class PlateSlicer(Slicer):
         substances_arr = np.vectorize(lambda elem: set(elem.contents.keys()), cache=True)(self.get())
         return set.union(*substances_arr.flatten())
 
-    def get_moles(self, substance: (Substance | Iterable[Substance]), unit: str = 'mol') -> np.ndarray:
+    def get_moles(self, 
+                  substance:(Substance|Iterable[Substance]), 
+                  unit:str='mol') -> np.ndarray:
         """
         Arguments:
             unit: unit to return moles in. ('mol', 'mmol', 'umol', etc.)
@@ -651,7 +694,9 @@ class PlateSlicer(Slicer):
         self.apply(lambda elem: elem.remove(remove_substances, remove_types))
         return self.plate
 
-    def fill_to(self, solvent: Substance, quantity: str):
+    def fill_to(self, 
+                solvent:Substance, 
+                quantity:str) -> Plate:
         """
         Fills all wells in slice with `solvent` up to `quantity`.
 
