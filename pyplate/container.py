@@ -1762,6 +1762,18 @@ class Container:
         # ('V_x' & 'V_y') needed for the dilution.
         V_x, V_y = np.linalg.solve(a, b)
 
+        # Define a small tolerance for floating point comparisons
+        epsilon = 1e-9  # TODO: Refactor to make this value more visible to 
+                        #       PyPlate developers (and maybe even users)
+
+        # Set volumes within a small tolerance of zero to zero. This is done to
+        # avoid floating-point precision issues that can cause small negative
+        # values to be returned when the expected value is zero.
+        if -epsilon <= V_x < 0:
+            V_x = 0.0 
+        if -epsilon <= V_y < 0:
+            V_y = 0.0 # pragma: no cover
+
         # If the volumes needed of either solution are negative, the solution is
         # impossible to create. This is likely because the specified dilution is
         # more concentrated in the solute than either the source or diluent 
@@ -2180,90 +2192,128 @@ class Container:
 
         return result
 
-    def remove(self, 
-               remove_substances: Substance | Iterable[Substance] = [],
-               remove_types: int | Iterable[int] = [],
-               ) -> Container:
+    def remove_substances(self, 
+                          substances: Substance | Iterable[Substance]
+                          ) -> Container:
         """
-        Removes substances from the container.
+        Removes specific substances from the container.
 
         Arguments:
-            remove_substances (Substance | Iterable[Substance]): 
+            substances (Substance | Iterable[Substance]): 
                 The specific Substance(s) to remove from the container.
-                Defaults to an empty list.
-
-            remove_type (int | Iterable[int]): The type(s) of substances to 
-                remove from the container. Must be supported Substance types.
-                Defaults to an empty list.
 
         Returns: 
-            The container with the specified substances removed.
-
-        NOTE: If both `remove_substances` and `remove_types` are specified, then
-                substances will be removed if they match either criterion.
+            A new Container with the specified substances removed.
         """
 
         # Check that the arguments are of the correct type.
-        if isinstance(remove_substances, Substance):
-            remove_substances = [remove_substances]
-        elif not isinstance(remove_substances, Iterable):
-            raise TypeError("'Remove Substances' must be a Substance or an "
-                            "iterable set of Substances.")
-        if any(not isinstance(sub, Substance) for sub in remove_substances):
-            raise TypeError("'Remove Substances' must be a Substance or an "
-                            "iterable set of Substances.")
+        if isinstance(substances, Substance):
+            substances = [substances]
+        if not isinstance(substances, Iterable):
+            raise TypeError("'Substances' must be a Substance or an iterable "
+                            "set of Substances.")
+        if any(not isinstance(sub, Substance) for sub in substances):
+            raise TypeError("'Substances' must be a Substance or an iterable "
+                            "set of Substances.")
         
-        if isinstance(remove_types, int):
-            remove_types = [remove_types]
-        elif not isinstance(remove_types, Iterable):
-            raise TypeError("'Remove Types' must be a supported Substance type "
-                            "or an iterable set of supported Substance types.")
-        
-        if any(not isinstance(type, int) for type in remove_types):
-            raise TypeError("'Remove Types' must be a supported Substance type "
-                            "or an iterable set of supported Substance types.")
-        
-        for type in remove_types:
-            if type not in Substance.classes:
-                raise ValueError(f"Unsupported Substance type: {type}")
+        # If no substances are specified, terminate early and return the current
+        # container unchanged.
+        if not substances:
+            return self
         
         new_container = deepcopy(self)
 
         # Copy all contents from the old container to the new container as long
-        # for all substances not in `remove_substances` and not of a type in
-        # `remove_types`.
-        new_container.contents = {substance: value
-                                  for substance, value in self.contents.items()
-                                  if substance not in remove_substances and 
-                                     substance._type not in remove_types}
+        # as the substances are not in `substances`.
+        new_container.contents = {
+            substance: value
+            for substance, value in self.contents.items()
+            if substance not in substances
+        }
         
-        # Define helper function used in recomputing the volume of the container
-        # after substances are removed.
-        def _get_storage_vol(substance, value):
-            """
-            Helper for converting storage mole units of a substance to storage
-            volume units.
-            """
-            return substance.convert(value, config.moles_storage_unit, 
-                                            config.volume_storage_unit)
-
         # Recompute the volume of the new container based on the updated
         # contents.
         new_container.volume = 0
         for substance, value in new_container.contents.items():
-            new_container.volume += _get_storage_vol(substance, value)
+            new_container.volume += substance.convert(
+                                        value, 
+                                        config.moles_storage_unit, 
+                                        config.volume_storage_unit
+                                    )
 
         # Update the instructions attribute of the new container to reflect the
         # removal of substances.
         new_container.instructions = self.instructions
-        classes = {Substance.SOLID: 'solids', Substance.LIQUID: 'liquids'}
-        if len(remove_types) > 0:
-            for type in remove_types:
-                new_container.instructions += f"\nRemove all {classes[type]}."
-        if len(remove_substances) > 0:
-            for substance in remove_substances:
-                new_container.instructions += f"\nRemove all {substance.name}."
+        for substance in substances:
+            new_container.instructions += f"\nRemove all {substance.name}."
+        
         return new_container
-
-
     
+    # TODO: Replace the 'int' type with a proper Substance type enum.
+    def remove_by_type(self, 
+                       substance_types: int | Iterable[int]
+                       ) -> Container:
+        """
+        Removes all substances of the specified type(s) from the container.
+
+        Arguments:
+            types_to_remove (int | Iterable[int]): The type(s) of substances 
+                to remove. Must be supported Substance types.
+
+        Returns: 
+            A new Container with the specified types of substances removed.
+        """
+
+        # Check that the arguments are of the correct type.
+        type_error_msg = "'Substance Types' must be a supported Substance " \
+                         "type or an iterable set of supported Substance types."
+        if isinstance(substance_types, int):
+            substance_types = [substance_types]
+        if not isinstance(substance_types, Iterable):
+            raise TypeError(type_error_msg)
+        if any(not isinstance(sub_type, int) for sub_type in substance_types):
+            raise TypeError(type_error_msg)
+        
+        # Check that the specified substance types are supported.
+        if any(sub_type not in Substance.classes 
+               for sub_type in substance_types):
+            raise ValueError("One or more of the specified substance types are "
+                             "not supported.")
+
+        # If no substance types are specified, terminate early and return the
+        # current container unchanged.
+        if not substance_types:
+            return self
+        
+        new_container = deepcopy(self)
+
+        # Copy all contents from the old container to the new container as long
+        # as the substance type is not in `substance_types`.
+        new_container.contents = {
+            substance: value
+            for substance, value in self.contents.items()
+            if substance._type not in substance_types
+        }
+
+        # Recompute the volume of the new container based on the updated 
+        # contents.
+        new_container.volume = 0
+        for substance, value in new_container.contents.items():
+            new_container.volume += substance.convert(
+                                        value, 
+                                        config.moles_storage_unit, 
+                                        config.volume_storage_unit
+                                    )
+            
+        # Update the instructions attribute of the new container to reflect the
+        # removal of substances.
+        new_container.instructions = self.instructions
+        for sub_type in substance_types:
+            # Only add instruction if substances of this type were actually present
+            if any(s._type == sub_type for s in self.contents.keys()):
+                msg = f"\nRemove all {Substance.classes[sub_type].lower()}."
+                new_container.instructions += msg
+
+        return new_container
+    
+        

@@ -1,5 +1,6 @@
 import pytest
 
+from copy import copy
 from itertools import product
 from typing import Iterable
 
@@ -678,13 +679,13 @@ def test_Plate_get_volume(empty_plate:Plate,
     
     # Test that a non-empty plate returns a volume greater than zero for
     # the added substance
-    water_volume = water_plate.get_volume(water, 'mL')
+    water_volume = water_plate.get_volume('mL', water)
     assert water_volume is not None
     assert water_volume > 0, \
         "Volume of water in the water plate should be greater than zero."
 
     # Test that a substance not added to the plate returns a volume of zero
-    salt_volume = water_plate.get_volume(salt, 'uL')
+    salt_volume = water_plate.get_volume('uL', salt)
     assert salt_volume is not None
     assert salt_volume == 0, \
         "Volume of salt in the water plate should be zero."
@@ -735,20 +736,20 @@ def test_Plate_get_volume(empty_plate:Plate,
     
     # Test that the total volume of each substance in the test plate is equal to
     # the sum of the manually added volumes for the individual substances
-    water_volume = multi_test_plate.get_volume(water, unit='mL')
+    water_volume = multi_test_plate.get_volume(unit='mL', substance=water)
     assert water_volume is not None
     assert water_volume == 500, \
         "Volume of water in the multi-substance test plate should be equal to "\
         "the sum of the volumes of all wells containing water (500 mL)."
 
-    salt_volume = multi_test_plate.get_volume(salt, unit='mL')
+    salt_volume = multi_test_plate.get_volume(unit='mL', substance=salt)
     assert salt_volume is not None
     assert salt_volume == 500, \
         "Volume of salt in the multi-substance test plate should be equal to "\
         "the sum of the volumes of all wells containing salt (500 mL)."
     
     # Test that the total volume of a substance not added to the plate is zero
-    dmso_volume = multi_test_plate.get_volume(dmso, unit='mL')
+    dmso_volume = multi_test_plate.get_volume(unit='mL', substance=dmso)
     assert dmso_volume is not None
     assert dmso_volume == 0, \
         "Volume of substance not added to the multi-substance test plate " \
@@ -949,6 +950,159 @@ def test_Plate_transfer(empty_plate:Plate,
   
     # Revert PlateSlicer._transfer() to its original form
     mocker.patch.object(PlateSlicer, '_transfer', real__transfer)
+
+
+def test_Plate_remove_substances(empty_plate:Plate,
+                                 water_plate:Plate,
+                                 water:Substance,
+                                 salt:Substance):
+    """
+    Unit test for `Plate.remove()`.
+
+    This is a minimal unit test which ensures the function is defined, throws
+    the appropriate TypeErrors for an invalid self input, and returns reasonable 
+    results for both Plate fixtures; the functionality is robustly tested by the
+    unit test for `PlateSlicer.remove()`.
+    """
+
+    # ==========================================================================
+    # Failure Case: Function Called on Non-Plate Object
+    # ==========================================================================
+
+    match_msg = r"'Plate\.remove_substances\(\)' must be called on a Plate."
+    with pytest.raises(TypeError, match=match_msg):
+        Plate.remove_substances(water, salt)
+
+
+    # Define the function name as a str variable to use for error messages
+    fn_name = "Plate.remove_substances()"
+
+    # ==========================================================================
+    # Success Case: Function Called on Empty Plate
+    # ==========================================================================
+
+    # Test that removing a Substance from an empty plate returns the plate
+    # unchanged
+    empty_plate_copy = copy(empty_plate)
+    result = Plate.remove_substances(empty_plate, water)
+    assert result is not None, \
+        f"{fn_name} did not return a value for an empty plate."
+    assert numpy.all(result.get_volumes() == 0), \
+        f"{fn_name} returned non-zero volumes when called on an empty plate."
+    assert result == empty_plate_copy, \
+        f"{fn_name} did not return an exact copy of the input when called on " \
+        "an empty plate."
+    assert empty_plate == empty_plate_copy, \
+        f"{fn_name} incorrectly modified the original empty plate."
+    
+    # Test that removing multiple substances from an empty plate returns the 
+    # plate unchanged
+    result = Plate.remove_substances(empty_plate, [water, salt])
+    assert result is not None, \
+        f"{fn_name} did not return a value for an empty plate."
+    assert numpy.all(result.get_volumes() == 0), \
+        f"{fn_name} returned non-zero volumes when called on an empty plate."
+    assert result == empty_plate_copy, \
+        f"{fn_name} did not return an exact copy of the input when called on " \
+        "an empty plate."
+    
+
+    # ==========================================================================
+    # Success Case: Function Called on Non-Empty Plate
+    # ==========================================================================
+    
+    # Test that removing a Substance from a non-empty plate returns the plate
+    # with the Substance removed
+    water_plate_copy = copy(water_plate)
+    result = Plate.remove_substances(water_plate, water)
+    assert result is not None, \
+        f"{fn_name} did not return a value for a non-empty plate."
+    assert numpy.all(result.get_volumes() == 0), \
+        f"{fn_name} returned non-zero volumes when asked to remove all water " \
+        "from a plate containing only water."
+    assert result == empty_plate, \
+        f"{fn_name} did not return an empty plate when asked to remove all " \
+        "water from a plate containing only water."
+    assert water_plate == water_plate_copy, \
+        f"{fn_name} incorrectly modified the original water plate."
+    
+
+def test_Plate_remove_by_type(empty_plate:Plate,
+                              water_plate:Plate,
+                              water:Substance,
+                              salt:Substance):
+    """
+    Unit test for `Plate.remove()`.
+
+    This is a minimal unit test which ensures the function is defined, throws
+    the appropriate TypeErrors for an invalid self input, and returns reasonable 
+    results for both Plate fixtures; the functionality is robustly tested by the
+    unit test for `PlateSlicer.remove()`.
+    """
+
+    # ==========================================================================
+    # Failure Case: Function Called on Non-Plate Object
+    # ==========================================================================
+
+    match_msg = r"'Plate\.remove_by_type\(\)' must be called on a Plate."
+    with pytest.raises(TypeError, match=match_msg):
+        Plate.remove_by_type(water, salt)
+
+
+    # Define the function name as a str variable to use for error messages
+    fn_name = "Plate.remove_by_type()"
+
+    # ==========================================================================
+    # Success Case: Function Called on Empty Plate
+    # ==========================================================================
+
+    # Test that removing a Substance from an empty plate returns the plate
+    # unchanged
+    empty_plate_copy = copy(empty_plate)
+    result = Plate.remove_by_type(empty_plate, Substance.SOLID)
+    assert result is not None, \
+        f"{fn_name} did not return a value for an empty plate."
+    assert numpy.all(result.get_volumes() == 0), \
+        f"{fn_name} returned non-zero volumes when called on an empty plate."
+    assert result == empty_plate_copy, \
+        f"{fn_name} did not return an exact copy of the input when called on " \
+        "an empty plate."
+    assert empty_plate == empty_plate_copy, \
+        f"{fn_name} incorrectly modified the original empty plate."
+    
+    # Test that removing multiple substance types from an empty plate returns 
+    # the plate unchanged
+    result = Plate.remove_by_type(empty_plate, [Substance.SOLID, 
+                                                Substance.LIQUID])
+    assert result is not None, \
+        f"{fn_name} did not return a value for an empty plate."
+    assert numpy.all(result.get_volumes() == 0), \
+        f"{fn_name} returned non-zero volumes when called on an empty plate."
+    assert result == empty_plate_copy, \
+        f"{fn_name} did not return an exact copy of the input when called on " \
+        "an empty plate."
+    
+
+    # ==========================================================================
+    # Success Case: Function Called on Non-Empty Plate
+    # ==========================================================================
+    
+    # Test that removing a Substance from a non-empty plate returns the plate
+    # with the Substance removed
+    water_plate_copy = copy(water_plate)
+    result = Plate.remove_by_type(water_plate, Substance.LIQUID)
+    assert result is not None, \
+        f"{fn_name} did not return a value for a non-empty plate."
+    assert numpy.all(result.get_volumes() == 0), \
+        f"{fn_name} returned non-zero volumes when asked to remove all water " \
+        "from a plate containing only water."
+    assert result == empty_plate, \
+        f"{fn_name} did not return an empty plate when asked to remove all " \
+        "water from a plate containing only water."
+    assert water_plate == water_plate_copy, \
+        f"{fn_name} incorrectly modified the original water plate."
+    
+
 
 
 # def test_volume_and_volumes(salt, water, dmso, empty_plate):

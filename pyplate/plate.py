@@ -204,12 +204,25 @@ class Plate:
     def __getitem__(self, item) -> PlateSlicer:
         return PlateSlicer(self, item)
 
+    def __eq__(self, other):
+        if not isinstance(other, Plate):
+            return False
+        return (self.name == other.name and
+                self.make == other.make and
+                self.max_volume_per_well == other.max_volume_per_well and
+                self.n_rows == other.n_rows and
+                self.n_columns == other.n_columns and
+                self.row_names == other.row_names and
+                self.column_names == other.column_names and
+                np.array_equal(self.wells, other.wells))
+
     def __repr__(self):
         return f"Plate: {self.name}"
 
     def get_volumes(self, 
+                    unit:str = None,
                     substance:(Substance|Iterable[Substance]) = None,
-                    unit:str = None) -> np.ndarray:
+                    ) -> np.ndarray:
         """
 
         Arguments:
@@ -222,18 +235,19 @@ class Plate:
         """
 
         # Arguments are type checked in PlateSlicer.volumes
-        return self[:].get_volumes(substance=substance, unit=unit)
+        return self[:].get_volumes(unit=unit, substance=substance)
 
     def get_volume(self, 
+                   unit:str = None,
                    substance:(Substance|Iterable[Substance]) = None,
-                   unit:str = None) -> float:
+                   ) -> float:
         """
         Arguments:
             unit: unit to return volumes in.
 
         Returns: total volume stored in slice in uL.
         """
-        return self.get_volumes(substance=substance, unit=unit).sum()
+        return self.get_volumes(unit=unit, substance=substance).sum()
 
     def get_substances(self) -> set[Substance]:
         """
@@ -313,25 +327,41 @@ class Plate:
         # noinspection PyProtectedMember
         return PlateSlicer._transfer(source, destination, quantity)
 
-    def remove(self, 
-               remove_substances: Substance | Iterable[Substance] = [],
-               remove_types: int | Iterable[int] = [],
-               ) -> Plate:
+    def remove_substances(self, 
+                          substances: Substance | Iterable[Substance]) -> Plate:
         """
         Removes substances from this plate.
 
         Arguments:
             remove_substances (Substance | Iterable[Substance]): 
                 The specific Substance(s) to remove from the container.
-                Defaults to an empty list.
-            remove_type (int | Iterable[int]): The type(s) of substances to 
-                remove from the container. Must be supported Substance types.
-                Defaults to an empty list.
 
         Returns: New Plate with requested substances removed.
-
         """
-        return self[:].remove(remove_substances, remove_types)
+        if not isinstance(self, Plate):
+            msg = "'Plate.remove_substances()' must be called on a Plate."
+            raise TypeError(msg)
+
+        return self[:].remove_substances(substances)
+    
+    # TODO: Replace the `int` type with a proper Substance type enum
+    def remove_by_type(self, 
+                       substance_types: int | Iterable[int]) -> Plate:
+        """
+        Removes substances from this plate by type (e.g. remove all liquids).
+
+        Arguments:
+            substance_types (int | Iterable[int]): 
+                The Substance types to remove from the container. Must be a 
+                supported Substance type (e.g. Substance.LIQUID).
+
+        Returns: New Plate with requested substances removed.
+        """
+        if not isinstance(self, Plate):
+            msg = "'Plate.remove_by_type()' must be called on a Plate."
+            raise TypeError(msg)
+
+        return self[:].remove_by_type(substance_types)
 
     def fill_to(self, 
                 solvent:Substance, 
@@ -352,6 +382,8 @@ class PlateSlicer(Slicer):
     """
     Represents a slice of a Plate.
     """
+
+    plate: Plate
 
     def __init__(self, plate, item):
         self.plate = plate
@@ -588,8 +620,9 @@ class PlateSlicer(Slicer):
         return styler
 
     def get_volumes(self, 
+                    unit:str = None,
                     substance:(Substance|Iterable[Substance]) = None, 
-                    unit:str = None) -> np.ndarray:
+                    ) -> np.ndarray:
         """
 
         Arguments:
@@ -671,27 +704,41 @@ class PlateSlicer(Slicer):
 
         return np.vectorize(helper, cache=True, otypes='d')(self.get()).round(precision)
 
-    def remove(self, 
-               remove_substances: Substance | Iterable[Substance] = [],
-               remove_types: int | Iterable[int] = [],
-               ) -> Plate:
+    def remove_substances(self, 
+                            substances: Substance | Iterable[Substance]) -> Plate:
         """
-        Removes substances from slice
+        Removes specified substances from all wells in the slice.
 
         Arguments:
-            remove_substances (Substance | Iterable[Substance]): 
-                The specific Substance(s) to remove from the container.
-                Defaults to an empty list.
+            substances (Substance | Iterable[Substance]): 
+                The specific Substance(s) to remove from the containers in the 
+                slice.
 
-            remove_type (int | Iterable[int]): The type(s) of substances to 
-                remove from the container. Must be supported Substance types.
-                Defaults to Substance.LIQUID.
-
-        Returns: New Plate with requested substances removed.
-
+        Returns: New Plate with requested substances removed from the slice.
         """
+            
         self.plate = deepcopy(self.plate)
-        self.apply(lambda elem: elem.remove(remove_substances, remove_types))
+        self.apply(lambda elem: elem.remove_substances(substances))
+        return self.plate
+
+    # TODO: Replace `int` with a proper Substance type enum
+    def remove_by_type(self, 
+                        substance_types: int | Iterable[int]) -> Plate:
+        """
+        Removes substances of specified types from all wells in the slice.
+
+        Arguments:
+            substance_types (int | Iterable[int]): 
+                The Substance type(s) to remove from the containers in the 
+                slice. Must be supported Substance types (e.g., 
+                Substance.LIQUID).
+
+        Returns: New Plate with requested substance types removed from the 
+            slice.
+        """
+       
+        self.plate = deepcopy(self.plate)
+        self.apply(lambda elem: elem.remove_by_type(substance_types))
         return self.plate
 
     def fill_to(self, 
